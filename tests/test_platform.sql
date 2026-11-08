@@ -95,11 +95,11 @@ do $$ declare n int; begin
   select count(*) into n from customers; assert n=1, 'customer sees own row only: '||n;
   select count(*) into n from visits; assert n=4, 'customer sees own 4 visits';
   select count(*) into n from loyalty_rewards; assert n=3, 'customer sees reward ladder';
-  select count(*) into n from my_businesses; assert n=1;
+  select count(*) into n from my_businesses(); assert n=1;
   select count(*) into n from feedback; assert n=0, 'customer cannot read feedback inbox';
   select count(*) into n from leads; assert n=0;
   begin update customers set stamps=99; get diagnostics n = row_count; assert n=0, 'customer cannot edit stamps'; exception when others then null; end;
-  perform submit_feedback((select slug from my_businesses limit 1), 5, null, 'Great', null, null, true);
+  perform submit_feedback((select slug from my_businesses() limit 1), 5, null, 'Great', null, null, true);
 end $$;
 reset role;
 

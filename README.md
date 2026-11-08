@@ -47,11 +47,16 @@ tests/
 
 ---
 
-## Setup (about 30 minutes)
+## Live project
+
+- Supabase project: **branditude-growth-plan** (`dumninwceiqvevndpupc`, Mumbai). Schema, catalogue and the `whatsapp-send` function are deployed. `web/assets/js/config.js` already points at it.
+- Super admin: kunalahuja392@gmail.com. Change the password after the first sign-in.
+
+## Setup from scratch (about 30 minutes)
 
 ### 1. Supabase project
 1. Create a project at supabase.com (region: Mumbai `ap-south-1`).
-2. **SQL Editor →** run `supabase/migrations/20261108000001_platform.sql`, then `…000002_seed_catalogue.sql`.
+2. **SQL Editor →** run the three files in `supabase/migrations/` in order.
    *(Or with the CLI: `supabase link --project-ref <ref>` then `supabase db push`.)*
 3. **Authentication → Providers**
    - Email: on. Turning off "Confirm email" makes sign-up instant. If you leave it on, the app finishes registration after the first sign-in.

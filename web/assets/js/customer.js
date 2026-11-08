@@ -10,7 +10,7 @@ export async function mount(ctx) {
   C = ctx;
   window.addEventListener("hashchange", () => { if (location.hash === "#signout") return C.signOut(); render(); });
   const [biz, me, progs, rewards, visits, coupons] = await Promise.all([
-    q(sb.from("my_businesses").select("*")), q(sb.from("customers").select("*")), q(sb.from("loyalty_programs").select("*")),
+    q(sb.rpc("my_businesses")), q(sb.from("customers").select("*")), q(sb.from("loyalty_programs").select("*")),
     q(sb.from("loyalty_rewards").select("*").order("visit_no")), q(sb.from("visits").select("*").order("created_at", { ascending: false }).limit(200)), q(sb.from("coupons").select("*")),
   ]);
   Object.assign(D, { biz, me, progs, rewards, visits, coupons });
