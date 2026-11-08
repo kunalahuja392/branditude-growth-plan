@@ -4,6 +4,8 @@ import { $, $$, esc, inr, inr2, nfmt, fmtDate, fmtShort, fmtDT, ago, daysSince, 
   openModal, closeModal, modalOpen, confirmBox, formModal, ico, shell, barChart, statusPill, THEMES, rwLabel, rwShort, rewardAt, nextReward, loyaltyCard } from "./ui.js";
 
 let C, D = {}, BID;
+const gstOn = () => +(D.settings?.gst?.rate ?? 0) > 0;
+const plusGst = () => (gstOn() ? " + GST" : "");
 const canWrite = () => ["active", "pending_payment"].includes(D.biz?.status);
 const waOn = () => !!D.biz?.wa_enabled;
 
@@ -282,7 +284,7 @@ after.whatsapp = async () => {
   ]);
   D.tpls = tpls; D.packs = packs;
   const note = D.settings.whatsapp?.price_note || "";
-  const packsHtml = `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">${packs.map((p) => `<div class="coupon" style="border-style:solid"><b style="font-size:17px">${esc(p.name)}</b><div class="num"><b style="font-size:22px">${nfmt(p.credits)}</b> messages</div><div class="muted small num">${inr(p.price)} + GST · ${inr2(p.price / p.credits)}/message</div><button class="btn sm primary" data-a="buy-pack" data-id="${p.id}" ${D.biz.status === "active" ? "" : "disabled"}>Buy</button></div>`).join("")}</div>`;
+  const packsHtml = `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">${packs.map((p) => `<div class="coupon" style="border-style:solid"><b style="font-size:17px">${esc(p.name)}</b><div class="num"><b style="font-size:22px">${nfmt(p.credits)}</b> messages</div><div class="muted small num">${inr(p.price)}${plusGst()} · ${inr2(p.price / p.credits)}/message</div><button class="btn sm primary" data-a="buy-pack" data-id="${p.id}" ${D.biz.status === "active" ? "" : "disabled"}>Buy</button></div>`).join("")}</div>`;
   const el = $("#wa-view"); if (!el) return;
   if (!waOn()) {
     el.innerHTML = head("WhatsApp add-on", "Optional. Send offers, birthday wishes, loyalty updates and review requests on WhatsApp from a verified business number.") + `
@@ -385,7 +387,7 @@ after.plan = async () => {
       <div class="row" style="align-items:baseline;gap:8px"><b style="font:800 26px var(--display)">${esc(b.packages?.name || "No plan")}</b><span class="muted">${esc(b.billing)}</span></div>
       <p class="muted small" style="margin-top:4px">${b.subscription_ends ? "Paid until " + fmtDate(b.subscription_ends) : "Not paid yet"}${b.wa_enabled ? " · WhatsApp add-on on" : ""}</p>
       ${b.packages ? `<ul class="small" style="padding-left:18px">${b.packages.features.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : ""}
-      <div class="row" style="margin-top:12px">${b.package_id ? `<button class="btn primary" data-a="renew" data-id="${b.package_id}" data-bill="${b.billing}">Renew ${esc(b.billing)} · ${inr(price(b.packages, b.billing))} + GST</button>` : ""}</div></div>
+      <div class="row" style="margin-top:12px">${b.package_id ? `<button class="btn primary" data-a="renew" data-id="${b.package_id}" data-bill="${b.billing}">Renew ${esc(b.billing)} · ${inr(price(b.packages, b.billing))}${plusGst()}</button>` : ""}</div></div>
     <div class="card"><div class="card-head"><h2>Payments waiting</h2><span class="pill ${pend.length ? "warn" : "good"}">${pend.length}</span></div>
       ${pend.length ? `<div class="list">${pend.map((p) => `<div class="item"><div class="grow"><b>${esc(p.description)}</b><span class="muted small">${fmtDT(p.created_at)} · ${p.utr ? "UPI ref " + esc(p.utr) + " · being checked" : "not paid yet"}</span></div><b class="num">${inr2(p.total)}</b>${p.utr ? "" : `<button class="btn sm primary" data-a="pay" data-id="${p.id}">Pay</button>`}</div>`).join("")}</div>` : `<div class="empty">Nothing to pay.</div>`}</div>
   </div>
@@ -403,7 +405,7 @@ async function payModal(paymentId) {
   const upi = D.settings.payment || {}; const ref = "BGP-" + p.id.slice(0, 8).toUpperCase();
   const link = upi.upi_id ? `upi://pay?pa=${encodeURIComponent(upi.upi_id)}&pn=${encodeURIComponent(upi.upi_name || "Branditude")}&am=${(+p.total).toFixed(2)}&cu=INR&tn=${encodeURIComponent(ref)}` : "";
   const m = openModal(`<div class="modal-head"><h2>Pay ${inr2(p.total)}</h2><button class="btn ghost" data-close>Close</button></div>
-    <p class="muted small">${esc(p.description)} · ${inr2(p.amount)} + GST ${inr2(p.gst)}</p>
+    <p class="muted small">${esc(p.description)}${+p.gst ? ` · ${inr2(p.amount)} + GST ${inr2(p.gst)}` : ""}</p>
     ${upi.upi_id ? `<div class="row" style="gap:18px;margin-top:14px;align-items:center"><div class="qr" id="pay-qr"></div><div><p class="small muted">Scan with any UPI app, or pay to</p><p style="font:800 18px var(--display)">${esc(upi.upi_id)}</p><p class="small muted">Add <b>${ref}</b> in the note</p><a class="btn sm primary" href="${esc(link)}" style="margin-top:8px">Open UPI app</a></div></div>` : `<div class="note">Branditude hasn't added a UPI ID yet. Contact them to pay.</div>`}
     <div class="field" style="margin-top:18px"><label for="utr">UPI transaction ID (12-digit UTR)</label><input id="utr" inputmode="numeric" placeholder="e.g. 431298765012"></div><p class="err" id="utr-err"></p>
     <div class="modal-foot"><button class="btn" data-close>Later</button><button class="btn primary" id="utr-go">I've paid</button></div>`);
@@ -584,7 +586,7 @@ document.addEventListener("click", async (e) => {
       case "ly-save": lyRead(); await q(sb.rpc("save_loyalty", { p_business: BID, p: compiled() })); await reload("loyalty"); LD = null; toast("Loyalty card saved"); render(); break;
       case "wa-one": await waOne(cust(), el.dataset.tpl); break;
       case "wa-compose": WA.aud = el.dataset.aud || "all"; location.hash = "whatsapp"; break;
-      case "wa-buy": location.hash = "whatsapp"; document.querySelector("#wa-view") && openModal(`<div class="modal-head"><h2>Buy WhatsApp credits</h2><button class="btn ghost" data-close>Close</button></div><div class="list">${(D.packs || []).map((p) => `<div class="item"><div class="grow"><b>${esc(p.name)}</b><span class="muted small num">${nfmt(p.credits)} messages · ${inr2(p.price / p.credits)}/message</span></div><b class="num">${inr(p.price)} + GST</b><button class="btn sm primary" data-a="buy-pack" data-id="${p.id}">Buy</button></div>`).join("")}</div>`); break;
+      case "wa-buy": location.hash = "whatsapp"; document.querySelector("#wa-view") && openModal(`<div class="modal-head"><h2>Buy WhatsApp credits</h2><button class="btn ghost" data-close>Close</button></div><div class="list">${(D.packs || []).map((p) => `<div class="item"><div class="grow"><b>${esc(p.name)}</b><span class="muted small num">${nfmt(p.credits)} messages · ${inr2(p.price / p.credits)}/message</span></div><b class="num">${inr(p.price)}${plusGst()}</b><button class="btn sm primary" data-a="buy-pack" data-id="${p.id}">Buy</button></div>`).join("")}</div>`); break;
       case "buy-pack": closeModal(); await order("wa_credits", id); break;
       case "buy-product": if (await confirmBox("Buy this service?", "We'll create a payment for it. Branditude's team will contact you to get started once it's paid.", "Continue to payment")) await order("product", id); break;
       case "renew": await order("subscription", id, el.dataset.bill); break;

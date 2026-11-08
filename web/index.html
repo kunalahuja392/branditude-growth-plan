@@ -302,7 +302,7 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
       <h3 style="font-size:20px;margin-top:56px" id="svc-title">Extra services</h3>
       <p class="gst" style="margin-top:6px">Pick these at checkout. Services change with your business type.</p>
       <div class="addons" id="addons"></div>
-      <p class="gst" id="gst-note">Prices are in Indian rupees and exclude GST, which is added at checkout.</p>
+      <p class="gst" id="gst-note">Prices are in Indian rupees.</p>
     </div>
   </section>
 
@@ -314,7 +314,7 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
         <details><summary>How do WhatsApp messages get sent?</summary><p>Messages go from your own WhatsApp number. The app opens each chat with the message ready, so you tap send. The Pro plan can add the official WhatsApp Business API for one-click bulk sending. Meta charges its own per-message fees for that.</p></details>
         <details><summary>Is my customer data safe?</summary><p>Your customer list is private to your account. We never message your customers ourselves unless you ask us to, and you can export or delete your data at any time.</p></details>
         <details><summary>Can I cancel?</summary><p>Monthly plans can be cancelled before the next billing date. Yearly plans are paid upfront and get two months free.</p></details>
-        <details><summary>How do I pay?</summary><p>Pay by UPI from any app (GPay, PhonePe, Paytm, BHIM). You'll get a GST invoice on WhatsApp and email after we confirm the payment.</p></details>
+        <details><summary>How do I pay?</summary><p>Pay by UPI from any app (GPay, PhonePe, Paytm, BHIM). You'll get an invoice on WhatsApp and email after we confirm the payment.</p></details>
       </div>
     </div>
   </section>
@@ -365,7 +365,7 @@ async function load() {
   const a = SET.agency || {}, row = (label, val, href) => (val ? `<div><small>${label}</small>${href ? `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(val)}</a>` : `<span>${esc(val)}</span>`}</div>` : "");
   $("#cinfo").innerHTML = row("WhatsApp", a.whatsapp ? "+" + a.whatsapp : "", a.whatsapp ? waLink("Hi Branditude!") : "") + row("Call", a.phone, a.phone ? "tel:" + a.phone : "") + row("Email", a.email, a.email ? "mailto:" + a.email : "") + row("Office", a.address) + row("Hours", a.hours) || `<div><small>Contact</small><span>Details coming soon</span></div>`;
   $("#foot-left").textContent = "© " + new Date().getFullYear() + " " + (a.legal_name || "Branditude") + (a.website ? " · " + a.website : "");
-  $("#gst-note").textContent = `Prices are in Indian rupees and exclude ${Math.round((SET.gst?.rate ?? 0.18) * 100)}% GST, which is added at checkout.`;
+  const gr = +(SET.gst?.rate ?? 0); $("#gst-note").textContent = gr > 0 ? `Prices are in Indian rupees and exclude ${Math.round(gr * 100)}% GST, which is added at checkout.` : "Prices are in Indian rupees. No GST is charged.";
   drawPlans(); drawServices();
 }
 function drawPlans() {
@@ -399,7 +399,7 @@ async function refreshQuote() {
   co.quote = error ? null : data; const el = $("#co-sum"); if (el) el.innerHTML = summary();
 }
 const summary = () => { const qt = co.quote; if (!qt) return `<p class="gst">Calculating…</p>`;
-  return `${qt.lines.map((l) => `<div class="srow"><span>${esc(l.label)}</span><span class="num">${inr(l.amount)}</span></div>`).join("")}<div class="srow"><span>GST</span><span class="num">${inr(qt.gst)}</span></div><div class="srow total"><span>Total</span><span class="num">${inr(qt.total)}</span></div>${qt.promo_message ? `<p class="${qt.promo_ok ? "ok-msg" : "err"}" style="font-size:14px;margin-top:6px">${esc(qt.promo_message)}</p>` : ""}`; };
+  return `${qt.lines.map((l) => `<div class="srow"><span>${esc(l.label)}</span><span class="num">${inr(l.amount)}</span></div>`).join("")}${+qt.gst ? `<div class="srow"><span>GST</span><span class="num">${inr(qt.gst)}</span></div>` : ""}<div class="srow total"><span>Total</span><span class="num">${inr(qt.total)}</span></div>${qt.promo_message ? `<p class="${qt.promo_ok ? "ok-msg" : "err"}" style="font-size:14px;margin-top:6px">${esc(qt.promo_message)}</p>` : ""}`; };
 function readStep1() {
   const v = (id) => ($("#" + id)?.value || "").trim();
   co.biz = { name: v("b-name"), contact_name: v("b-owner"), phone: v("b-phone"), email: v("b-email"), city: v("b-city") };
