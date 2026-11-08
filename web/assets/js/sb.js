@@ -19,5 +19,6 @@ export function friendly(e) {
   if (/violates row-level security|permission denied/i.test(m)) return "You don't have permission to do that.";
   if (/duplicate key/i.test(m)) return "That already exists.";
   if (/Failed to fetch|NetworkError/i.test(m)) return "Can't reach the server. Check your internet connection.";
+  if (/rate limit/i.test(m)) return "Too many sign-ups in the last hour. Please try again in a little while, or WhatsApp us and we'll set up your account.";
   return m;
 }
