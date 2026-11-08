@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in · Branditude Growth Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body>
+<div class="auth-wrap">
+  <div class="auth">
+    <a href="index.html" class="row" style="text-decoration:none;gap:10px"><div class="brand-mark" style="width:34px;height:34px;border-radius:9px;background:var(--accent);display:grid;place-items:center;color:var(--accent-ink);font:800 17px var(--display)">B</div><b style="font:800 16px var(--display)">Branditude Growth Plan</b></a>
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-business" aria-selected="true" data-tab="business">Business</button>
+      <button role="tab" id="tab-customer" aria-selected="false" data-tab="customer">Customer</button>
+      <button role="tab" id="tab-team" aria-selected="false" data-tab="team">Branditude team</button>
+    </div>
+    <div id="panel"></div>
+    <p class="err" id="err" role="alert"></p>
+    <p class="ok-msg" id="ok" role="status"></p>
+  </div>
+</div>
+<script type="module">
+import { sb, configured, friendly } from "./assets/js/sb.js";
+import { $, $$, esc, normPhone } from "./assets/js/ui.js";
+
+const err = (m) => { $("#err").textContent = m || ""; $("#ok").textContent = ""; };
+const ok = (m) => { $("#ok").textContent = m || ""; $("#err").textContent = ""; };
+if (!configured) err("Setup needed: add your Supabase URL and anon key in assets/js/config.js.");
+
+let tab = new URLSearchParams(location.search).get("as") || "business";
+const emailForm = (who) => `
+  <form id="f-email" class="fields" style="grid-template-columns:1fr">
+    <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="email" required></div>
+    <div class="field"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required minlength="8"></div>
+    <button class="btn primary" type="submit" style="justify-content:center">Sign in</button>
+    <div class="row" style="justify-content:space-between"><button type="button" class="btn ghost sm" id="forgot">Forgot password?</button>
+    ${who === "business" ? `<a class="btn ghost sm" href="index.html#pricing">New business? Choose a plan</a>` : `<span class="muted small">Team accounts are added by your super admin.</span>`}</div>
+  </form>`;
+const phoneForm = () => `
+  <p class="muted small">See your loyalty cards and offers from every business you visit. We'll send a one-time code to your phone.</p>
+  <form id="f-phone" class="fields" style="grid-template-columns:1fr">
+    <div class="field"><label for="phone">Mobile number</label><input id="phone" inputmode="tel" autocomplete="tel" placeholder="98xxxxxxxx" required></div>
+    <div class="field" id="otp-wrap" hidden><label for="otp">6-digit code</label><input id="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6"></div>
+    <button class="btn primary" type="submit" id="phone-btn" style="justify-content:center">Send code</button>
+  </form>`;
+function draw() {
+  $$("[data-tab]").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === tab));
+  $("#panel").innerHTML = tab === "customer" ? phoneForm() : emailForm(tab);
+  err("");
+  if (tab === "customer") bindPhone(); else bindEmail();
+}
+$$("[data-tab]").forEach((b) => (b.onclick = () => { tab = b.dataset.tab; draw(); }));
+
+function bindEmail() {
+  $("#f-email").onsubmit = async (e) => {
+    e.preventDefault(); err(""); const btn = e.target.querySelector("button[type=submit]"); btn.disabled = true;
+    const { error } = await sb.auth.signInWithPassword({ email: $("#email").value.trim(), password: $("#password").value });
+    if (error) { err(/Invalid login/i.test(error.message) ? "Wrong email or password." : friendly(error)); btn.disabled = false; return; }
+    location.href = "app.html";
+  };
+  $("#forgot").onclick = async () => {
+    const email = $("#email").value.trim(); if (!email) { err("Enter your email first, then tap Forgot password."); return; }
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: new URL("app.html", location.href).href });
+    error ? err(friendly(error)) : ok("Check your email for a link to set a new password.");
+  };
+}
+function bindPhone() {
+  let sent = false;
+  $("#f-phone").onsubmit = async (e) => {
+    e.preventDefault(); err(""); const btn = $("#phone-btn"); btn.disabled = true;
+    const phone = "+" + normPhone($("#phone").value);
+    if (phone.length < 12) { err("Enter a 10-digit mobile number."); btn.disabled = false; return; }
+    if (!sent) {
+      const { error } = await sb.auth.signInWithOtp({ phone });
+      btn.disabled = false;
+      if (error) { err(friendly(error)); return; }
+      sent = true; $("#otp-wrap").hidden = false; $("#otp").focus(); btn.textContent = "Verify and sign in"; ok("Code sent to " + phone + ".");
+    } else {
+      const { error } = await sb.auth.verifyOtp({ phone, token: $("#otp").value.trim(), type: "sms" });
+      if (error) { err("That code didn't work. Check it and try again."); btn.disabled = false; return; }
+      location.href = "app.html";
+    }
+  };
+}
+(async () => { const { data } = await sb.auth.getSession(); if (data?.session) location.href = "app.html"; })();
+draw();
+</script>
+</body>
+</html>
