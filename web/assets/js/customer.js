@@ -1,6 +1,7 @@
 // Customer portal (optional): loyalty cards, offers, visit history, feedback. Everything is managed by the business.
 import { sb, q } from "./sb.js";
 import { $, esc, inr, fmtDate, fmtDT, toast, openModal, closeModal, ico, shell, loyaltyCard, prettyPhone, rwLabel } from "./ui.js";
+import { mountReviewHelper } from "./review-helper.js";
 
 let C, D = {};
 const ROUTES = [{ label: "", items: [["cards", "My cards", "card"], ["offers", "Offers", "tag"], ["visits", "My visits", "chart"], ["me", "My profile", "users"], ["signout", "Sign out", "out"]] }];
@@ -62,15 +63,15 @@ document.addEventListener("click", (e) => {
       <div id="rate-more" style="margin-top:14px"></div>`);
     m.querySelectorAll("[data-n]").forEach((s) => (s.onclick = () => {
       rating = +s.dataset.n; m.querySelectorAll("[data-n]").forEach((x) => (x.style.borderColor = +x.dataset.n <= rating ? "var(--accent)" : ""));
-      const g = b.google_review_link ? `<a class="btn ${rating >= 4 ? "primary" : ""}" href="${esc(b.google_review_link)}" target="_blank" rel="noopener" id="rate-g">Write a Google review</a>` : "";
-      if (rating >= 4 && b.google_review_link) {   // straight to Google's review form
-        q(sb.rpc("submit_feedback", { p_slug: b.slug, p_rating: rating, p_tags: [], p_text: "", p_name: C.profile.full_name || "", p_phone: "", p_opened_google: true })).catch(() => {});
-        closeModal(); window.open(b.google_review_link, "_blank", "noopener"); toast("Thanks! Opening Google reviews…"); return;
+      if (rating >= 4 && b.google_review_link) {   // their own words → tidied options → copy → Google
+        const go = (text) => { q(sb.rpc("submit_feedback", { p_slug: b.slug, p_rating: rating, p_tags: [], p_text: text || "", p_name: C.profile.full_name || "", p_phone: "", p_opened_google: true })).catch(() => {});
+          window.open(b.google_review_link, "_blank", "noopener"); closeModal(); toast(text ? "Copied! Paste it on Google." : "Opening Google reviews…"); };
+        return mountReviewHelper(m.querySelector("#rate-more"), { slug: b.slug, bizName: b.name, link: b.google_review_link, compact: true, onSkip: () => go(""), onOpen: (t) => go(t) });
       }
-      const small = b.google_review_link ? `<p class="small muted" style="margin-top:10px">Prefer to share it publicly? <a href="${esc(b.google_review_link)}" target="_blank" rel="noopener" id="rate-g">Post a Google review</a></p>` : "";
+      const quiet = b.google_review_link ? `<p class="k-quiet">You can also <a href="${esc(b.google_review_link)}" target="_blank" rel="noopener" id="rate-g">post a public review on Google</a>.</p>` : "";
       m.querySelector("#rate-more").innerHTML = rating >= 4
         ? `<p>Thank you for the rating!</p><div class="modal-foot" style="justify-content:flex-start"><button class="btn primary" id="rate-send">Send my rating</button></div>`
-        : `<p>Sorry it wasn't great. Tell the owner what went wrong, privately.</p><textarea id="rate-text" placeholder="What happened?"></textarea><div class="modal-foot" style="justify-content:flex-start"><button class="btn primary" id="rate-send">Send to the owner</button></div>${small}`;
+        : `<p><b>We're sorry we let you down.</b> Please tell the owner what went wrong. It goes straight to them, privately, and they read every message.</p><textarea id="rate-text" placeholder="Tell the owner what happened"></textarea><div class="modal-foot" style="justify-content:flex-start"><button class="btn primary" id="rate-send">Send privately to the owner</button></div>${quiet}`;
       const send = async (opened) => { try { await q(sb.rpc("submit_feedback", { p_slug: b.slug, p_rating: rating, p_tags: [], p_text: m.querySelector("#rate-text")?.value || "", p_name: C.profile.full_name || "", p_phone: "", p_opened_google: !!opened })); closeModal(); toast("Thanks for your feedback"); } catch (err) { toast(err.message, "error"); } };
       m.querySelector("#rate-send").onclick = () => send(false);
       const gl = m.querySelector("#rate-g"); if (gl) gl.addEventListener("click", () => send(true));

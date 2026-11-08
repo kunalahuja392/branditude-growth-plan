@@ -12,11 +12,11 @@ const canWrite = () => D.biz?.status === "active" || trialOpen() || (["trial", "
 const waOn = () => !!D.biz?.wa_enabled;
 
 const ROUTES = () => [
-  { label: "", items: [["dashboard", "Dashboard", "dash"], ["customers", "Customers", "users"], ["reviews", "Google reviews", "star"], ["feedback", "Feedback", "smile", openComplaints() || ""], ["seo", "Keywords & SEO", "spark"],
+  { label: "", items: [["dashboard", "Dashboard", "dash"], ["customers", "Customers", "users"], ["reviews", "Google reviews", "star"], ["feedback", "Feedback", "smile", openComplaints() || ""], ["seo", "Keywords & SEO", "spark"], ["replies", "Google replies", "star", gbpPending() || ""],
     ["offers", "Offers & coupons", "tag"], ["loyalty", "Loyalty card", "card"], ["whatsapp", "WhatsApp", "wa"], ["alerts", "Alerts", "bell", alerts().length || ""]] },
   { label: "Account", items: [["plan", "Plan & services", "box"], ["profile", "Business profile", "store"], ["signout", "Sign out", "out"]] },
 ];
-const route = () => { const h = location.hash.slice(1); return ROUTES().flatMap((g) => g.items).some((r) => r[0] === h) ? h : "dashboard"; };
+const route = () => { const h = location.hash.slice(1).split("?")[0]; return ROUTES().flatMap((g) => g.items).some((r) => r[0] === h) ? h : "dashboard"; };
 
 export async function mount(ctx) {
   C = ctx;
@@ -24,7 +24,7 @@ export async function mount(ctx) {
   if (!m.length) { $("#main").innerHTML = `<div class="auth-wrap"><div class="auth"><h2>No business yet</h2><p>Choose a plan to set up your business.</p><a class="btn primary" href="index.html#pricing">See plans</a></div></div>`; return; }
   BID = m[0].business_id;
   window.addEventListener("hashchange", () => { if (location.hash === "#signout") return C.signOut(); render(); });
-  await loadAll(); render();
+  await loadAll(); await gbpLoad().catch(() => {}); render();
 }
 
 async function loadAll() {
@@ -535,6 +535,82 @@ function templateDraft(kind, input) {
   return "";
 }
 
+/* ---------- Google auto-reply (owner's replies to Google reviews) ---------- */
+const GBP_MODES = [
+  ["positive", "Auto-reply to 4–5★, I approve 1–3★", "Recommended. Happy reviews get a warm reply within the hour. Unhappy ones wait for you, because they need a human touch."],
+  ["all", "Auto-reply to every review", "Every new review gets an AI reply automatically, including complaints. You can still edit any reply later."],
+  ["drafts", "Draft only, I post", "AI writes a draft for each review. Nothing goes live until you tap Post."],
+  ["off", "Off", "Reviews still show here, but no drafts or replies."],
+];
+const gbpPending = () => (D.gbpReviews || []).filter((r) => ["draft", "error"].includes(r.status)).length;
+async function gbpLoad() {
+  const [st, rv] = await Promise.all([q(sb.rpc("gbp_status", { b: BID })), q(sb.from("gbp_reviews").select("*").eq("business_id", BID).order("review_time", { ascending: false, nullsFirst: false }).limit(200))]);
+  D.gbp = st || { connected: false }; D.gbpReviews = rv;
+}
+async function gbpFn(name, body) {
+  const { data, error } = await sb.functions.invoke(name, { body: { business_id: BID, ...body } });
+  if (error) { let m = error.message, setup = false; try { const j = await error.context.json(); m = j.error || m; setup = !!j.setup; } catch {} const e = new Error(m); e.setup = setup; throw e; }
+  return data;
+}
+VIEWS.replies = () => `<div id="gbp-view"><div class="loading"><span class="spinner"></span></div></div>`;
+after.replies = async () => {
+  const hq = new URLSearchParams(location.hash.split("?")[1] || "");
+  if (hq.get("gbp")) { toast(hq.get("gbp") === "ok" ? "Google Business Profile connected ✓" : hq.get("msg") || "Couldn't connect Google", hq.get("gbp") === "ok" ? "" : "error"); history.replaceState(null, "", "#replies"); }
+  try { await gbpLoad(); } catch (e) { toast(e.message, "error"); D.gbp = { connected: false }; D.gbpReviews = []; }
+  drawGbp();
+};
+function drawGbp() {
+  const el = $("#gbp-view"); if (!el) return;
+  const g = D.gbp, rv = D.gbpReviews || [], mode = D.biz.gbp_reply_mode || "positive", stars = (n) => `<span class="stars-txt">${"★".repeat(n || 0)}${"☆".repeat(5 - (n || 0))}</span>`;
+  const todo = rv.filter((r) => ["draft", "error", "new"].includes(r.status)), done = rv.filter((r) => ["posted", "skipped"].includes(r.status));
+  const intro = head("Google auto-reply", "Reply to every Google review, automatically. Replies show you care, and Google treats an active, responsive profile as a good sign.",
+    g.connected ? `<button class="btn" data-g="sync" ${canWrite() ? "" : "disabled"}>${ico("spark")} Check for new reviews</button>` : "");
+  if (!g.connected) { el.innerHTML = intro + `<div class="card" style="max-width:720px">
+      <h2>Connect your Google Business Profile</h2>
+      <p class="muted" style="margin:8px 0 14px">Sign in with the Google account that owns or manages your profile. We'll read new reviews and post your replies. You can disconnect any time.</p>
+      <ol class="small" style="margin:0 0 16px 18px;display:grid;gap:6px"><li>Tap <b>Connect Google</b> and choose your Google account.</li><li>Allow "manage your business listings". That's what lets us post replies.</li><li>Choose how replies go out. We recommend auto-replying to 4–5★ and approving 1–3★ yourself.</li></ol>
+      <button class="btn primary" data-g="connect" ${canWrite() ? "" : "disabled"}>Connect Google</button>
+      <div class="note" style="margin-top:14px">Until it's connected, you can still write replies in <a href="#seo">Keywords &amp; SEO → Review reply</a> and paste them on Google yourself.</div></div>`; return; }
+  el.innerHTML = intro + `
+    ${g.last_error ? `<div class="note" style="background:var(--bad-soft,#fde8e8);margin-bottom:14px"><b>Google says:</b> ${esc(g.last_error)}</div>` : ""}
+    <div class="grid g4" style="margin-bottom:16px">${kpi("Waiting for you", todo.filter((r) => r.status !== "new").length, "drafts to approve")}${kpi("Replied", rv.filter((r) => r.status === "posted").length, `of ${rv.length} reviews`)}${kpi("Average rating", rv.length ? (rv.reduce((a, r) => a + (r.stars || 0), 0) / rv.length).toFixed(1) : "–", "latest 200 reviews")}${kpi("Last checked", g.last_sync_at ? ago(g.last_sync_at) : "never", "checks every hour")}</div>
+    <div class="grid g2" style="align-items:start">
+      <div class="card"><div class="card-head"><h2>How replies go out</h2></div>
+        <div class="list">${GBP_MODES.map(([v, t, d]) => `<label class="item" style="cursor:pointer;align-items:flex-start"><input type="radio" name="gbp-mode" value="${v}" ${mode === v ? "checked" : ""} ${canWrite() ? "" : "disabled"} style="margin-top:4px;width:auto;flex:none;min-height:0"><div class="grow"><b>${t}</b><span class="muted small">${d}</span></div></label>`).join("")}</div></div>
+      <div class="card"><div class="card-head"><h2>Connected profile</h2></div>
+        <dl class="kv"><dt>Location</dt><dd>${esc(g.location_title || "Not chosen")}</dd><dt>Connected</dt><dd>${g.connected_at ? fmtDate(g.connected_at) : "–"}</dd></dl>
+        ${(g.locations || []).length > 1 ? `<div class="field" style="margin-top:12px"><label for="gbp-loc">Use this location</label><select id="gbp-loc">${g.locations.map((l) => `<option value="${esc(l.name)}" ${l.name === g.location_name ? "selected" : ""}>${esc(l.title)}${l.address ? " · " + esc(l.address) : ""}</option>`).join("")}</select></div>` : ""}
+        <div class="row" style="margin-top:12px"><button class="btn sm ghost" data-g="disconnect">Disconnect</button></div>
+        <p class="small muted" style="margin-top:10px">Replies use your keywords only where they read naturally, and never on complaints.</p></div>
+    </div>
+    <div class="card" style="margin-top:16px"><div class="card-head"><h2>Needs your OK</h2><span class="pill ${todo.length ? "warn" : "good"}">${todo.length}</span></div>
+      ${todo.length ? `<div class="list">${todo.map((r) => `<div class="item" style="align-items:flex-start;flex-direction:column;gap:8px">
+        <div><b>${esc(r.reviewer || "Google user")} ${stars(r.stars)}</b><span class="muted small"> · ${r.review_time ? ago(r.review_time) : ""}${r.status === "error" ? ` · <span class="err">${esc(r.error || "couldn't post")}</span>` : ""}</span></div>
+        ${r.comment ? `<p>“${esc(r.comment)}”</p>` : `<p class="muted small">Star rating only, no text.</p>`}
+        <textarea data-draft="${r.id}" style="width:100%;min-height:80px" placeholder="Write your reply">${esc(r.draft || "")}</textarea>
+        <div class="row"><button class="btn sm primary" data-g="post" data-id="${r.id}" ${canWrite() ? "" : "disabled"}>Post reply on Google</button><button class="btn sm" data-g="redraft" data-id="${r.id}" ${canWrite() ? "" : "disabled"}>${ico("spark")} New draft</button><button class="btn sm ghost" data-g="skip" data-id="${r.id}">Don't reply</button></div></div>`).join("")}</div>` : `<div class="empty">All caught up. New reviews are checked every hour.</div>`}</div>
+    <div class="card" style="margin-top:16px"><div class="card-head"><h2>Replied</h2></div>
+      ${done.length ? `<div class="list">${done.slice(0, 50).map((r) => `<div class="item" style="align-items:flex-start"><div class="grow"><b>${esc(r.reviewer || "Google user")} ${stars(r.stars)}</b>${r.comment ? `<span class="small">“${esc(r.comment)}”</span>` : ""}${r.reply_text ? `<span class="small muted" style="display:block;margin-top:4px">↳ ${esc(r.reply_text)}</span>` : ""}</div>${r.status === "skipped" ? `<span class="pill">skipped</span>` : `<span class="pill good">replied</span>`}</div>`).join("")}</div>` : `<div class="empty">No replies yet.</div>`}</div>`;
+  el.querySelectorAll('[name="gbp-mode"]').forEach((r) => (r.onchange = async () => {
+    try { await q(sb.from("businesses").update({ gbp_reply_mode: r.value }).eq("id", BID)); D.biz.gbp_reply_mode = r.value; toast("Saved"); } catch (e) { toast(e.message, "error"); drawGbp(); }
+  }));
+  const loc = $("#gbp-loc"); if (loc) loc.onchange = async () => { try { await gbpFn("gbp-sync", { action: "set_location", location: loc.value }); await gbpLoad(); drawGbp(); toast("Location changed"); } catch (e) { toast(e.message, "error"); } };
+}
+document.addEventListener("click", async (e) => {
+  const el = e.target.closest("[data-g]"); if (!el || !D.biz) return;
+  const a = el.dataset.g, id = el.dataset.id;
+  el.disabled = true;
+  try {
+    if (a === "connect") { const r = await gbpFn("gbp-connect", {}); location.href = r.url; return; }
+    if (a === "sync") { const r = await gbpFn("gbp-sync", { action: "sync" }); toast(`Checked ${r.synced || 0} reviews · ${r.posted || 0} replied · ${r.drafted || 0} drafts`); }
+    if (a === "disconnect") { if (!(await confirmBox("Disconnect Google?", "Auto-replies stop until you connect again. Your past replies stay on Google.", "Disconnect", { danger: true }))) { el.disabled = false; return; } await gbpFn("gbp-sync", { action: "disconnect" }); }
+    if (a === "post") { const text = document.querySelector(`[data-draft="${id}"]`)?.value || ""; await gbpFn("gbp-sync", { action: "post", review_id: id, text }); toast("Reply posted on Google ✓"); }
+    if (a === "redraft") { const r = await gbpFn("gbp-sync", { action: "redraft", review_id: id }); const t = document.querySelector(`[data-draft="${id}"]`); if (t) t.value = r.draft || ""; el.disabled = false; return; }
+    if (a === "skip") await gbpFn("gbp-sync", { action: "skip", review_id: id });
+    await gbpLoad(); drawGbp(); nav();
+  } catch (err) { toast(err.message, "error"); el.disabled = false; }
+});
+
 /* ---------- Log a visit ---------- */
 function visitModal() {
   const m = openModal(`<div class="modal-head"><h2>Log a visit</h2><button class="btn ghost" data-close>Close</button></div>
@@ -590,8 +666,8 @@ function drawK() {
   let h;
   if (K.step === "rate") h = `<p class="k-biz">${esc(D.biz.name)}</p><h1 class="k-q">${c ? esc(c.name.split(" ")[0]) + ", how" : "How"} was your visit today?</h1><p class="k-sub">Tap a star. It takes 5 seconds.</p><div class="k-stars">${[1, 2, 3, 4, 5].map((n) => `<button class="k-star" data-k="rate" data-n="${n}" aria-label="${n} stars: ${FACES[n]}"><span aria-hidden="true">★</span><b class="num" style="font-size:20px;color:var(--ink)">${n}</b><small>${FACES[n]}</small></button>`).join("")}</div>`;
   else if (K.step === "happy") h = `<div class="k-big" aria-hidden="true">🎉</div><h1 class="k-q">Thank you! We're so glad you enjoyed it.</h1><p class="k-sub">Would you share that on Google? It helps other people find ${esc(D.biz.name)}.</p>${link ? `<div class="k-qr"><div id="k-qr"></div><span>Scan with your phone camera</span></div>` : ""}<div class="k-actions">${gBtn("primary")}<button class="btn ghost k-btn" data-k="done">Done</button></div>`;
-  else if (K.step === "unhappy") h = `<h1 class="k-q">We're sorry it wasn't great.</h1><p class="k-sub">Tell the owner what went wrong, privately. They'll put it right.</p><div class="chips k-chips">${ISSUES.map((t) => `<button class="chip" data-k="tag" data-t="${t}" aria-pressed="${K.tags.includes(t)}">${t}</button>`).join("")}</div><textarea id="k-text" placeholder="What happened? (optional)" aria-label="What happened">${esc(K.text)}</textarea>${c ? "" : `<input id="k-phone" inputmode="tel" placeholder="Your number, if you'd like a reply (optional)" value="${esc(K.phone)}" aria-label="Your phone number">`}<div class="k-actions"><button class="btn primary k-btn" data-k="send">Send to the owner</button></div>${link ? `<p class="k-fine">Prefer to share it publicly? <a href="${esc(link)}" target="_blank" rel="noopener" data-k="opened">Post a Google review</a></p>` : ""}`;
-  else h = `<div class="k-big" aria-hidden="true">🙏</div><h1 class="k-q">${K.rating >= 4 && !K.text ? "Thank you for visiting! See you again soon." : "Thank you. The owner will see this today."}</h1>${link && K.rating <= 3 ? `<p class="k-fine">Prefer to share it publicly? <a href="${esc(link)}" target="_blank" rel="noopener" data-k="opened">Post a Google review</a></p>` : ""}<div class="k-actions"><button class="btn primary k-btn" data-k="again">Next customer</button></div>`;
+  else if (K.step === "unhappy") h = `<h1 class="k-q">We're sorry we let you down.</h1><p class="k-sub">Please tell the owner what went wrong. It goes straight to them, privately, and they read every message.</p><div class="chips k-chips">${ISSUES.map((t) => `<button class="chip" data-k="tag" data-t="${t}" aria-pressed="${K.tags.includes(t)}">${t}</button>`).join("")}</div><textarea id="k-text" placeholder="Tell the owner what happened (optional)" aria-label="What happened">${esc(K.text)}</textarea>${c ? "" : `<input id="k-phone" inputmode="tel" placeholder="Your number, so the owner can call you back (optional)" value="${esc(K.phone)}" aria-label="Your phone number">`}<div class="k-actions"><button class="btn primary k-btn" data-k="send">Send privately to the owner</button></div>${link ? `<p class="k-quiet">You can also <a href="${esc(link)}" target="_blank" rel="noopener" data-k="opened">post a public review on Google</a>.</p>` : ""}`;
+  else h = `<div class="k-big" aria-hidden="true">🙏</div><h1 class="k-q">${K.rating >= 4 && !K.text ? "Thank you for visiting! See you again soon." : "Thank you for telling us. The owner will see this today."}</h1>${link && K.rating <= 3 ? `<p class="k-quiet">You can also <a href="${esc(link)}" target="_blank" rel="noopener" data-k="opened">post a public review on Google</a>.</p>` : ""}<div class="k-actions"><button class="btn primary k-btn" data-k="again">Next customer</button></div>`;
   $("#kiosk-root").innerHTML = `<div class="kiosk" role="dialog" aria-modal="true" aria-label="Customer feedback"><button class="btn sm ghost k-exit" data-k="exit">Exit</button><div class="k-inner">${h}</div></div>`;
   if (K.step === "happy" && link && window.QRCode) new QRCode($("#k-qr"), { text: link, width: 190, height: 190, colorDark: "#16203a", colorLight: "#ffffff" });
   clearTimeout(K.timer); if (K.step === "happy" || K.step === "thanks") K.timer = setTimeout(() => { if (K) { K = freshK(); drawK(); } }, K.step === "happy" ? 120000 : 20000);

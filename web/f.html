@@ -12,36 +12,36 @@
 <body>
 <div class="kiosk"><div class="k-inner" id="k"><div class="loading"><span class="spinner"></span></div></div></div>
 <script type="module">
-// Public feedback page: f.html?b=<business-slug>. 4–5★ → Google review; 1–3★ → private note to the owner.
-// Everyone can still reach Google (Google review policy + IS 19000 forbid hiding it from unhappy customers).
+// Public feedback page: f.html?b=<business-slug>.
+// 4–5★ → the customer writes in their own words, we tidy spelling, they pick a version → copied → Google.
+// 1–3★ → private note to the owner first. A small, clearly labelled Google link stays available to everyone
+// (Google's review policy and IS 19000 forbid hiding the review option from unhappy customers).
 import { sb, friendly } from "./assets/js/sb.js";
 import { $, esc } from "./assets/js/ui.js";
+import { mountReviewHelper } from "./assets/js/review-helper.js";
 const slug = new URLSearchParams(location.search).get("b") || "";
 const FACES = ["", "Very bad", "Bad", "Okay", "Good", "Excellent"], ISSUES = ["Waiting time", "Staff behaviour", "Quality", "Price", "Cleanliness", "Something else"];
 let B, S = { rating: 0, tags: [] };
 const k = $("#k");
-const g = (cls) => B.google_review_link ? `<a class="btn ${cls} k-btn" href="${esc(B.google_review_link)}" target="_blank" rel="noopener" id="g">Write a Google review</a>` : "";
-// Small public-review link for 1–3★ (Google requires the option to stay available to everyone)
-const gSmall = () => B.google_review_link ? `<p class="k-fine">Prefer to share it publicly? <a href="${esc(B.google_review_link)}" target="_blank" rel="noopener" id="g">Post a Google review</a></p>` : "";
+const quiet = () => B.google_review_link ? `<p class="k-quiet">You can also <a href="${esc(B.google_review_link)}" target="_blank" rel="noopener" id="g">post a public review on Google</a>.</p>` : "";
+const toGoogle = (text) => { if (text) S.text = text; submit(true).catch(() => {}); setTimeout(() => { location.href = B.google_review_link; }, text ? 1200 : 300); };
 function draw(step) {
   if (step === "rate") k.innerHTML = `<p class="k-biz">${esc(B.name)}</p><h1 class="k-q">How was your visit?</h1><p class="k-sub">Tap a star.</p><div class="k-stars">${[1, 2, 3, 4, 5].map((n) => `<button class="k-star" data-n="${n}" aria-label="${n} stars: ${FACES[n]}"><span aria-hidden="true">★</span><b class="num" style="font-size:20px;color:var(--ink)">${n}</b><small>${FACES[n]}</small></button>`).join("")}</div>`;
-  if (step === "happy") k.innerHTML = `<div class="k-big">🎉</div><h1 class="k-q">Thank you! Taking you to Google…</h1><p class="k-sub">Share a few words about your visit to ${esc(B.name)}. It helps other people find us.</p><div class="k-actions">${g("primary")}</div>`;
-  if (step === "unhappy") k.innerHTML = `<h1 class="k-q">We're sorry it wasn't great.</h1><p class="k-sub">Tell the owner what went wrong, privately. They'll put it right.</p><div class="chips k-chips">${ISSUES.map((t) => `<button class="chip" data-t="${t}" aria-pressed="${S.tags.includes(t)}">${t}</button>`).join("")}</div>
-    <textarea id="txt" placeholder="What happened? (optional)" aria-label="What happened">${esc(S.text || "")}</textarea><input id="nm" placeholder="Your name (optional)" value="${esc(S.name || "")}" aria-label="Your name"><input id="ph" inputmode="tel" placeholder="Your number, if you'd like a reply (optional)" value="${esc(S.phone || "")}" aria-label="Your phone number">
-    <p class="err" id="err"></p><div class="k-actions"><button class="btn primary k-btn" id="send">Send to the owner</button></div>${gSmall()}`;
-  if (step === "thanks") k.innerHTML = `<div class="k-big">🙏</div><h1 class="k-q">${S.rating >= 4 ? "Thank you for visiting!" : "Thank you. The owner will see this today."}</h1>${S.rating <= 3 ? gSmall() : ""}`;
+  if (step === "happy") { k.innerHTML = `<p class="k-biz">${esc(B.name)}</p><div id="rh" style="display:flex;flex-direction:column;gap:14px;align-items:center;width:100%"></div>`;
+    mountReviewHelper($("#rh"), { slug, bizName: B.name, link: B.google_review_link, onSkip: () => toGoogle(""), onOpen: (t) => toGoogle(t) }); }
+  if (step === "unhappy") k.innerHTML = `<h1 class="k-q">We're sorry we let you down.</h1><p class="k-sub">Please tell the owner what went wrong. It goes straight to them, privately, and they read every message.</p><div class="chips k-chips">${ISSUES.map((t) => `<button class="chip" data-t="${t}" aria-pressed="${S.tags.includes(t)}">${t}</button>`).join("")}</div>
+    <textarea id="txt" placeholder="Tell the owner what happened (optional)" aria-label="What happened">${esc(S.text || "")}</textarea><input id="nm" placeholder="Your name (optional)" value="${esc(S.name || "")}" aria-label="Your name"><input id="ph" inputmode="tel" placeholder="Your number, so the owner can call you back (optional)" value="${esc(S.phone || "")}" aria-label="Your phone number">
+    <p class="err" id="err"></p><div class="k-actions"><button class="btn primary k-btn" id="send">Send privately to the owner</button></div>${quiet()}`;
+  if (step === "thanks") k.innerHTML = `<div class="k-big">🙏</div><h1 class="k-q">${S.rating >= 4 ? "Thank you for visiting!" : "Thank you for telling us."}</h1>${S.rating <= 3 ? `<p class="k-sub">The owner will see this today${S.phone ? " and will call you back" : ""}.</p>${quiet()}` : ""}`;
   k.querySelectorAll("[data-n]").forEach((b) => (b.onclick = async () => {
     S.rating = +b.dataset.n;
     if (S.rating >= 4) {
       if (!B.google_review_link) { submit(false).catch(() => {}); return draw("thanks"); }
-      draw("happy"); submit(true).catch(() => {});
-      setTimeout(() => { location.href = B.google_review_link; }, 900);   // straight to Google's review form
+      draw("happy");
     } else draw("unhappy");
   }));
   k.querySelectorAll("[data-t]").forEach((b) => (b.onclick = () => { keep(); S.tags = S.tags.includes(b.dataset.t) ? S.tags.filter((x) => x !== b.dataset.t) : [...S.tags, b.dataset.t]; draw("unhappy"); }));
-  const n = $("#note"); if (n) n.onclick = () => draw("unhappy");
   const s = $("#send"); if (s) s.onclick = async () => { keep(); s.disabled = true; try { await submit(false); draw("thanks"); } catch (e) { $("#err").textContent = friendly(e); s.disabled = false; } };
-  const gl = $("#g"); if (gl && S.rating >= 4) gl.addEventListener("click", () => submit(true).catch(() => {}));
 }
 const keep = () => { S.text = $("#txt")?.value || S.text; S.name = $("#nm")?.value || S.name; S.phone = $("#ph")?.value || S.phone; };
 let sentHappy = false;

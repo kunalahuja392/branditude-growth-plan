@@ -236,4 +236,38 @@ reset role;
 set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000c1');
 do $$ declare n int; begin select count(*) into n from business_keywords; assert n=0, 'customer cannot see keywords'; end $$;
 reset role;
+
+\echo '--- 11. Google auto-reply tables: tokens hidden, reviews per business, reply mode'
+reset role;
+insert into gbp_connections(business_id, refresh_token, location_name, location_title)
+  select id, 'secret-refresh-token', 'accounts/1/locations/2', 'Spice Route Cafe' from businesses where name='Spice Route Cafe';
+insert into gbp_reviews(business_id, review_name, reviewer, stars, comment, status, draft)
+  select id, 'accounts/1/locations/2/reviews/r1', 'Asha K', 5, 'Lovely chai', 'draft', 'Thank you Asha!' from businesses where name='Spice Route Cafe';
+do $$ begin assert (select count(*) from internal_secrets where key='cron_secret' and length(value)=64)=1, 'cron secret generated'; end $$;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000a1');
+do $$ declare b uuid; j jsonb; n int; begin
+  select id into b from businesses where name='Spice Route Cafe';
+  begin perform 1 from gbp_connections; assert false; exception when insufficient_privilege then null; end;
+  begin perform 1 from internal_secrets; assert false; exception when insufficient_privilege then null; end;
+  begin perform 1 from oauth_states; assert false; exception when insufficient_privilege then null; end;
+  j := gbp_status(b); assert (j->>'connected')::bool and j->>'location_title'='Spice Route Cafe' and not (j ? 'refresh_token'), 'status without token';
+  select count(*) into n from gbp_reviews; assert n=1, 'owner sees own Google reviews';
+  begin update gbp_reviews set status='posted'; get diagnostics n = row_count; assert n=0, 'owner cannot write reviews directly'; exception when insufficient_privilege then null; end;
+  update businesses set gbp_reply_mode='all' where id=b;
+  begin update businesses set gbp_reply_mode='spam' where id=b; assert false; exception when check_violation then null; end;
+end $$;
+reset role;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000b1');
+do $$ declare n int; begin
+  select count(*) into n from gbp_reviews; assert n=0, 'other business cannot see Google reviews';
+  assert gbp_status((select id from businesses where name='Spice Route Cafe')) is null, 'other business gets no status';
+end $$;
+reset role;
+set role anon; select pg_temp.as_user(null);
+do $$ declare n int; begin
+  select count(*) into n from gbp_reviews; assert n=0, 'anon sees no reviews';
+  begin perform 1 from review_polish_usage; assert n=0; exception when insufficient_privilege then null; end;
+  begin perform gbp_status((select id from businesses limit 1)); assert false; exception when insufficient_privilege then null; end;
+end $$;
+reset role;
 \echo 'ALL TESTS PASSED'
