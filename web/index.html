@@ -249,7 +249,7 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
           <a class="btn primary" href="#pricing">See plans from ₹999/month</a>
           <a class="btn line" data-wa="Hi Branditude, I'd like to know more about the Growth Plan for my business." href="#" target="_blank" rel="noopener">Talk to us on WhatsApp</a>
         </div>
-        <p class="fine">Live in 48 hours · No long contract · Cancel any month</p>
+        <p class="fine" id="hero-fine">3-day free trial · No long contract · Cancel any month</p>
       </div>
       <div class="phone" aria-label="Example: a café asks a customer for a Google review on WhatsApp">
         <div class="screen">
@@ -314,6 +314,7 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
         <details><summary>How do WhatsApp messages get sent?</summary><p>Messages go from your own WhatsApp number. The app opens each chat with the message ready, so you tap send. The Pro plan can add the official WhatsApp Business API for one-click bulk sending. Meta charges its own per-message fees for that.</p></details>
         <details><summary>Is my customer data safe?</summary><p>Your customer list is private to your account. We never message your customers ourselves unless you ask us to, and you can export or delete your data at any time.</p></details>
         <details><summary>Can I cancel?</summary><p>Monthly plans can be cancelled before the next billing date. Yearly plans are paid upfront and get two months free.</p></details>
+        <details><summary>Is there a free trial?</summary><p id="faq-trial">Yes. Every new business gets 3 days free with everything unlocked. Pay by UPI any time during the trial to keep going. If you don't pay, your account turns read-only and your data stays safe.</p></details>
         <details><summary>How do I pay?</summary><p>Pay by UPI from any app (GPay, PhonePe, Paytm, BHIM). You'll get an invoice on WhatsApp and email after we confirm the payment.</p></details>
       </div>
     </div>
@@ -342,7 +343,7 @@ const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const inr = (n) => "₹" + new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(+n || 0);
 function toast(m) { const t = document.createElement("div"); t.className = "toast"; t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 2800); }
 
-let CATS = [], PKGS = [], PRODS = [], SET = {}, billing = "monthly", cat = "";
+let CATS = [], PKGS = [], PRODS = [], SET = {}, billing = "monthly", cat = "", TRIAL = 0;
 const price = (p, b = billing) => (b === "yearly" ? p.yearly_price : p.monthly_price) * (1 - p.discount_percent / 100);
 const full = (p, b = billing) => (b === "yearly" ? p.yearly_price : p.monthly_price);
 const forCat = (p) => !p.product_categories.length || p.product_categories.some((x) => x.category_id === cat);
@@ -365,6 +366,9 @@ async function load() {
   const a = SET.agency || {}, row = (label, val, href) => (val ? `<div><small>${label}</small>${href ? `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(val)}</a>` : `<span>${esc(val)}</span>`}</div>` : "");
   $("#cinfo").innerHTML = row("WhatsApp", a.whatsapp ? "+" + a.whatsapp : "", a.whatsapp ? waLink("Hi Branditude!") : "") + row("Call", a.phone, a.phone ? "tel:" + a.phone : "") + row("Email", a.email, a.email ? "mailto:" + a.email : "") + row("Office", a.address) + row("Hours", a.hours) || `<div><small>Contact</small><span>Details coming soon</span></div>`;
   $("#foot-left").textContent = "© " + new Date().getFullYear() + " " + (a.legal_name || "Branditude") + (a.website ? " · " + a.website : "");
+  TRIAL = Math.max(0, parseInt(SET.trial?.days ?? 0, 10) || 0);
+  if (TRIAL) { $("#hero-fine").textContent = `${TRIAL}-day free trial · No long contract · Cancel any month`; $("#faq-trial").textContent = `Yes. Every new business gets ${TRIAL} day${TRIAL > 1 ? "s" : ""} free with everything unlocked. Pay by UPI any time during the trial to keep going. If you don't pay, your account turns read-only and your data stays safe.`; }
+  else { $("#hero-fine").textContent = "Live in 48 hours · No long contract · Cancel any month"; $("#faq-trial").closest("details").remove(); }
   const gr = +(SET.gst?.rate ?? 0); $("#gst-note").textContent = gr > 0 ? `Prices are in Indian rupees and exclude ${Math.round(gr * 100)}% GST, which is added at checkout.` : "Prices are in Indian rupees. No GST is charged.";
   drawPlans(); drawServices();
 }
@@ -374,7 +378,7 @@ function drawPlans() {
     <div class="price"><b class="num">${inr(Math.round(price(p)))}</b><span>/${billing === "monthly" ? "month" : "year"}</span>${+p.discount_percent ? ` <s class="num">${inr(full(p))}</s>` : ""}</div>
     <p class="bill">${+p.discount_percent ? `<span class="sale">${+p.discount_percent}% off${p.discount_label ? " · " + esc(p.discount_label) : ""}</span> ` : ""}${billing === "monthly" ? "Billed monthly" : "Works out to " + inr(Math.round(price(p) / 12)) + "/month"}</p>
     <ul>${p.features.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
-    <button class="btn ${p.is_popular ? "primary" : "line"}" data-buy="${p.id}">Get ${esc(p.name)}</button></div>`).join("");
+    <button class="btn ${p.is_popular ? "primary" : "line"}" data-buy="${p.id}">${TRIAL ? `Start ${TRIAL}-day free trial` : `Get ${esc(p.name)}`}</button></div>`).join("");
   document.querySelectorAll("[data-bill]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.bill === billing));
 }
 function drawServices() {
@@ -406,7 +410,7 @@ function readStep1() {
   co.cat = v("b-cat"); co.pkg = v("b-plan"); co.billing = v("b-bill") || co.billing; co.promo = v("b-promo");
 }
 function draw() {
-  const steps = ["Your business", "Create your account", "Pay by UPI", "Done"];
+  const steps = ["Your business", "Create your account", co.result?.trial ? "Your free trial has started" : "Pay by UPI", "Done"];
   let body = "", foot = "";
   if (co.step === 1) {
     const prods = PRODS.filter((p) => !p.product_categories.length || p.product_categories.some((x) => x.category_id === co.cat));
@@ -434,15 +438,18 @@ function draw() {
   } else if (co.step === 3) {
     const p = SET.payment || {}, ref = "BGP-" + co.payment_id.slice(0, 8).toUpperCase();
     const link = p.upi_id ? `upi://pay?pa=${encodeURIComponent(p.upi_id)}&pn=${encodeURIComponent(p.upi_name || "Branditude")}&am=${(+co.result.total).toFixed(2)}&cu=INR&tn=${encodeURIComponent(ref)}` : "";
-    body = p.upi_id ? `<div class="pay"><div class="qrbox" id="upi-qr"></div><div><p style="color:var(--ink-2);font-size:15px">Scan with any UPI app, or pay to</p><p class="upi">${esc(p.upi_id)}</p>
+    const trialNote = co.result.trial ? `<div class="note" style="margin-bottom:18px"><b>Everything is unlocked until ${new Date(co.result.trial_ends + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "long" })}.</b> Pay now or any time before then to keep it running after the trial.</div>` : "";
+    body = trialNote + (p.upi_id ? `<div class="pay"><div class="qrbox" id="upi-qr"></div><div><p style="color:var(--ink-2);font-size:15px">Scan with any UPI app, or pay to</p><p class="upi">${esc(p.upi_id)}</p>
         <p style="margin-top:10px">Amount <b class="num">${inr(co.result.total)}</b></p><p style="color:var(--ink-3);font-size:14px">Add <b>${ref}</b> in the payment note</p><a class="btn sm primary" href="${esc(link)}" style="margin-top:10px">Open UPI app</a></div></div>
       <div class="field" style="margin-top:20px"><label for="utr">UPI transaction ID (12-digit UTR)</label><input id="utr" inputmode="numeric" placeholder="e.g. 431298765012"></div><p class="err" id="err"></p>`
-      : `<div class="note">Your account is ready. Branditude will share payment details with you shortly.</div>`;
-    foot = `<a class="btn line sm" href="app.html#plan">Pay later</a>${p.upi_id ? `<button class="btn primary" data-co="paid">I've paid</button>` : `<a class="btn primary" href="app.html">Go to my dashboard</a>`}`;
+      : `<div class="note">Your account is ready. Branditude will share payment details with you shortly.</div>`);
+    foot = co.result.trial
+      ? `${p.upi_id ? `<button class="btn line sm" data-co="paid">I've paid</button>` : ""}<a class="btn primary" href="app.html">Start using my free trial</a>`
+      : `<a class="btn line sm" href="app.html#plan">Pay later</a>${p.upi_id ? `<button class="btn primary" data-co="paid">I've paid</button>` : `<a class="btn primary" href="app.html">Go to my dashboard</a>`}`;
   } else {
     body = `<div class="done-mark"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></div>
       <h3 style="font-size:22px">${co.pendingConfirm ? "Check your email" : co.enquiry ? "Thanks! We'll be in touch" : "You're all set"}</h3>
-      <p style="color:var(--ink-2);margin-top:8px">${co.pendingConfirm ? "We've sent you a link to confirm your email. Open it, sign in, and your business will be set up automatically." : co.enquiry ? "Our team will call or WhatsApp you within one working day." : "We'll confirm your payment and activate your plan within one working day. You can start setting up your dashboard now."}</p>
+      <p style="color:var(--ink-2);margin-top:8px">${co.pendingConfirm ? "We've sent you a link to confirm your email. Open it, sign in, and your business will be set up automatically." : co.enquiry ? "Our team will call or WhatsApp you within one working day." : (co.result?.trial ? "Thanks for paying. Your free trial carries on while we confirm the payment, and your plan starts as soon as it's confirmed." : "We'll confirm your payment and activate your plan within one working day. You can start setting up your dashboard now.")}</p>
       ${co.ref ? `<p style="margin-top:10px">Reference: <b>${esc(co.ref)}</b></p>` : ""}`;
     foot = co.enquiry || co.pendingConfirm ? `<button class="btn primary" data-co="close">Close</button>` : `<a class="btn primary" href="app.html">Go to my dashboard</a>`;
   }

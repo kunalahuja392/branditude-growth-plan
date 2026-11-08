@@ -54,6 +54,7 @@ function where(f) {
     if (op === "neq") return `${col} <> ${val(v)}`;
     if (op === "gte") return `${col} >= ${val(v)}`; if (op === "lte") return `${col} <= ${val(v)}`; if (op === "gt") return `${col} > ${val(v)}`; if (op === "lt") return `${col} < ${val(v)}`;
     if (op === "in") return v.length ? `${col} in (${v.map(val).join(",")})` : "false";
+    if (op === "not") return v[0] === "is" && v[1] === null ? `${col} is not null` : `not (${col} = ${val(v[1])})`;
     throw new Error("op " + op);
   }).join(" and ");
 }
@@ -61,6 +62,8 @@ function handle(req) {
   const { user, op } = req;
   if (op.kind === "rpc") {
     const args = Object.entries(op.args || {}).map(([k, v]) => `${ident(k)} => ${val(v)}`).join(", ");
+    const setof = rawAdmin(`select to_json(coalesce(bool_or(proretset), false)) from pg_proc where proname = ${lit(op.fn)} and pronamespace = 'public'::regnamespace`);
+    if (setof) return run(`select coalesce(jsonb_agg(x),'[]') from public.${ident(op.fn)}(${args}) x`, user);
     return run(`select to_jsonb(public.${ident(op.fn)}(${args}))`, user);
   }
   const T = ident(op.table);

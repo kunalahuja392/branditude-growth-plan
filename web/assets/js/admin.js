@@ -51,7 +51,7 @@ const VIEWS = {
       ${kpi("New leads · 7 days", nfmt(s.leads_new_7d), `${s.leads_open} open in total`)}
       ${kpi("WhatsApp credits sold · 30 days", nfmt(s.wa_credits_sold_30d), "")}
       ${kpi("WhatsApp messages sent · 30 days", nfmt(s.wa_messages_30d), "")}
-      ${kpi("Leads won", nfmt(ls.won || 0), `${ls.lost || 0} lost`)}
+      ${kpi("On free trial", nfmt(s.businesses_trial || 0), `${s.trials_ending_48h || 0} ending in 48h · ${s.trials_expired || 0} expired unpaid`)}
     </div>
     <div class="grid g2" style="margin-top:16px">
       <div class="card"><div class="card-head"><h2>Revenue by month</h2><span class="muted small">confirmed payments</span></div>${months.length ? barChart(months) : `<div class="empty">No confirmed payments yet.</div>`}</div>
@@ -115,7 +115,7 @@ VIEWS.businesses = async () => {
   return head("Businesses", "All client accounts. Open one to see its report, change its plan, or switch WhatsApp on.") + `
   <div class="row" style="margin-bottom:12px"><input id="bf-q" type="search" placeholder="Search name, city or phone" style="flex:2;min-width:200px" aria-label="Search businesses">
     <select id="bf-cat" style="flex:1;min-width:150px" aria-label="Category"><option value="">All categories</option>${D.cats.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select>
-    <select id="bf-st" style="flex:1;min-width:150px" aria-label="Status"><option value="">All statuses</option>${["active", "pending_payment", "paused", "cancelled"].map((s) => `<option value="${s}">${s.replace("_", " ")}</option>`).join("")}</select></div>
+    <select id="bf-st" style="flex:1;min-width:150px" aria-label="Status"><option value="">All statuses</option>${["trial", "active", "pending_payment", "paused", "cancelled"].map((s) => `<option value="${s}">${s.replace("_", " ")}</option>`).join("")}</select></div>
   <div class="table-wrap"><table><thead><tr><th>Business</th><th>Category</th><th>Package</th><th>Status</th><th>Renews</th><th>WhatsApp</th><th>Joined</th></tr></thead><tbody id="biz-rows"></tbody></table></div>`;
 };
 after.businesses = () => {
@@ -148,10 +148,10 @@ async function openBiz(id) {
     </div>
     <h3 style="margin:18px 0 8px">Account</h3>
     <div class="fields">
-      <div class="field"><label for="bz-status">Status</label><select id="bz-status">${["pending_payment", "active", "paused", "cancelled"].map((s) => `<option value="${s}" ${b.status === s ? "selected" : ""}>${s.replace("_", " ")}</option>`).join("")}</select></div>
+      <div class="field"><label for="bz-status">Status</label><select id="bz-status">${["trial", "pending_payment", "active", "paused", "cancelled"].map((s) => `<option value="${s}" ${b.status === s ? "selected" : ""}>${s.replace("_", " ")}</option>`).join("")}</select></div>
       <div class="field"><label for="bz-pkg">Package</label><select id="bz-pkg">${D.pkgs.map((p) => `<option value="${p.id}" ${b.package_id === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></div>
       <div class="field"><label for="bz-bill">Billing</label><select id="bz-bill"><option ${b.billing === "monthly" ? "selected" : ""}>monthly</option><option ${b.billing === "yearly" ? "selected" : ""}>yearly</option></select></div>
-      <div class="field"><label for="bz-ends">Paid until</label><input id="bz-ends" type="date" value="${esc(b.subscription_ends || "")}"></div>
+      <div class="field"><label for="bz-ends">Paid / trial until</label><input id="bz-ends" type="date" value="${esc(b.subscription_ends || "")}"></div>
       <div class="field"><label for="bz-cat">Category</label><select id="bz-cat">${D.cats.map((c) => `<option value="${c.id}" ${b.category_id === c.id ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></div>
       <div class="field"><label for="bz-waid">WhatsApp sender id (optional)</label><input id="bz-waid" value="${esc(b.wa_phone_number_id || "")}" placeholder="Uses agency number if empty"></div>
       <label class="check" style="grid-column:1/-1"><input type="checkbox" id="bz-wa" ${b.wa_enabled ? "checked" : ""}> WhatsApp add-on on</label>
@@ -339,7 +339,7 @@ VIEWS.team = async () => {
 VIEWS.settings = async () => {
   if (!isSuper()) return `<div class="card empty">Only a super admin can change settings.</div>`;
   const rows = await q(sb.from("settings").select("*")); const g = (k) => rows.find((r) => r.key === k)?.value || {};
-  D.settings = { agency: g("agency"), payment: g("payment"), gst: g("gst"), whatsapp: g("whatsapp") };
+  D.settings = { agency: g("agency"), payment: g("payment"), gst: g("gst"), whatsapp: g("whatsapp"), trial: g("trial") };
   const a = D.settings.agency, p = D.settings.payment;
   const f = (id, label, val, ph = "") => `<div class="field"><label for="${id}">${label}</label><input id="${id}" value="${esc(val || "")}" placeholder="${esc(ph)}"></div>`;
   return head("Settings", "Agency details shown on the store and in emails, and how businesses pay you.") + `
@@ -351,6 +351,8 @@ VIEWS.settings = async () => {
     <h2 style="margin:22px 0 12px">Payments</h2>
     <div class="fields">${f("s-upi", "UPI ID", p.upi_id, "branditude@okicici")}${f("s-upiname", "UPI payee name", p.upi_name)}${f("s-gstin", "GSTIN", p.gstin)}
       <div class="field"><label for="s-gst">GST rate %</label><input id="s-gst" type="number" min="0" max="28" value="${Math.round((D.settings.gst.rate ?? 0.18) * 100)}"></div></div>
+    <h2 style="margin:22px 0 12px">Free trial</h2>
+    <div class="fields"><div class="field"><label for="s-trial">Free trial for new businesses (days, 0 = no trial)</label><input id="s-trial" type="number" min="0" max="60" value="${D.settings.trial.days ?? 3}"></div></div>
     <h2 style="margin:22px 0 12px">WhatsApp</h2>
     <div class="field"><label for="s-wanote">Pricing note shown to businesses</label><input id="s-wanote" value="${esc(D.settings.whatsapp.price_note || "")}"></div>
     <div class="modal-foot" style="justify-content:flex-start"><button class="btn primary">Save settings</button></div>
@@ -364,6 +366,7 @@ after.settings = () => {
       { key: "payment", public: true, value: { upi_id: v("s-upi"), upi_name: v("s-upiname"), gstin: v("s-gstin") } },
       { key: "gst", public: true, value: { rate: (+v("s-gst") || 0) / 100 } },
       { key: "whatsapp", public: true, value: { price_note: v("s-wanote") } },
+      { key: "trial", public: true, value: { days: Math.max(0, Math.min(60, parseInt(v("s-trial"), 10) || 0)) } },
     ].map((r) => ({ ...r, updated_at: new Date().toISOString() }));
     try { await q(sb.from("settings").upsert(up)); toast("Settings saved"); } catch (err) { toast(err.message, "error"); } };
 };

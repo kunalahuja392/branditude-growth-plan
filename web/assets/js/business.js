@@ -6,7 +6,9 @@ import { $, $$, esc, inr, inr2, nfmt, fmtDate, fmtShort, fmtDT, ago, daysSince, 
 let C, D = {}, BID;
 const gstOn = () => +(D.settings?.gst?.rate ?? 0) > 0;
 const plusGst = () => (gstOn() ? " + GST" : "");
-const canWrite = () => ["active", "pending_payment"].includes(D.biz?.status);
+const trialLeft = () => (D.biz?.status === "trial" && D.biz.subscription_ends ? Math.round((new Date(D.biz.subscription_ends + "T23:59:59") - Date.now()) / 864e5) : null);
+const trialOpen = () => D.biz?.status === "trial" && D.biz.subscription_ends >= todayISO();
+const canWrite = () => D.biz?.status === "active" || trialOpen() || (["trial", "pending_payment"].includes(D.biz?.status) && D.payWaiting);
 const waOn = () => !!D.biz?.wa_enabled;
 
 const ROUTES = () => [
@@ -39,6 +41,7 @@ async function loadAll() {
     q(sb.from("wa_wallets").select("balance").eq("business_id", BID).maybeSingle()),
     q(sb.from("settings").select("key,value").in("key", ["payment", "whatsapp", "agency", "gst"])),
   ]);
+  D.payWaiting = (await q(sb.from("payments").select("id").eq("business_id", BID).eq("kind", "subscription").eq("status", "pending").not("utr", "is", null).limit(1))).length > 0;
   Object.assign(D, { biz, customers, coupons, feedback, reminders, visits, prog: prog || { enabled: false, name: "Loyalty card", stamps: 10, theme: "saffron" }, rewards, wallet: wallet?.balance ?? 0 });
   D.settings = Object.fromEntries(settings.map((s) => [s.key, s.value]));
 }
@@ -77,7 +80,8 @@ const couponDeal = (k) => (k.type === "percent" ? `${+k.value}% off${+k.max_disc
 function alerts() {
   if (!D.customers) return [];
   const out = [];
-  if (D.biz.status === "pending_payment") out.push({ sev: "warn", kind: "pay", title: "Complete your payment to activate your plan", sub: "Your account is waiting for payment confirmation" });
+  if (D.biz.status === "pending_payment" && !D.payWaiting) out.push({ sev: "warn", kind: "pay", title: "Complete your payment to activate your plan", sub: "Your account is waiting for payment" });
+  if (D.biz.status === "trial" && !D.payWaiting) { const l = trialLeft(); if (!trialOpen()) out.push({ sev: "bad", kind: "pay", title: "Your free trial has ended", sub: "Pay for your plan to keep using the app" }); else if (l <= 1) out.push({ sev: "warn", kind: "pay", title: l <= 0 ? "Your free trial ends today" : "Your free trial ends tomorrow", sub: "Pay now so nothing stops" }); }
   D.feedback.filter((f) => f.status === "open").forEach((f) => out.push({ sev: "bad", kind: "feedback", f, title: `Unhappy customer: ${f.name || "Walk-in"} rated ${f.rating}★`, sub: [(f.tags || []).join(", "), f.text].filter(Boolean).join(" · ") || "No details given" }));
   D.customers.forEach((c) => {
     const b = daysToBirthday(c.birthday); if (b <= 7) out.push({ sev: b === 0 ? "bad" : "warn", kind: "birthday", c, title: b === 0 ? `${c.name}'s birthday is today` : `${c.name}'s birthday in ${b} day${b > 1 ? "s" : ""}`, sub: "Send a birthday offer" });
@@ -103,10 +107,17 @@ function render() {
 function softRender() { const a = document.activeElement; if (a && $("#main").contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) { pendingRender = true; nav(); return; } render(); }
 document.addEventListener("focusout", () => { if (pendingRender) setTimeout(() => { const a = document.activeElement; if (a && $("#main").contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) return; pendingRender = false; render(); }); });
 function banner() {
+  if (D.biz.status === "trial") {
+    const left = trialLeft();
+    if (trialOpen()) return `<div class="banner"><p><b>Free trial: ${left <= 0 ? "last day today" : `${left} day${left === 1 ? "" : "s"} left`}</b> (until ${fmtDate(D.biz.subscription_ends)}). Everything is unlocked. Pay for your plan any time to keep it running after the trial.</p><a class="btn primary" href="#plan">Pay now</a></div>`;
+    if (D.payWaiting) return `<div class="banner"><p><b>Thanks, we've got your payment details.</b> Your account stays open while Branditude confirms the payment.</p></div>`;
+    return `<div class="banner" style="border-color:var(--bad);background:var(--bad-soft)"><p><b>Your free trial has ended.</b> Your customers and data are safe. Pay for your plan to keep logging visits and sending offers.</p><a class="btn primary" href="#plan">Pay now</a></div>`;
+  }
+  if (D.biz.status === "pending_payment" && D.payWaiting) return `<div class="banner"><p><b>Thanks, we've got your payment details.</b> You can use everything while Branditude confirms the payment.</p></div>`;
   if (D.biz.status === "pending_payment") return `<div class="banner"><p><b>Your plan isn't active yet.</b> You can set things up now. Pay for your plan and we'll activate it as soon as the payment is confirmed.</p><a class="btn primary" href="#plan">Pay now</a></div>`;
   if (D.biz.status === "paused") return `<div class="banner" style="border-color:var(--bad);background:var(--bad-soft)"><p><b>Your account is paused.</b> You can view your data but not make changes. Renew your plan or contact Branditude.</p><a class="btn" href="#plan">Renew</a></div>`;
   if (D.biz.status === "cancelled") return `<div class="banner" style="border-color:var(--bad);background:var(--bad-soft)"><p><b>Your plan is cancelled.</b> Choose a plan to start again.</p><a class="btn" href="#plan">See plans</a></div>`;
-  if (D.biz.subscription_ends && daysSince(D.biz.subscription_ends) > -5) return `<div class="banner"><p><b>Your plan renews ${fmtDate(D.biz.subscription_ends)}.</b> Pay now so nothing stops.</p><a class="btn primary" href="#plan">Renew</a></div>`;
+  if (D.biz.status === "active" && D.biz.subscription_ends && daysSince(D.biz.subscription_ends) > -5) return `<div class="banner"><p><b>Your plan renews ${fmtDate(D.biz.subscription_ends)}.</b> Pay now so nothing stops.</p><a class="btn primary" href="#plan">Renew</a></div>`;
   return "";
 }
 const head = (t, p, actions = "") => `<div class="page-head"><div><h1>${t}</h1>${p ? `<p>${p}</p>` : ""}</div><div class="row">${actions}</div></div>`;
@@ -411,7 +422,7 @@ async function payModal(paymentId) {
     <div class="modal-foot"><button class="btn" data-close>Later</button><button class="btn primary" id="utr-go">I've paid</button></div>`);
   if (link && window.QRCode) new QRCode(m.querySelector("#pay-qr"), { text: link, width: 150, height: 150, colorDark: "#16203a", colorLight: "#ffffff" });
   m.querySelector("#utr-go").onclick = async () => {
-    try { await q(sb.rpc("submit_utr", { p_payment: p.id, p_utr: m.querySelector("#utr").value.trim() })); closeModal(); toast("Thanks! We'll confirm your payment shortly."); render(); }
+    try { await q(sb.rpc("submit_utr", { p_payment: p.id, p_utr: m.querySelector("#utr").value.trim() })); closeModal(); toast("Thanks! We'll confirm your payment shortly."); if (p.kind === "subscription") D.payWaiting = true; render(); }
     catch (e) { m.querySelector("#utr-err").textContent = e.message; }
   };
 }

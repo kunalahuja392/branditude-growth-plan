@@ -37,6 +37,8 @@ do $$ declare r jsonb; begin
   r := register_business(jsonb_build_object('name','Spice Route Cafe','contact_name','Asha','phone','9800000001','city','Pune',
         'category_id',(select id from categories where slug='cafe-restaurant'),'package_id',(select id from packages where slug='growth'),'billing','monthly'));
   assert my_role()='business', 'role becomes business';
+  assert (r->>'trial')::boolean and (select status from businesses where id=(r->>'business_id')::uuid)='trial', 'new business starts on trial';
+  assert (select subscription_ends from businesses where id=(r->>'business_id')::uuid) = current_date + 3, 'trial is 3 days';
   perform submit_utr((r->>'payment_id')::uuid, '431298765012');
   raise notice 'registered %', r->>'slug';
 end $$;
@@ -128,7 +130,7 @@ do $$ begin perform set_user_role('team@branditude.test','team'); end $$;
 reset role;
 set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-00000000000b');
 do $$ declare s jsonb; p uuid; n int; begin
-  s := admin_stats(); assert (s->>'payments_pending')::int=2, 'two pending sign-ups';
+  s := admin_stats(); assert (s->>'payments_pending')::int=1, 'one sign-up with a UPI ref to confirm'; assert (s->>'businesses_trial')::int=2, 'two on trial';
   select count(*) into n from leads; assert n=3, 'team sees all leads: '||n;
   select id into p from payments where description='Plan sign-up' and utr is not null;
   perform admin_confirm_payment(p, true);
@@ -174,6 +176,37 @@ do $$ declare n int; begin
   select count(*) into n from customers; assert n=2, 'can still read';
   begin perform log_visit((select id from businesses),'9876543210','',100,null); assert false; exception when others then assert sqlerrm like 'Your account is paused%'; end;
   begin insert into reminders(business_id,text) values ((select id from businesses),'x'); assert false; exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+\echo '--- 9. free trial rules'
+reset role;
+-- salon (no UTR) trial expires -> read-only with a clear reason
+update businesses set subscription_ends = current_date - 1 where name='Glow Salon';
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000b1');
+do $$ declare b uuid; p uuid; begin
+  select id into b from businesses;
+  begin perform log_visit(b,'9876500000','A',100,null); assert false; exception when others then assert sqlerrm like 'Your free trial has ended%', sqlerrm; end;
+  -- paying (UTR entered) re-opens the account while the team checks the payment
+  select id into p from payments where business_id=b and kind='subscription';
+  perform submit_utr(p,'431200000001');
+  perform log_visit(b,'9876500000','A',100,null);
+end $$;
+reset role;
+-- same phone can't get a second trial
+insert into auth.users (id,email) values ('00000000-0000-0000-0000-0000000000d1','again@example.test');
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000d1');
+do $$ declare r jsonb; begin
+  r := register_business(jsonb_build_object('name','Glow Salon 2','phone','9800000002','package_id',(select id from packages where slug='starter')));
+  assert not (r->>'trial')::boolean, 'no second trial for the same phone';
+  begin perform log_visit((r->>'business_id')::uuid,'9876500000','A',100,null); assert false; exception when others then assert sqlerrm like 'Your plan isn''t active yet%', sqlerrm; end;
+end $$;
+reset role;
+-- confirming the salon's payment after an expired trial starts the month today
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
+do $$ begin
+  perform admin_confirm_payment((select p.id from payments p join businesses b on b.id=p.business_id where b.name='Glow Salon' and p.kind='subscription'), true);
+  assert (select status from businesses where name='Glow Salon')='active';
+  assert (select subscription_ends from businesses where name='Glow Salon') = (current_date + interval '1 month')::date, 'month starts today';
 end $$;
 reset role;
 \echo 'ALL TESTS PASSED'

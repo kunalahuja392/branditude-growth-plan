@@ -141,7 +141,7 @@ export function barChart(points, { label = (p) => p.label, value = (p) => p.valu
 export const hbars = (rows, fmt = nfmt) => { const max = Math.max(...rows.map((r) => +r.value), 1);
   return rows.length ? rows.map((r) => `<div class="hbar"><span title="${esc(r.label)}">${esc(r.label)}</span><div class="bar"><i style="width:${Math.round((+r.value / max) * 100)}%"></i></div><b class="num">${fmt(r.value)}</b></div>`).join("") : `<div class="empty">No data yet.</div>`; };
 
-export const statusPill = (s) => { const m = { active: "good", won: "good", confirmed: "good", happy: "good", pending_payment: "warn", pending: "warn", payment_pending: "warn", contacted: "info", new: "acc", open: "bad", paused: "bad", rejected: "bad", lost: "", cancelled: "", resolved: "" };
+export const statusPill = (s) => { const m = { trial: "info", active: "good", won: "good", confirmed: "good", happy: "good", pending_payment: "warn", pending: "warn", payment_pending: "warn", contacted: "info", new: "acc", open: "bad", paused: "bad", rejected: "bad", lost: "", cancelled: "", resolved: "" };
   return `<span class="pill ${m[s] ?? ""}">${esc(String(s).replace(/_/g, " "))}</span>`; };
 
 /* ---------- loyalty card (shared by business + customer portals) ---------- */

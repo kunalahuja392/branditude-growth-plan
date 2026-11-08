@@ -42,7 +42,9 @@ tests/
 - **WhatsApp is optional and charged per message.** Businesses buy prepaid credit packs (prices set by admin). Each message uses the template's credits, which are reserved before sending (no overdraw), and failed messages are refunded automatically. Without credits, WhatsApp is off.
 - **Loyalty card**: the business sets the number of visits (2–20), rewards on any visit (% off, ₹ off, or a free item worth up to ₹X), and the final reward. The card resets after the final reward. If a coupon and a loyalty reward apply on the same visit, the bigger one is used. They don't stack.
 - **Feedback**: 4–5★ go to the Google review page. 1–3★ are invited to tell the owner privately and land in the Feedback inbox and Alerts. **Everyone can still reach Google**: Google's review policy and India's IS 19000:2022 don't allow hiding the review option from unhappy customers.
+- **Free trial**: new businesses get a free trial (default 3 days, set in Admin → Settings; 0 turns it off) with everything unlocked except WhatsApp sending. One trial per business phone number. After the trial the account is read-only until the plan payment is confirmed, but entering a UPI transaction ID keeps it open while the team checks. A plan paid after a trial starts that day.
 - **Paused / cancelled businesses** can still see their data but can't change anything.
+- Database time zone is Asia/Kolkata, so "today", trial ends and renewals follow Indian dates.
 - **Customers** only ever see rows that match their own verified phone number.
 
 ---

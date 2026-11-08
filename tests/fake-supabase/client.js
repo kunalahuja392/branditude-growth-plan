@@ -11,7 +11,7 @@
     update(v) { this.op.kind = "update"; this.op.values = v; return this; }
     delete() { this.op.kind = "delete"; return this; }
     eq(c, v) { this.op.filters.push(["eq", c, v]); return this; } neq(c, v) { this.op.filters.push(["neq", c, v]); return this; }
-    in(c, v) { this.op.filters.push(["in", c, v]); return this; } gte(c, v) { this.op.filters.push(["gte", c, v]); return this; } lte(c, v) { this.op.filters.push(["lte", c, v]); return this; }
+    in(c, v) { this.op.filters.push(["in", c, v]); return this; } not(c, op, v) { this.op.filters.push(["not", c, [op, v]]); return this; } gte(c, v) { this.op.filters.push(["gte", c, v]); return this; } lte(c, v) { this.op.filters.push(["lte", c, v]); return this; }
     order(c, o = {}) { this.op.order.push([c, o]); return this; } limit(n) { this.op.limit = n; return this; }
     single() { this.mode = "single"; return this; } maybeSingle() { this.mode = "maybe"; return this; }
     then(res, rej) { return post("/__q", { user: getSess()?.user?.id || null, op: this.op }).then((r) => {
