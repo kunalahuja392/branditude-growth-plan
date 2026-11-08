@@ -6,7 +6,7 @@ let C, D = {};
 const isSuper = () => C.profile.role === "super_admin";
 const ROUTES = () => [
   { label: "", items: [["overview", "Overview", "dash"], ["leads", "Leads", "inbox", D.stats?.leads_open || ""], ["businesses", "Businesses", "store"], ["payments", "Payments", "rupee", D.stats?.payments_pending || ""]] },
-  { label: "Catalogue", items: [["packages", "Packages", "box"], ["promos", "Package discounts", "tag"], ["categories", "Categories", "grid"], ["products", "Category services", "spark"], ["whatsapp", "WhatsApp", "wa"]] },
+  { label: "Catalogue", items: [["packages", "Packages", "box"], ["promos", "Package discounts", "tag"], ["categories", "Categories", "grid"], ["products", "Category services", "spark"], ["keywords", "Keyword suggestions", "star"], ["whatsapp", "WhatsApp", "wa"]] },
   { label: "Agency", items: [...(isSuper() ? [["team", "Team", "shield"], ["settings", "Settings", "cog"]] : []), ["signout", "Sign out", "out"]] },
 ];
 const route = () => { const h = location.hash.slice(1); return ROUTES().flatMap((g) => g.items).some((r) => r[0] === h) ? h : "overview"; };
@@ -285,6 +285,30 @@ function prodForm(p = { active: true, billing: "one_time", sort: 100, product_ca
       toast("Service saved"); render(); } });
 }
 
+/* ---------------- Keyword suggestions ---------------- */
+let KW_CAT = null;
+VIEWS.keywords = async () => {
+  await cats(); if (!KW_CAT || !D.cats.some((c) => c.id === KW_CAT)) KW_CAT = D.cats[0]?.id;
+  const all = await q(sb.from("category_keywords").select("*").order("sort"));
+  D.ckw = all; const list = all.filter((k) => k.category_id === KW_CAT);
+  return head("Keyword suggestions", "Search phrases suggested to businesses in each category on their Keywords & SEO page. Write <b>{city}</b> where the business's city should go. Businesses use these in their own Google profile content, never in customer reviews.") + `
+  <div class="chips" style="margin-bottom:16px">${D.cats.map((c) => `<button class="chip" data-a="kw-cat" data-id="${c.id}" aria-pressed="${c.id === KW_CAT}">${esc(c.icon)} ${esc(c.name)} <span class="num">${all.filter((k) => k.category_id === c.id).length}</span></button>`).join("")}</div>
+  <div class="grid g2">
+    <div class="card"><div class="card-head"><h2>${esc(D.cats.find((c) => c.id === KW_CAT)?.name || "")}</h2><span class="pill num">${list.length}</span></div>
+      ${list.length ? `<div class="list">${list.map((k) => `<div class="item"><div class="grow">${esc(k.keyword)}<span class="muted small" style="display:block">e.g. ${esc(k.keyword.replace(/\{city\}/g, "Pune"))}</span></div><button class="btn sm ghost danger" data-a="ckw-del" data-id="${k.id}">Remove</button></div>`).join("")}</div>` : `<div class="empty">No suggestions for this category yet.</div>`}</div>
+    <div class="card"><div class="card-head"><h2>Add suggestions</h2></div>
+      <form id="ckw-form"><div class="field"><label for="ckw-new">One per line</label><textarea id="ckw-new" placeholder="best café in {city}&#10;cafe near me&#10;filter coffee {city}"></textarea></div>
+      <div class="modal-foot" style="justify-content:flex-start"><button class="btn primary">Add to this category</button></div></form></div>
+  </div>`;
+};
+after.keywords = () => { const f = $("#ckw-form"); if (!f) return;
+  f.onsubmit = async (e) => { e.preventDefault();
+    const lines = [...new Set($("#ckw-new").value.split("\n").map((x) => x.trim().replace(/\s+/g, " ")).filter((x) => x.length >= 2 && x.length <= 80))];
+    if (!lines.length) return toast("Type at least one keyword", "error");
+    const start = (D.ckw.filter((k) => k.category_id === KW_CAT).reduce((m, k) => Math.max(m, k.sort), 0) || 0) + 1;
+    try { await q(sb.from("category_keywords").upsert(lines.map((kw, i) => ({ category_id: KW_CAT, keyword: kw, sort: start + i })), { onConflict: "category_id,keyword", ignoreDuplicates: true })); toast(`Added ${lines.length}`); render(); }
+    catch (err) { toast(err.message, "error"); } }; };
+
 /* ---------------- WhatsApp ---------------- */
 VIEWS.whatsapp = async () => {
   const [packs, tpls, wallets, settings] = await Promise.all([
@@ -394,6 +418,8 @@ document.addEventListener("click", async (e) => {
       case "cat-edit": catForm(D.cats.find((c) => c.id === id)); break;
       case "prod-new": prodForm(); break;
       case "prod-edit": prodForm(D.prods.find((p) => p.id === id)); break;
+      case "kw-cat": KW_CAT = id; render(); break;
+      case "ckw-del": await q(sb.from("category_keywords").delete().eq("id", id)); render(); break;
       case "pack-new": packForm(); break;
       case "pack-edit": packForm(D.packs.find((p) => p.id === id)); break;
       case "tpl-new": tplForm(); break;

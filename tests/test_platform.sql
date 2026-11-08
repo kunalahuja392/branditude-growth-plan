@@ -209,4 +209,31 @@ do $$ begin
   assert (select subscription_ends from businesses where name='Glow Salon') = (current_date + interval '1 month')::date, 'month starts today';
 end $$;
 reset role;
+\echo '--- 10. keyword studio permissions'
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000a1');
+do $$ declare b uuid; n int; begin
+  select id into b from businesses where name='Spice Route Cafe';
+  -- cafe was paused in test 8: reopen as staff below, first check reads work
+  select count(*) into n from category_keywords; assert n > 0, 'business can read agency suggestions';
+  begin insert into category_keywords(category_id, keyword) values ((select id from categories limit 1), 'hack'); assert false; exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+update businesses set status='active' where name='Spice Route Cafe';
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000a1');
+do $$ declare b uuid; n int; begin
+  select id into b from businesses where name='Spice Route Cafe';
+  insert into business_keywords(business_id, keyword, source) values (b, 'best cafe in Pune', 'suggested');
+  begin insert into business_keywords(business_id, keyword) values (b, 'BEST CAFE IN PUNE'); assert false; exception when unique_violation then null; end;
+  insert into business_content(business_id, kind, body) values (b, 'description', 'Spice Route Cafe is a cafe in Pune.');
+end $$;
+reset role;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000b1');
+do $$ declare n int; begin
+  select count(*) into n from business_keywords; assert n=0, 'other business cannot see keywords';
+  select count(*) into n from business_content; assert n=0, 'other business cannot see drafts';
+end $$;
+reset role;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000c1');
+do $$ declare n int; begin select count(*) into n from business_keywords; assert n=0, 'customer cannot see keywords'; end $$;
+reset role;
 \echo 'ALL TESTS PASSED'

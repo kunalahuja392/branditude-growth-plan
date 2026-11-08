@@ -63,9 +63,14 @@ document.addEventListener("click", (e) => {
     m.querySelectorAll("[data-n]").forEach((s) => (s.onclick = () => {
       rating = +s.dataset.n; m.querySelectorAll("[data-n]").forEach((x) => (x.style.borderColor = +x.dataset.n <= rating ? "var(--accent)" : ""));
       const g = b.google_review_link ? `<a class="btn ${rating >= 4 ? "primary" : ""}" href="${esc(b.google_review_link)}" target="_blank" rel="noopener" id="rate-g">Write a Google review</a>` : "";
+      if (rating >= 4 && b.google_review_link) {   // straight to Google's review form
+        q(sb.rpc("submit_feedback", { p_slug: b.slug, p_rating: rating, p_tags: [], p_text: "", p_name: C.profile.full_name || "", p_phone: "", p_opened_google: true })).catch(() => {});
+        closeModal(); window.open(b.google_review_link, "_blank", "noopener"); toast("Thanks! Opening Google reviews…"); return;
+      }
+      const small = b.google_review_link ? `<p class="small muted" style="margin-top:10px">Prefer to share it publicly? <a href="${esc(b.google_review_link)}" target="_blank" rel="noopener" id="rate-g">Post a Google review</a></p>` : "";
       m.querySelector("#rate-more").innerHTML = rating >= 4
-        ? `<p>Thank you! Would you share that on Google?</p><div class="modal-foot" style="justify-content:flex-start">${g}<button class="btn" id="rate-send">Just send my rating</button></div>`
-        : `<p>Sorry it wasn't great. Tell the owner what went wrong, privately.</p><textarea id="rate-text" placeholder="What happened?"></textarea><div class="modal-foot" style="justify-content:flex-start"><button class="btn primary" id="rate-send">Send to the owner</button>${g}</div>`;
+        ? `<p>Thank you for the rating!</p><div class="modal-foot" style="justify-content:flex-start"><button class="btn primary" id="rate-send">Send my rating</button></div>`
+        : `<p>Sorry it wasn't great. Tell the owner what went wrong, privately.</p><textarea id="rate-text" placeholder="What happened?"></textarea><div class="modal-foot" style="justify-content:flex-start"><button class="btn primary" id="rate-send">Send to the owner</button></div>${small}`;
       const send = async (opened) => { try { await q(sb.rpc("submit_feedback", { p_slug: b.slug, p_rating: rating, p_tags: [], p_text: m.querySelector("#rate-text")?.value || "", p_name: C.profile.full_name || "", p_phone: "", p_opened_google: !!opened })); closeModal(); toast("Thanks for your feedback"); } catch (err) { toast(err.message, "error"); } };
       m.querySelector("#rate-send").onclick = () => send(false);
       const gl = m.querySelector("#rate-g"); if (gl) gl.addEventListener("click", () => send(true));

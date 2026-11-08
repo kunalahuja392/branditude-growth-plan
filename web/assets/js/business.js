@@ -12,7 +12,7 @@ const canWrite = () => D.biz?.status === "active" || trialOpen() || (["trial", "
 const waOn = () => !!D.biz?.wa_enabled;
 
 const ROUTES = () => [
-  { label: "", items: [["dashboard", "Dashboard", "dash"], ["customers", "Customers", "users"], ["reviews", "Google reviews", "star"], ["feedback", "Feedback", "smile", openComplaints() || ""],
+  { label: "", items: [["dashboard", "Dashboard", "dash"], ["customers", "Customers", "users"], ["reviews", "Google reviews", "star"], ["feedback", "Feedback", "smile", openComplaints() || ""], ["seo", "Keywords & SEO", "spark"],
     ["offers", "Offers & coupons", "tag"], ["loyalty", "Loyalty card", "card"], ["whatsapp", "WhatsApp", "wa"], ["alerts", "Alerts", "bell", alerts().length || ""]] },
   { label: "Account", items: [["plan", "Plan & services", "box"], ["profile", "Business profile", "store"], ["signout", "Sign out", "out"]] },
 ];
@@ -445,6 +445,96 @@ after.profile = () => { $("#prof").onsubmit = async (e) => { e.preventDefault();
   try { await q(sb.from("businesses").update({ name: $("#p-name").value.trim(), phone: normPhone($("#p-phone").value, $("#p-cc").value), email: $("#p-email").value.trim(), city: $("#p-city").value.trim(), country_code: $("#p-cc").value.replace(/\D/g, "") || "91", address: $("#p-addr").value.trim(), google_review_link: $("#p-review").value.trim() }).eq("id", BID));
     await reload("biz"); toast("Profile saved"); render(); } catch (err) { toast(err.message, "error"); } }; };
 
+/* ---------- Keywords & SEO ---------- */
+const SEO_KINDS = {
+  description: { label: "Profile description", max: 750, where: "Google Business Profile → Edit profile → Description" },
+  post: { label: "Google post", max: 1500, where: "Google Business Profile → Add update" },
+  faq: { label: "FAQ", max: 3000, where: "Your website, and Google Business Profile → Q&A" },
+  reply: { label: "Reply to a review", max: 4096, where: "Google Business Profile → Reviews → Reply" },
+};
+let SEO = { kind: "description", out: "", input: {} };
+const cityOf = () => (D.biz.city || "").trim();
+const fillCity = (k) => k.replace(/\{city\}/g, cityOf() || "your city").replace(/\s+/g, " ").trim();
+VIEWS.seo = () => `<div id="seo-view"><div class="loading"><span class="spinner"></span></div></div>`;
+async function seoLoad() {
+  const [kw, sug, saved] = await Promise.all([
+    q(sb.from("business_keywords").select("*").eq("business_id", BID).order("created_at")),
+    D.biz.category_id ? q(sb.from("category_keywords").select("keyword").eq("category_id", D.biz.category_id).order("sort")) : [],
+    q(sb.from("business_content").select("*").eq("business_id", BID).order("created_at", { ascending: false }).limit(30)),
+  ]);
+  D.kw = kw; D.kwSug = sug.map((x) => fillCity(x.keyword)); D.saved = saved; D.kwAi = D.kwAi || [];
+}
+after.seo = async () => { try { await seoLoad(); } catch (e) { toast(e.message, "error"); } drawSeo(); };
+function drawSeo() {
+  const el = $("#seo-view"); if (!el) return;
+  const have = new Set(D.kw.map((k) => k.keyword.toLowerCase()));
+  const sugg = [...new Set([...D.kwSug, ...D.kwAi])].filter((k) => !have.has(k.toLowerCase()));
+  const k = SEO_KINDS[SEO.kind], len = (SEO.out || "").length;
+  const inputs = {
+    description: `<div class="field"><label for="seo-in">Anything special to mention? (optional)</label><input id="seo-in" data-in="details" value="${esc(SEO.input.details || "")}" placeholder="e.g. rooftop seating, open till midnight, pure veg"></div>`,
+    post: `<div class="field"><label for="seo-in">What is the post about?</label><input id="seo-in" data-in="topic" value="${esc(SEO.input.topic || "")}" placeholder="e.g. Diwali offer: 20% off sweets till 15 Nov"></div>`,
+    faq: `<div class="field"><label for="seo-in">Facts to include (optional)</label><input id="seo-in" data-in="details" value="${esc(SEO.input.details || "")}" placeholder="e.g. open 8am–11pm, free parking, UPI accepted"></div>`,
+    reply: `<div class="fields"><div class="field"><label for="seo-rn">Customer's name</label><input id="seo-rn" data-in="reviewer" value="${esc(SEO.input.reviewer || "")}"></div>
+      <div class="field"><label for="seo-rs">Stars</label><select id="seo-rs" data-in="stars">${[5, 4, 3, 2, 1].map((n) => `<option ${String(SEO.input.stars || 5) === String(n) ? "selected" : ""}>${n}</option>`).join("")}</select></div></div>
+      <div class="field" style="margin-top:12px"><label for="seo-in">Paste their Google review</label><textarea id="seo-in" data-in="review" style="min-height:80px">${esc(SEO.input.review || "")}</textarea></div>`,
+  }[SEO.kind];
+  el.innerHTML = head("Keywords & SEO", "Pick the searches you want to be found for. They go into content <b>you</b> publish on your Google profile: the description, posts, FAQs and replies to reviews. That helps you show up on Google Maps and in AI assistants like ChatGPT and Gemini.") + `
+  <div class="note" style="margin-bottom:16px">Keywords are never put into your customers' reviews. Google doesn't allow businesses to tell customers what to write, and it can remove reviews or restrict your profile if you do.</div>
+  <div class="grid g2">
+    <div class="card"><div class="card-head"><h2>Your keywords</h2><span class="pill ${D.kw.length ? "good" : ""} num">${D.kw.length}/15</span></div>
+      ${D.kw.length ? `<div class="chips">${D.kw.map((x) => `<span class="chip" aria-pressed="true" style="cursor:default">${esc(x.keyword)} <button class="btn sm ghost" data-a="kw-del" data-id="${x.id}" aria-label="Remove ${esc(x.keyword)}" style="padding:0 4px;color:inherit">✕</button></span>`).join("")}</div>` : `<p class="muted small">No keywords yet. Tap suggestions below or add your own.</p>`}
+      <form id="kw-add" class="row" style="margin-top:12px"><input id="kw-new" placeholder="Add your own, e.g. best filter coffee in ${esc(cityOf() || "your city")}" style="flex:1;min-width:200px" aria-label="New keyword" maxlength="80"><button class="btn" ${canWrite() ? "" : "disabled"}>Add</button></form>
+      <h3 style="margin:18px 0 8px">Suggested for ${esc(D.biz.categories?.name || "you")}${cityOf() ? " in " + esc(cityOf()) : ""}</h3>
+      ${sugg.length ? `<div class="chips">${sugg.map((x) => `<button class="chip" data-a="kw-add-s" data-kw="${esc(x)}" ${canWrite() && D.kw.length < 15 ? "" : "disabled"}>+ ${esc(x)}</button>`).join("")}</div>` : `<p class="muted small">You've added all the suggestions.</p>`}
+      <div class="row" style="margin-top:12px"><button class="btn sm" data-a="kw-ai" ${canWrite() ? "" : "disabled"}>${ico("spark")} Suggest more with AI</button>${cityOf() ? "" : `<span class="small muted">Add your city in <a href="#profile">Business profile</a> for better suggestions.</span>`}</div>
+    </div>
+    <div class="card"><div class="card-head"><h2>Write with your keywords</h2></div>
+      <div class="chips" style="margin-bottom:14px">${Object.entries(SEO_KINDS).map(([key, v]) => `<button class="chip" data-a="seo-kind" data-id="${key}" aria-pressed="${SEO.kind === key}">${v.label}</button>`).join("")}</div>
+      ${inputs}
+      <div class="row" style="margin-top:12px"><button class="btn primary" data-a="seo-go" ${canWrite() ? "" : "disabled"}>${ico("spark")} Write it</button></div>
+      <div class="field" style="margin-top:14px"><label for="seo-out">Draft (edit freely)</label><textarea id="seo-out" style="min-height:180px" placeholder="Your draft appears here">${esc(SEO.out)}</textarea>
+        <span class="small ${len > k.max ? "err" : "muted"}" id="seo-len" style="margin-top:4px">${len}/${k.max} characters · paste into ${esc(k.where)}</span></div>
+      <div class="row" style="margin-top:10px"><button class="btn sm" data-a="seo-copy">${ico("copy")} Copy</button><button class="btn sm" data-a="seo-save" ${canWrite() ? "" : "disabled"}>Save to library</button></div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:16px"><div class="card-head"><h2>Saved drafts</h2></div>
+    ${D.saved.length ? `<div class="list">${D.saved.map((c) => `<div class="item" style="align-items:flex-start"><div class="grow"><b>${esc(SEO_KINDS[c.kind]?.label || c.kind)}${c.title ? " · " + esc(c.title) : ""}</b><span class="muted small">${fmtDT(c.created_at)}</span><p class="small" style="white-space:pre-wrap;margin-top:4px">${esc(c.body.length > 280 ? c.body.slice(0, 280) + "…" : c.body)}</p></div><button class="btn sm" data-a="copy" data-text="${esc(c.body)}">${ico("copy")}</button><button class="btn sm ghost danger" data-a="seo-del" data-id="${c.id}">Delete</button></div>`).join("")}</div>` : `<div class="empty">Drafts you save appear here.</div>`}
+  </div>`;
+  $("#kw-add").onsubmit = async (e) => { e.preventDefault(); await addKw($("#kw-new").value, "own"); };
+  $$("[data-in]").forEach((i) => (i.oninput = i.onchange = () => (SEO.input[i.dataset.in] = i.value)));
+  $("#seo-out").oninput = (e) => { SEO.out = e.target.value; const n = SEO.out.length; const l = $("#seo-len"); l.textContent = `${n}/${k.max} characters · paste into ${k.where}`; l.className = "small " + (n > k.max ? "err" : "muted"); };
+}
+async function addKw(kw, source) {
+  kw = String(kw || "").trim().replace(/\s+/g, " ");
+  if (kw.length < 2) return toast("Type a keyword first", "error");
+  if (D.kw.length >= 15) return toast("Keep it to 15 keywords. Remove one first.", "error");
+  try { await q(sb.from("business_keywords").insert({ business_id: BID, keyword: kw.slice(0, 80), source })); await seoLoad(); drawSeo(); } catch (e) { toast(/exists/.test(e.message) ? "You already have that keyword" : e.message, "error"); }
+}
+async function aiCall(kind, input) {
+  const { data, error } = await sb.functions.invoke("ai-content", { body: { business_id: BID, kind, input } });
+  if (error) { let m = error.message, fb = true; try { const j = await error.context.json(); m = j.error || m; fb = !!j.fallback; } catch {} const e = new Error(m); e.fallback = fb; throw e; }
+  return data;
+}
+// Template drafts used when AI writing isn't switched on
+function templateDraft(kind, input) {
+  const b = D.biz, name = b.name, city = cityOf(), cat = (b.categories?.name || "local business").toLowerCase(), kws = D.kw.map((x) => x.keyword);
+  const k = (i) => kws[i % Math.max(kws.length, 1)] || `${cat} in ${city || "town"}`;
+  if (kind === "description") return `${name} is a ${cat}${city ? ` in ${city}` : ""} that customers come back to. ${input.details ? input.details.trim().replace(/^./, (c) => c.toUpperCase()).replace(/\.?$/, ". ") : ""}If you're searching for ${k(0)}, we'd love to welcome you. Our team takes care of every visit personally, and regulars earn rewards on our loyalty card. ${kws[1] ? `People also find us when looking for ${k(1)}. ` : ""}Drop by, or message us on WhatsApp to plan your visit.`.slice(0, 750);
+  if (kind === "post") return `${(input.topic || "Something new at " + name).trim()}\n\n${name}${city ? `, ${city}` : ""} is ready for you. ${kws[0] ? `If you've been looking for ${k(0)}, this is a great time to visit. ` : ""}Show this post at the counter or message us on WhatsApp to know more.\n\nSee you soon!`;
+  if (kind === "faq") return [
+    [`Where is ${name} located?`, `We're at [address]${city ? `, ${city}` : ""}. Search "${name}" on Google Maps for directions.`],
+    [`What are your timings?`, `We're open [timings], all days except [closed day].`],
+    [`What do you offer?`, `${name} is a ${cat}${kws[0] ? ` known for ${k(0)}` : ""}. ${input.details || "[main services or products]"}.`],
+    [`Do I need to book in advance?`, `[Walk-ins are welcome / Booking is recommended]. You can message us on WhatsApp at [number].`],
+    [`Is parking available?`, `[Parking details].`],
+    [`Which payment methods do you accept?`, `We accept UPI, cards and cash.`],
+  ].map(([qq, a]) => `Q: ${qq}\nA: ${a}`).join("\n\n");
+  if (kind === "reply") { const first = (input.reviewer || "").split(" ")[0]; const st = +input.stars || 5;
+    return st >= 4 ? `Thank you so much${first ? `, ${first}` : ""}! We're really glad you enjoyed your visit to ${name}. ${kws[0] ? `It means a lot to us as a ${cat}${city ? ` in ${city}` : ""}. ` : ""}Hope to see you again soon!`
+      : `Hi${first ? ` ${first}` : ""}, thank you for telling us about this, and we're sorry your visit wasn't up to the mark. This isn't the experience we want for anyone at ${name}. Please message us on WhatsApp or call us so we can understand what happened and make it right.`; }
+  return "";
+}
+
 /* ---------- Log a visit ---------- */
 function visitModal() {
   const m = openModal(`<div class="modal-head"><h2>Log a visit</h2><button class="btn ghost" data-close>Close</button></div>
@@ -499,9 +589,9 @@ function drawK() {
   const gBtn = (cls) => (link ? `<a class="btn ${cls} k-btn" target="_blank" rel="noopener" href="${esc(link)}" data-k="opened">Write a Google review</a>` : "");
   let h;
   if (K.step === "rate") h = `<p class="k-biz">${esc(D.biz.name)}</p><h1 class="k-q">${c ? esc(c.name.split(" ")[0]) + ", how" : "How"} was your visit today?</h1><p class="k-sub">Tap a star. It takes 5 seconds.</p><div class="k-stars">${[1, 2, 3, 4, 5].map((n) => `<button class="k-star" data-k="rate" data-n="${n}" aria-label="${n} stars: ${FACES[n]}"><span aria-hidden="true">★</span><b class="num" style="font-size:20px;color:var(--ink)">${n}</b><small>${FACES[n]}</small></button>`).join("")}</div>`;
-  else if (K.step === "happy") h = `<div class="k-big" aria-hidden="true">🎉</div><h1 class="k-q">Thank you! We're so glad you enjoyed it.</h1><p class="k-sub">Would you share that on Google? It helps other people find ${esc(D.biz.name)}.</p>${link ? `<div class="k-qr"><div id="k-qr"></div><span>Scan with your phone camera</span></div>` : ""}<div class="k-actions">${gBtn("primary")}<button class="btn k-btn" data-k="improve">Leave a private note</button><button class="btn ghost k-btn" data-k="done">Done</button></div>`;
-  else if (K.step === "unhappy") h = `<h1 class="k-q">We're sorry it wasn't great.</h1><p class="k-sub">Tell the owner what went wrong, privately. They'll put it right.</p><div class="chips k-chips">${ISSUES.map((t) => `<button class="chip" data-k="tag" data-t="${t}" aria-pressed="${K.tags.includes(t)}">${t}</button>`).join("")}</div><textarea id="k-text" placeholder="What happened? (optional)" aria-label="What happened">${esc(K.text)}</textarea>${c ? "" : `<input id="k-phone" inputmode="tel" placeholder="Your number, if you'd like a reply (optional)" value="${esc(K.phone)}" aria-label="Your phone number">`}<div class="k-actions"><button class="btn primary k-btn" data-k="send">Send to the owner</button>${gBtn("")}</div>`;
-  else h = `<div class="k-big" aria-hidden="true">🙏</div><h1 class="k-q">${K.rating >= 4 && !K.text ? "Thank you for visiting! See you again soon." : "Thank you. The owner will see this today."}</h1>${link && K.rating <= 3 ? `<div class="k-actions">${gBtn("")}</div>` : ""}<div class="k-actions"><button class="btn primary k-btn" data-k="again">Next customer</button></div>`;
+  else if (K.step === "happy") h = `<div class="k-big" aria-hidden="true">🎉</div><h1 class="k-q">Thank you! We're so glad you enjoyed it.</h1><p class="k-sub">Would you share that on Google? It helps other people find ${esc(D.biz.name)}.</p>${link ? `<div class="k-qr"><div id="k-qr"></div><span>Scan with your phone camera</span></div>` : ""}<div class="k-actions">${gBtn("primary")}<button class="btn ghost k-btn" data-k="done">Done</button></div>`;
+  else if (K.step === "unhappy") h = `<h1 class="k-q">We're sorry it wasn't great.</h1><p class="k-sub">Tell the owner what went wrong, privately. They'll put it right.</p><div class="chips k-chips">${ISSUES.map((t) => `<button class="chip" data-k="tag" data-t="${t}" aria-pressed="${K.tags.includes(t)}">${t}</button>`).join("")}</div><textarea id="k-text" placeholder="What happened? (optional)" aria-label="What happened">${esc(K.text)}</textarea>${c ? "" : `<input id="k-phone" inputmode="tel" placeholder="Your number, if you'd like a reply (optional)" value="${esc(K.phone)}" aria-label="Your phone number">`}<div class="k-actions"><button class="btn primary k-btn" data-k="send">Send to the owner</button></div>${link ? `<p class="k-fine">Prefer to share it publicly? <a href="${esc(link)}" target="_blank" rel="noopener" data-k="opened">Post a Google review</a></p>` : ""}`;
+  else h = `<div class="k-big" aria-hidden="true">🙏</div><h1 class="k-q">${K.rating >= 4 && !K.text ? "Thank you for visiting! See you again soon." : "Thank you. The owner will see this today."}</h1>${link && K.rating <= 3 ? `<p class="k-fine">Prefer to share it publicly? <a href="${esc(link)}" target="_blank" rel="noopener" data-k="opened">Post a Google review</a></p>` : ""}<div class="k-actions"><button class="btn primary k-btn" data-k="again">Next customer</button></div>`;
   $("#kiosk-root").innerHTML = `<div class="kiosk" role="dialog" aria-modal="true" aria-label="Customer feedback"><button class="btn sm ghost k-exit" data-k="exit">Exit</button><div class="k-inner">${h}</div></div>`;
   if (K.step === "happy" && link && window.QRCode) new QRCode($("#k-qr"), { text: link, width: 190, height: 190, colorDark: "#16203a", colorLight: "#ffffff" });
   clearTimeout(K.timer); if (K.step === "happy" || K.step === "thanks") K.timer = setTimeout(() => { if (K) { K = freshK(); drawK(); } }, K.step === "happy" ? 120000 : 20000);
@@ -596,6 +686,26 @@ document.addEventListener("click", async (e) => {
       case "ly-reset": LD = null; render(); break;
       case "ly-save": lyRead(); await q(sb.rpc("save_loyalty", { p_business: BID, p: compiled() })); await reload("loyalty"); LD = null; toast("Loyalty card saved"); render(); break;
       case "wa-one": await waOne(cust(), el.dataset.tpl); break;
+      case "kw-add-s": await addKw(el.dataset.kw, "suggested"); break;
+      case "kw-del": await q(sb.from("business_keywords").delete().eq("id", id)); await seoLoad(); drawSeo(); break;
+      case "kw-ai": { el.disabled = true; el.innerHTML = `<span class="spinner"></span> Thinking…`;
+        try { const r = await aiCall("suggest_keywords", {}); D.kwAi = r.keywords || []; toast(`${D.kwAi.length} new ideas added to suggestions`); }
+        catch (e) { if (e.fallback) { const cat = (D.biz.categories?.name || "shop").toLowerCase().split(" & ")[0], c = cityOf() || "my city";
+            D.kwAi = [`${cat} near me`, `best ${cat} in ${c}`, `${cat} in ${c}`, `affordable ${cat} ${c}`, `top rated ${cat} ${c}`, `${cat} open now ${c}`]; toast("Added a few common search ideas below");
+          } else toast(e.message, "error"); }
+        drawSeo(); break; }
+      case "seo-kind": SEO = { kind: id, out: "", input: SEO.kind === id ? SEO.input : {} }; drawSeo(); break;
+      case "seo-go": {
+        if (SEO.kind === "post" && !(SEO.input.topic || "").trim()) { toast("Write what the post is about", "error"); break; }
+        if (SEO.kind === "reply" && !(SEO.input.review || "").trim()) { toast("Paste the customer's review first", "error"); break; }
+        el.disabled = true; el.innerHTML = `<span class="spinner"></span> Writing…`;
+        try { const r = await aiCall(SEO.kind, SEO.input); SEO.out = r.text || ""; }
+        catch (e) { if (e.fallback) { SEO.out = templateDraft(SEO.kind, SEO.input); toast("Drafted from a template (AI writing isn't switched on yet). Edit it to make it yours."); } else toast(e.message, "error"); }
+        drawSeo(); break; }
+      case "seo-copy": copy($("#seo-out").value, "Draft copied"); break;
+      case "seo-save": { const body = $("#seo-out").value.trim(); if (!body) { toast("Nothing to save yet", "error"); break; }
+        await q(sb.from("business_content").insert({ business_id: BID, kind: SEO.kind, title: (SEO.input.topic || SEO.input.reviewer || "").slice(0, 80), body })); await seoLoad(); drawSeo(); toast("Saved to your library"); break; }
+      case "seo-del": await q(sb.from("business_content").delete().eq("id", id)); await seoLoad(); drawSeo(); break;
       case "wa-compose": WA.aud = el.dataset.aud || "all"; location.hash = "whatsapp"; break;
       case "wa-buy": location.hash = "whatsapp"; document.querySelector("#wa-view") && openModal(`<div class="modal-head"><h2>Buy WhatsApp credits</h2><button class="btn ghost" data-close>Close</button></div><div class="list">${(D.packs || []).map((p) => `<div class="item"><div class="grow"><b>${esc(p.name)}</b><span class="muted small num">${nfmt(p.credits)} messages · ${inr2(p.price / p.credits)}/message</span></div><b class="num">${inr(p.price)}${plusGst()}</b><button class="btn sm primary" data-a="buy-pack" data-id="${p.id}">Buy</button></div>`).join("")}</div>`); break;
       case "buy-pack": closeModal(); await order("wa_credits", id); break;

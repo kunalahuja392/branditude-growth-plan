@@ -24,7 +24,7 @@
   window.__BGP_FAKE_SB__ = {
     from: (t) => new Q(t),
     rpc: (fn, args) => post("/__q", { user: getSess()?.user?.id || null, op: { kind: "rpc", fn, args } }).then((r) => (r.error ? { data: null, error: r.error } : { data: r.data, error: null })),
-    functions: { invoke: async () => ({ data: null, error: { message: "Edge functions aren't available in the local test", context: { json: async () => ({ error: "Edge functions aren't available in the local test" }) } } }) },
+    functions: { invoke: async () => ({ data: null, error: { message: "Edge functions aren't available in the local test", context: { json: async () => ({ error: "AI writing isn't switched on yet.", fallback: true }) } } }) },
     auth: {
       getSession: async () => ({ data: { session: getSess() } }),
       onAuthStateChange: (f) => { listeners.push(f); return { data: { subscription: { unsubscribe() {} } } }; },
