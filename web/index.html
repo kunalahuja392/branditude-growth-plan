@@ -11,11 +11,11 @@
 <style>
 /* Layout: dark ink hero band with a live "phone" proof moment, then light sections stacked on a 1120px column; pricing is the centre of gravity. */
 :root{
-  --ink:#121a33; --ink-2:#47506b; --ink-3:#7b839b;
-  --paper:#f7f6f2; --card:#ffffff; --line:#e4e2da; --soft:#efede6;
-  --accent:#e2701b; --accent-ink:#ffffff; --accent-soft:#fde9d6;
-  --band:#121a33; --band-ink:#f4f1ea; --band-2:#aab2c8; --band-line:#2a3456;
-  --wa:#128c5e; --wa-soft:#dcf3e8; --gold:#f4b400;
+  --ink:#10183a; --ink-2:#464f6c; --ink-3:#7a829c;
+  --paper:#f4f5f9; --card:#ffffff; --line:#e2e4ec; --soft:#eceef4;
+  --accent:#f07a1a; --accent-ink:#ffffff; --accent-soft:#fde9d6;
+  --band:#10183a; --band-ink:#f6f7fb; --band-2:#aab2cc; --band-line:#2a3460;
+  --wa:#128c5e; --wa-soft:#dcf3e8; --gold:#f4b400; --marigold:#ffc233;
   --display:"Unbounded", "Arial Black", system-ui, sans-serif;
   --body:"Hanken Grotesk", "Segoe UI", system-ui, -apple-system, sans-serif;
   color-scheme:light;
@@ -57,28 +57,49 @@ a{color:inherit}
 .btn svg{width:18px;height:18px}
 .btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
 
-/* top bar */
-header.top{background:var(--band);color:var(--band-ink);position:sticky;top:0;z-index:20;border-bottom:1px solid var(--band-line)}
+/* top bar: glass over the hero, solid once you scroll */
+header.top{position:sticky;top:0;z-index:20;color:var(--band-ink);background:rgba(16,24,58,.55);backdrop-filter:saturate(1.4) blur(14px);-webkit-backdrop-filter:saturate(1.4) blur(14px);border-bottom:1px solid rgba(255,255,255,.08);transition:background .3s}
+header.top.solid{background:rgba(16,24,58,.94)}
 .top .wrap{display:flex;align-items:center;gap:24px;height:66px}
 .logo{display:flex;align-items:center;gap:10px;text-decoration:none}
-.logo-mark{width:34px;height:34px;border-radius:9px;background:var(--accent);display:grid;place-items:center;font:900 17px var(--display);color:#fff}
+.logo-mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--marigold),var(--accent));display:grid;place-items:center;font:900 17px var(--display);color:#fff;box-shadow:0 4px 14px rgba(240,122,26,.45)}
 .logo b{font:700 16px var(--display);letter-spacing:-.02em}
-.top nav{display:flex;gap:22px;margin-left:auto}
-.top nav a{text-decoration:none;color:var(--band-2);font-weight:600;font-size:15px}
-.top nav a:hover{color:var(--band-ink)}
+.top nav{display:flex;gap:4px;margin-left:auto}
+.top nav a{text-decoration:none;color:var(--band-2);font-weight:600;font-size:15px;padding:7px 12px;border-radius:99px;transition:background .2s,color .2s}
+.top nav a:hover{color:var(--band-ink);background:rgba(255,255,255,.08)}
 .top .actions{display:flex;gap:10px}
+.top .btn.line{border-color:rgba(255,255,255,.3)}
 
-/* hero */
-.hero{background:var(--band);color:var(--band-ink);padding:64px 0 88px;overflow:hidden;position:relative}
-.hero .wrap{display:grid;grid-template-columns:1.15fr .85fr;gap:48px;align-items:center}
-.kicker{font:600 13px var(--body);letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
-.hero h1{font-size:clamp(38px,6.2vw,74px);font-weight:900;margin:18px 0 22px}
-.hero h1 em{font-style:normal;color:var(--accent);display:block}
-.hero p.lede{font-size:19px;color:var(--band-2);max-width:52ch}
-.hero .cta{display:flex;gap:12px;flex-wrap:wrap;margin-top:30px}
-.hero .fine{margin-top:18px;color:var(--band-2);font-size:14px}
-.phone{background:#0b0f1a;border:1px solid var(--band-line);border-radius:34px;padding:14px;width:min(340px,100%);margin-left:auto;box-shadow:0 30px 80px rgba(0,0,0,.45)}
-.screen{background:#e9e3d8;border-radius:24px;overflow:hidden;color:#16203a}
+/* hero: a live stage */
+.hero{background:var(--band);color:var(--band-ink);padding:72px 0 104px;overflow:hidden;position:relative;margin-top:-66px;padding-top:138px;isolation:isolate}
+.aurora{position:absolute;inset:-20%;z-index:-2;filter:blur(70px);opacity:.75;pointer-events:none}
+.aurora i{position:absolute;border-radius:50%;mix-blend-mode:screen}
+.aurora i:nth-child(1){width:46vw;height:46vw;left:48%;top:4%;background:radial-gradient(circle,#f07a1a 0,transparent 65%);animation:drift1 18s ease-in-out infinite alternate}
+.aurora i:nth-child(2){width:38vw;height:38vw;left:62%;top:38%;background:radial-gradient(circle,#ffc233 0,transparent 62%);opacity:.6;animation:drift2 22s ease-in-out infinite alternate}
+.aurora i:nth-child(3){width:40vw;height:40vw;left:6%;top:46%;background:radial-gradient(circle,#2b4cff 0,transparent 62%);opacity:.55;animation:drift3 26s ease-in-out infinite alternate}
+.dots{position:absolute;inset:0;z-index:-1;background-image:radial-gradient(rgba(255,255,255,.09) 1px,transparent 1px);background-size:26px 26px;mask-image:linear-gradient(180deg,#000 30%,transparent 95%);-webkit-mask-image:linear-gradient(180deg,#000 30%,transparent 95%)}
+@keyframes drift1{to{transform:translate(-8vw,6vh) scale(1.15)}}
+@keyframes drift2{to{transform:translate(-12vw,-8vh) scale(.9)}}
+@keyframes drift3{to{transform:translate(10vw,-6vh) scale(1.1)}}
+.hero .wrap{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center}
+.pill-tag{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:99px;padding:6px 14px 6px 8px;font-size:14px;font-weight:600;color:var(--band-ink)}
+.pill-tag b{background:var(--wa);color:#fff;border-radius:99px;font-size:12px;padding:2px 8px}
+.hero h1{font-size:clamp(40px,6vw,76px);font-weight:900;margin:22px 0 22px;line-height:1.02}
+.hero h1 .w{display:inline-block;white-space:pre}
+.hero p.lede{font-size:19px;color:var(--band-2);max-width:50ch}
+.hero .cta{display:flex;gap:12px;flex-wrap:wrap;margin-top:32px}
+.hero .fine{margin-top:20px;color:var(--band-2);font-size:14px;display:flex;gap:16px;flex-wrap:wrap}
+.hero .fine span::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--wa);margin-right:7px;vertical-align:1px}
+.hero .signin{margin-top:14px;font-size:15px;color:var(--band-2)}
+.hero .signin a{color:var(--band-ink);font-weight:700;text-underline-offset:3px}
+.btn.glow{position:relative;box-shadow:0 10px 30px -8px rgba(240,122,26,.8)}
+.btn.glow:hover{box-shadow:0 14px 34px -8px rgba(240,122,26,.95)}
+.btn.ghost-light{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.22);color:#fff}
+.btn.ghost-light:hover{background:rgba(255,255,255,.14)}
+
+.stage{position:relative;height:540px;perspective:1200px}
+.phone{position:absolute;left:50%;top:50%;width:300px;transform:translate(-50%,-50%) rotateY(var(--ry,-10deg)) rotateX(var(--rx,4deg));transform-style:preserve-3d;transition:transform .4s ease-out;background:#0b0f1a;border:1px solid rgba(255,255,255,.12);border-radius:38px;padding:12px;box-shadow:0 40px 90px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.04)}
+.screen{background:#e9e3d8;border-radius:28px;overflow:hidden;color:#16203a}
 .chat-head{background:#0f5c45;color:#fff;padding:12px 14px;display:flex;gap:10px;align-items:center;font-weight:700;font-size:15px}
 .chat-head i{width:30px;height:30px;border-radius:50%;background:var(--accent);display:grid;place-items:center;font:900 13px var(--display);font-style:normal;color:#fff}
 .chat-head small{display:block;font-weight:500;opacity:.8;font-size:12px}
@@ -87,33 +108,87 @@ header.top{background:var(--band);color:var(--band-ink);position:sticky;top:0;z-
 .msg.me{background:#d6f5c8;align-self:flex-end;border-radius:12px 12px 3px 12px}
 .msg a{color:#0b6bcb;word-break:break-all}
 .msg .t{display:block;text-align:right;font-size:11px;color:#6b7280;margin-top:3px}
+.typing{display:inline-flex;gap:4px;background:#fff;border-radius:12px;padding:12px 14px;width:max-content}
+.typing i{width:6px;height:6px;border-radius:50%;background:#9aa3b5;animation:blink 1s infinite}
+.typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+@keyframes blink{0%,80%,100%{opacity:.25;transform:none}40%{opacity:1;transform:translateY(-2px)}}
 .rating{background:#fff;margin:0 14px 14px;border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:12px}
 .rating .big{font:900 30px var(--display)}
 .stars{color:var(--gold);letter-spacing:2px;font-size:16px}
 .rating small{color:#6b7280;font-size:12px;display:block}
+.chipf{position:absolute;z-index:3;display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.96);color:#16203a;border-radius:16px;padding:10px 14px 10px 10px;box-shadow:0 18px 40px -12px rgba(0,0,0,.5);font-size:13.5px;line-height:1.3;max-width:240px}
+.chipf b{display:block;font-size:14px}
+.chipf small{color:#6b7280}
+.chipf .ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;font-size:18px;flex:none}
+.chipf.c1{left:-14%;top:4%}.chipf.c1 .ic{background:#fff4d6}
+.chipf.c2{right:-16%;top:36%}.chipf.c2 .ic{background:#ffe8d6}
+.chipf.c3{left:-8%;bottom:26%}.chipf.c3 .ic{background:#e2f2ff}
+.chipf.c4{right:-12%;bottom:2%}.chipf.c4 .ic{background:#dcf3e8}
 .anim{opacity:1;transform:none}
 @media (prefers-reduced-motion:no-preference){
-  .js .anim{opacity:0;transform:translateY(10px);transition:opacity .5s ease, transform .5s ease}
+  .js .anim{opacity:0;transform:translateY(12px);transition:opacity .55s ease, transform .55s cubic-bezier(.2,.8,.2,1)}
   .js .anim.in{opacity:1;transform:none}
+  .js .chipf.anim{transform:translateY(14px) scale(.92)}
+  .js .chipf.anim.in{transform:none;animation:bob 6s ease-in-out infinite}
+  .js .chipf.c2.in{animation-delay:-1.5s}.js .chipf.c3.in{animation-delay:-3s}.js .chipf.c4.in{animation-delay:-4.5s}
+  .js .hero h1 .w{opacity:0;transform:translateY(.45em) rotate(2deg);transition:opacity .6s ease, transform .7s cubic-bezier(.2,.8,.2,1)}
+  .js .hero h1.in .w{opacity:1;transform:none}
 }
+@keyframes bob{0%,100%{translate:0 0}50%{translate:0 -8px}}
+
+/* marquee */
+.who{padding:22px 0;background:var(--card);border-bottom:1px solid var(--line);overflow:hidden;position:relative}
+.who .track{display:flex;gap:14px;width:max-content;animation:marquee 38s linear infinite}
+.who:hover .track{animation-play-state:paused}
+.who span{white-space:nowrap;border:1px solid var(--line);background:var(--paper);border-radius:99px;padding:8px 16px;font-weight:600;color:var(--ink-2);font-size:15px}
+.who::before,.who::after{content:"";position:absolute;top:0;bottom:0;width:80px;z-index:1;pointer-events:none}
+.who::before{left:0;background:linear-gradient(90deg,var(--card),transparent)}
+.who::after{right:0;background:linear-gradient(-90deg,var(--card),transparent)}
+@keyframes marquee{to{transform:translateX(-50%)}}
 
 /* sections */
-section{padding:88px 0}
+section{padding:96px 0}
 .sec-head{max-width:720px;margin-bottom:44px}
-.sec-head h2{font-size:clamp(28px,3.8vw,44px);font-weight:700;margin-top:12px}
+.sec-head h2{font-size:clamp(30px,4vw,48px);font-weight:700}
 .sec-head p{color:var(--ink-2);margin-top:14px;font-size:18px}
-.who{border-bottom:1px solid var(--line);padding:26px 0;background:var(--card)}
-.who .wrap{display:flex;gap:12px 28px;flex-wrap:wrap;align-items:center;color:var(--ink-2);font-weight:600}
-.who b{color:var(--ink);font-family:var(--display);font-size:14px;font-weight:700;margin-right:6px}
-.feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:18px;overflow:hidden}
-.feat{background:var(--card);padding:28px}
-.feat .ix{font:700 13px var(--display);color:var(--accent)}
-.feat h3{font-size:19px;font-weight:700;margin:14px 0 10px;letter-spacing:-.01em}
-.feat p{color:var(--ink-2);font-size:16px}
-.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;counter-reset:st}
-.step{border-top:3px solid var(--ink);padding-top:20px}
-.step .d{font:900 46px var(--display);color:var(--accent);line-height:1}
-.step h3{font-size:19px;margin:14px 0 8px;font-weight:700}
+
+/* features: bento */
+.bento{display:grid;grid-template-columns:repeat(6,1fr);gap:16px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:26px;display:flex;flex-direction:column;gap:10px;position:relative;overflow:hidden}
+.tile h3{font-size:20px;font-weight:700;letter-spacing:-.015em}
+.tile p{color:var(--ink-2);font-size:16px;max-width:46ch}
+.tile.t-lg{grid-column:span 4}.tile.t-sm{grid-column:span 2}.tile.t-md{grid-column:span 3}
+.tile.dark{background:var(--band);color:var(--band-ink);border-color:transparent}
+.tile.dark p{color:var(--band-2)}
+.viz{margin-top:auto;padding-top:14px}
+.meter{display:flex;align-items:center;gap:14px}
+.meter .score{font:900 54px var(--display);letter-spacing:-.04em;line-height:1}
+.meter .bars{flex:1;display:grid;gap:5px}
+.meter .bars div{display:grid;grid-template-columns:14px 1fr;gap:8px;align-items:center;font-size:12px;color:var(--ink-3)}
+.meter .bars span{height:7px;border-radius:9px;background:var(--soft);overflow:hidden}
+.tile.dark .meter .bars span{background:rgba(255,255,255,.12)}
+.tile.dark .meter .bars div{color:var(--band-2)}
+.meter .bars span i{display:block;height:100%;background:var(--gold);border-radius:9px;width:var(--w)}
+.stamps{display:flex;gap:7px;flex-wrap:wrap}
+.stamps i{width:30px;height:30px;border-radius:50%;border:2px dashed var(--line);display:grid;place-items:center;font-size:14px;font-style:normal}
+.stamps i.on{border:0;background:var(--accent);color:#fff}
+.stamps i.gift{border-color:var(--accent);border-style:solid}
+.mini-menu{display:grid;gap:8px}
+.mini-menu div{display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:8px 12px;font-size:14px}
+.mini-menu em{font-style:normal;font-weight:700;font-size:12px;background:var(--accent);color:#fff;border-radius:8px;padding:3px 9px}
+.punch{display:flex;gap:10px;align-items:center;font-size:14px}
+.punch .clock{font:900 30px var(--display);letter-spacing:-.03em}
+.tag-row{display:flex;gap:6px;flex-wrap:wrap}
+.tag-row span{font-size:12.5px;font-weight:600;border-radius:99px;padding:4px 10px;background:var(--soft);color:var(--ink-2)}
+.tag-row span.hot{background:var(--wa-soft);color:var(--wa)}
+
+/* steps: a real sequence, with a progress line */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:28px;position:relative;padding-top:30px}
+.steps::before,.steps::after{content:"";position:absolute;top:22px;left:22px;right:22px;height:3px;border-radius:3px;background:var(--line)}
+.steps::after{background:linear-gradient(90deg,var(--accent),var(--marigold));transform-origin:left;transform:scaleX(var(--p,1))}
+.step{position:relative}
+.step .d{width:46px;height:46px;border-radius:50%;background:var(--card);border:3px solid var(--accent);display:grid;place-items:center;font:900 18px var(--display);color:var(--accent);position:relative;z-index:1;margin-top:-24px}
+.step h3{font-size:20px;margin:18px 0 8px;font-weight:700}
 .step p{color:var(--ink-2)}
 
 /* pricing */
@@ -124,7 +199,12 @@ section{padding:88px 0}
 .save{color:var(--wa);font-weight:700;font-size:13px;margin-left:4px}
 .plans{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;align-items:stretch}
 .plan{border:1.5px solid var(--line);border-radius:20px;padding:28px;display:flex;flex-direction:column;gap:18px;background:var(--paper);position:relative}
-.plan.pop{border-color:var(--accent);background:var(--card);box-shadow:0 18px 50px rgba(226,112,27,.14)}
+.plan{transition:transform .25s cubic-bezier(.2,.8,.2,1),box-shadow .25s}
+.plan:hover{transform:translateY(-4px);box-shadow:0 22px 50px -24px rgba(16,24,58,.35)}
+.plan.pop{border-color:transparent;background:linear-gradient(var(--card),var(--card)) padding-box,conic-gradient(from var(--ang,0deg),var(--accent),var(--marigold),var(--wa),var(--accent)) border-box;box-shadow:0 24px 60px -20px rgba(240,122,26,.45)}
+@property --ang{syntax:"<angle>";inherits:false;initial-value:0deg}
+@media (prefers-reduced-motion:no-preference){.plan.pop{animation:spin 6s linear infinite}}
+@keyframes spin{to{--ang:360deg}}
 .plan .badge{position:absolute;top:-13px;left:28px;background:var(--accent);color:var(--accent-ink);font:700 12px var(--body);letter-spacing:.06em;text-transform:uppercase;padding:4px 12px;border-radius:99px}
 .plan h3{font-size:22px;font-weight:700}
 .plan .for{color:var(--ink-2);font-size:15px;margin-top:6px}
@@ -145,14 +225,17 @@ section{padding:88px 0}
 
 /* faq */
 .faq{display:grid;gap:12px;max-width:820px}
-details{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 20px}
+details{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 20px;transition:border-color .2s,box-shadow .2s}
+details[open]{border-color:var(--accent);box-shadow:0 10px 30px -18px rgba(240,122,26,.6)}
+details[open] p{animation:open .35s ease}
+@keyframes open{from{opacity:0;transform:translateY(-6px)}}
 summary{cursor:pointer;font-weight:700;padding:14px 0;list-style:none;display:flex;justify-content:space-between;gap:12px}
-summary::after{content:"+";font:700 22px var(--display);color:var(--accent);line-height:1}
-details[open] summary::after{content:"–"}
+summary::after{content:"+";font:700 22px var(--display);color:var(--accent);line-height:1;transition:transform .25s}
+details[open] summary::after{transform:rotate(45deg)}
 details p{color:var(--ink-2);padding-bottom:16px}
 
 /* contact / footer */
-.contact{background:var(--band);color:var(--band-ink)}
+.contact{background:radial-gradient(60% 80% at 85% 10%,rgba(240,122,26,.35),transparent 70%),radial-gradient(50% 70% at 0% 100%,rgba(43,76,255,.3),transparent 70%),var(--band);color:var(--band-ink)}
 .contact .wrap{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:start}
 .contact h2{font-size:clamp(28px,4vw,46px);font-weight:900}
 .contact p.lede{color:var(--band-2);margin-top:16px;max-width:46ch}
@@ -202,9 +285,12 @@ input:focus,select:focus{outline:2px solid var(--accent-soft);border-color:var(-
 
 @media (max-width:900px){
   .hero .wrap,.contact .wrap{grid-template-columns:1fr}
-  .phone{margin:0 auto}
-  .feat-grid,.plans{grid-template-columns:1fr}
-  .steps{grid-template-columns:1fr}
+  .stage{height:520px;max-width:420px;margin:0 auto;width:100%}
+  .tile.t-lg,.tile.t-sm,.tile.t-md{grid-column:1/-1}
+  .plans{grid-template-columns:1fr}
+  .steps{grid-template-columns:1fr;padding-top:0;padding-left:30px}
+  .steps::before,.steps::after{top:0;bottom:0;left:21px;right:auto;width:3px;height:auto;transform-origin:top;transform:scaleY(var(--p,1))}
+  .step .d{margin:0 0 0 -30px}
   .addons{grid-template-columns:1fr 1fr}
   .top nav{display:none}
   .top .actions{margin-left:auto}
@@ -216,6 +302,8 @@ input:focus,select:focus{outline:2px solid var(--accent-soft);border-color:var(-
   .top .actions .btn{padding:7px 11px;font-size:13px}
   .top .logo b{display:none}
   section{padding:64px 0}
+  .chipf{max-width:200px;font-size:12.5px}.chipf.c1{left:0;top:0}.chipf.c4{right:0;bottom:0}.chipf.c2,.chipf.c3{display:none}
+  .hero{padding-bottom:64px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
 .cat-pick{max-width:420px;margin:-10px 0 34px}
@@ -232,7 +320,7 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
 <body>
 <script>document.documentElement.classList.add("js")</script>
 
-<header class="top">
+<header class="top" id="topbar">
   <div class="wrap">
     <a class="logo" href="#top" aria-label="Branditude home"><span class="logo-mark">B</span><b>Branditude</b></a>
     <nav aria-label="Sections"><a href="#features">What you get</a><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a></nav>
@@ -242,52 +330,70 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
 
 <main id="top">
   <section class="hero">
+    <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div><div class="dots" aria-hidden="true"></div>
     <div class="wrap">
       <div>
-        <span class="kicker">Branditude Growth Plan</span>
-        <h1>Turn every customer into a <em>5-star review.</em></h1>
+        <span class="pill-tag"><b>New</b> QR menus and staff attendance</span>
+        <h1 id="hero-h1"><span class="w">Turn every </span><span class="w">customer into </span><span class="w">a 5-star review.</span></h1>
         <p class="lede">One simple system for local businesses. Collect Google reviews on WhatsApp, build your own customer list, send offers that bring people back, and see what's working. We set it all up for you.</p>
         <div class="cta">
-          <a class="btn primary" href="#pricing">See plans from ₹999/month</a>
-          <a class="btn line" data-wa="Hi Branditude, I'd like to know more about the Growth Plan for my business." href="#" target="_blank" rel="noopener">Talk to us on WhatsApp</a>
+          <a class="btn primary glow" href="#pricing">See plans from ₹999/month</a>
+          <a class="btn ghost-light" data-wa="Hi Branditude, I'd like to know more about the Growth Plan for my business." href="#" target="_blank" rel="noopener">Talk to us on WhatsApp</a>
         </div>
-        <p class="small" style="margin-top:14px">Already a client? <a href="login.html" id="signin-hero" style="font-weight:700">Sign in to your dashboard →</a></p>
-        <p class="fine" id="hero-fine">3-day free trial · No long contract · Cancel any month</p>
+        <p class="fine" id="hero-fine"><span>3-day free trial</span><span>No long contract</span><span>Cancel any month</span></p>
+        <p class="signin">Already a client? <a href="login.html" id="signin-hero">Sign in to your dashboard</a></p>
       </div>
-      <div class="phone" aria-label="Example: a café asks a customer for a Google review on WhatsApp">
-        <div class="screen">
-          <div class="chat-head"><i>S</i><div>Spice Route Café<small>Business account</small></div></div>
-          <div class="chat">
-            <div class="msg anim" data-d="200">Hi Priya, thank you for visiting Spice Route Café today! 🙏 Could you leave us a quick Google review? <a href="#how">g.page/r/spice-route/review</a><span class="t">7:42 pm</span></div>
-            <div class="msg me anim" data-d="1100">Done! Loved the filter coffee ☕<span class="t">7:46 pm ✓✓</span></div>
-            <div class="msg anim" data-d="1900">Thank you! Here's 10% off your next visit: <b>THANKYOU10</b> 🎁<span class="t">7:47 pm</span></div>
+      <div class="stage" id="stage" aria-label="Example: a café asks a customer for a Google review on WhatsApp">
+        <div class="chipf c1 anim" data-d="900"><span class="ic">⭐</span><div><b>New 5-star review</b><small>"Best filter coffee in town"</small></div></div>
+        <div class="chipf c2 anim" data-d="1500"><span class="ic">🎂</span><div><b>3 birthdays this week</b><small>Wishes ready to send</small></div></div>
+        <div class="chipf c3 anim" data-d="2200"><span class="ic">🔁</span><div><b>Rahul came back</b><small>Win-back offer used</small></div></div>
+        <div class="chipf c4 anim" data-d="3000"><span class="ic">💬</span><div><b>Broadcast sent</b><small>214 regulars reached</small></div></div>
+        <div class="phone" id="phone">
+          <div class="screen">
+            <div class="chat-head"><i>S</i><div>Spice Route Café<small>Business account</small></div></div>
+            <div class="chat">
+              <div class="msg anim" data-d="300">Hi Priya, thank you for visiting Spice Route Café today! 🙏 Could you leave us a quick Google review? <a href="#how">g.page/r/spice-route/review</a><span class="t">7:42 pm</span></div>
+              <div class="msg me anim" data-d="1200">Done! Loved the filter coffee ☕<span class="t">7:46 pm ✓✓</span></div>
+              <div class="msg anim" data-d="2000">Thank you! Here's 10% off your next visit: <b>THANKYOU10</b> 🎁<span class="t">7:47 pm</span></div>
+            </div>
+            <div class="rating anim" data-d="2600"><div class="big num" id="rate">4.1</div><div><div class="stars" aria-hidden="true">★★★★★</div><small><span class="num" id="revs">38</span> Google reviews for this example café</small></div></div>
           </div>
-          <div class="rating anim" data-d="2600"><div class="big num" id="rate">4.1</div><div><div class="stars" aria-hidden="true">★★★★★</div><small><span class="num" id="revs">38</span> Google reviews · example café</small></div></div>
         </div>
       </div>
     </div>
   </section>
 
-  <div class="who"><div class="wrap"><b>Made for</b><span>Cafés & restaurants</span><span>Salons & spas</span><span>Clinics & dentists</span><span>Gyms & studios</span><span>Boutiques</span><span>Coaching centres</span></div></div>
+  <div class="who" aria-label="Made for"><div class="track">
+    <span>☕ Cafés & restaurants</span><span>💇 Salons & spas</span><span>🦷 Clinics & dentists</span><span>🏋️ Gyms & studios</span><span>👗 Boutiques</span><span>📚 Coaching centres</span><span>🍰 Bakeries</span><span>🛍️ Retail stores</span>
+    <span aria-hidden="true">☕ Cafés & restaurants</span><span aria-hidden="true">💇 Salons & spas</span><span aria-hidden="true">🦷 Clinics & dentists</span><span aria-hidden="true">🏋️ Gyms & studios</span><span aria-hidden="true">👗 Boutiques</span><span aria-hidden="true">📚 Coaching centres</span><span aria-hidden="true">🍰 Bakeries</span><span aria-hidden="true">🛍️ Retail stores</span>
+  </div></div>
 
   <section id="features">
     <div class="wrap">
-      <div class="sec-head"><span class="kicker">What you get</span><h2>Everything a local business needs to grow from the customers it already has.</h2><p>Your plan includes the Growth Plan app, set up by our team, plus the done-for-you work your plan covers.</p></div>
-      <div class="feat-grid">
-        <div class="feat"><span class="ix">01</span><h3>More Google reviews, fewer bad surprises</h3><p>A 5-second rating screen at the counter. Happy customers get a one-tap Google review. Unhappy ones can tell you privately first, so you fix it the same day.</p></div>
-        <div class="feat"><span class="ix">02</span><h3>Your own customer list</h3><p>Every visit adds the customer's name, number, birthday and spend. You own the list, not a delivery app.</p></div>
-        <div class="feat"><span class="ix">03</span><h3>Loyalty cards & coupons</h3><p>A digital stamp card with rewards on the visits you choose (10% off the 1st, a free dessert on the 5th, a free meal on the 10th) plus festival and birthday coupon codes.</p></div>
-        <div class="feat"><span class="ix">04</span><h3>WhatsApp broadcasts</h3><p>Send a personal message to the right group: birthdays this month, regulars, or people who haven't visited in 30 days.</p></div>
-        <div class="feat"><span class="ix">05</span><h3>Daily alerts</h3><p>See whose birthday is coming up, which regulars stopped coming, and which offers are about to end, every morning.</p></div>
-        <div class="feat"><span class="ix">06</span><h3>Simple growth report</h3><p>Revenue from logged visits, repeat-customer rate, reviews earned and coupon sales, on one screen.</p></div>
+      <div class="sec-head"><h2>Everything a local business needs to grow from the customers it already has.</h2><p>Your plan includes the Growth Plan app, set up by our team, plus the done-for-you work your plan covers.</p></div>
+      <div class="bento">
+        <div class="tile t-lg dark"><h3>More Google reviews, fewer bad surprises</h3><p>A 5-second rating screen at the counter. Happy customers get a one-tap Google review. Unhappy ones can tell you privately first, so you fix it the same day.</p>
+          <div class="viz meter"><div class="score">4.8</div><div class="bars"><div>5<span><i style="--w:82%"></i></span></div><div>4<span><i style="--w:12%"></i></span></div><div>3<span><i style="--w:4%"></i></span></div><div>2<span><i style="--w:1%"></i></span></div><div>1<span><i style="--w:1%"></i></span></div></div></div></div>
+        <div class="tile t-sm"><h3>Your own customer list</h3><p>Every visit adds the customer's name, number, birthday and spend. You own the list, not a delivery app.</p>
+          <div class="viz tag-row"><span class="hot">Regular</span><span>Birthday in May</span><span>₹4,200 spent</span></div></div>
+        <div class="tile t-md"><h3>Loyalty cards & coupons</h3><p>A digital stamp card with rewards on the visits you choose, plus festival and birthday coupon codes.</p>
+          <div class="viz stamps" aria-hidden="true"><i class="on">✓</i><i class="on">✓</i><i class="on">✓</i><i class="on">✓</i><i class="gift">🎁</i><i></i><i></i><i></i><i></i><i>🍽️</i></div></div>
+        <div class="tile t-md"><h3>WhatsApp broadcasts</h3><p>Send a personal message to the right group: birthdays this month, regulars, or people who haven't visited in 30 days.</p>
+          <div class="viz tag-row"><span class="hot">12 birthdays</span><span>214 regulars</span><span>47 not seen in 30 days</span></div></div>
+        <div class="tile t-sm"><h3>Daily alerts</h3><p>Every morning: upcoming birthdays, regulars who stopped coming, and offers about to end.</p></div>
+        <div class="tile t-sm"><h3>Staff attendance & salary</h3><p>Staff check in with a PIN. Late marks, leave and salary slips work themselves out.</p>
+          <div class="viz punch"><span class="clock">09:58</span><span>Priya checked in<br><small style="color:var(--wa);font-weight:700">On time</small></span></div></div>
+        <div class="tile t-sm dark"><h3>QR menu & table orders</h3><p>Guests scan, order from their table, and the kitchen sees it live.</p>
+          <div class="viz mini-menu"><div>Masala dosa <em>Table 4</em></div><div>Filter coffee ×2 <em>Table 7</em></div></div></div>
       </div>
+      <p class="gst" style="margin-top:18px">Simple growth report included: revenue from logged visits, repeat-customer rate, reviews earned and coupon sales on one screen.</p>
     </div>
   </section>
 
   <section id="how" style="padding-top:0">
     <div class="wrap">
-      <div class="sec-head"><span class="kicker">How it works</span><h2>Live in two days. Growing from week one.</h2></div>
-      <div class="steps">
+      <div class="sec-head"><h2>Live in two days. Growing from week one.</h2></div>
+      <div class="steps" id="steps">
         <div class="step"><span class="d">1</span><h3>Pick a plan and pay</h3><p>Choose a plan below, add your business details, and pay by UPI. You'll get an order ID right away.</p></div>
         <div class="step"><span class="d">2</span><h3>We set you up in 48 hours</h3><p>We connect your Google review link, import your existing customer numbers, create your first offers, and train your staff on WhatsApp.</p></div>
         <div class="step"><span class="d">3</span><h3>Log visits, earn reviews, send offers</h3><p>Log each visit in 10 seconds. The app does the rest: review requests, birthday wishes and win-back messages.</p></div>
@@ -297,7 +403,7 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
 
   <section id="pricing">
     <div class="wrap">
-      <div class="sec-head"><span class="kicker">Pricing</span><h2>Plans that pay for themselves with a few extra visits a month.</h2>
+      <div class="sec-head"><h2>Plans that pay for themselves with a few extra visits a month.</h2>
         <div class="toggle" role="group" aria-label="Billing period"><button type="button" data-bill="monthly" aria-pressed="true">Monthly</button><button type="button" data-bill="yearly" aria-pressed="false">Yearly <span class="save">2 months free</span></button></div>
       </div>
       <div class="field cat-pick"><label for="cat">What kind of business do you run?</label><select id="cat"><option value="">Loading…</option></select></div>
@@ -311,7 +417,7 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
 
   <section id="faq">
     <div class="wrap">
-      <div class="sec-head"><span class="kicker">Questions</span><h2>Before you buy</h2></div>
+      <div class="sec-head"><h2>Before you buy</h2></div>
       <div class="faq">
         <details><summary>Do I need a Google Business Profile already?</summary><p>No. If you don't have one, the Growth and Pro plans include creating and verifying it. On Starter, you can add the profile setup add-on.</p></details>
         <details><summary>How do WhatsApp messages get sent?</summary><p>Messages go from your own WhatsApp number. The app opens each chat with the message ready, so you tap send. The Pro plan can add the official WhatsApp Business API for one-click bulk sending. Meta charges its own per-message fees for that.</p></details>
@@ -325,7 +431,7 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
 
   <section class="contact" id="contact">
     <div class="wrap">
-      <div><span class="kicker">Talk to Branditude</span><h2>Not sure which plan fits?</h2><p class="lede">Tell us about your business and we'll suggest a plan. We usually reply within an hour during working hours.</p>
+      <div><h2>Not sure which plan fits?</h2><p class="lede">Tell us about your business and we'll suggest a plan. We usually reply within an hour during working hours.</p>
         <div class="cta" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:26px"><a class="btn wa" data-wa="Hi Branditude, which Growth Plan is right for my business?" href="#" target="_blank" rel="noopener">Chat on WhatsApp</a><a class="btn line" href="#pricing">Compare plans</a></div></div>
       <div class="cinfo" id="cinfo"></div>
     </div>
@@ -374,8 +480,8 @@ async function load() {
   $("#cinfo").innerHTML = row("WhatsApp", a.whatsapp ? "+" + a.whatsapp : "", a.whatsapp ? waLink("Hi Branditude!") : "") + row("Call", a.phone, a.phone ? "tel:" + a.phone : "") + row("Email", a.email, a.email ? "mailto:" + a.email : "") + row("Office", a.address) + row("Hours", a.hours) || `<div><small>Contact</small><span>Details coming soon</span></div>`;
   $("#foot-left").textContent = "© " + new Date().getFullYear() + " " + (a.legal_name || "Branditude") + (a.website ? " · " + a.website : "");
   TRIAL = Math.max(0, parseInt(SET.trial?.days ?? 0, 10) || 0);
-  if (TRIAL) { $("#hero-fine").textContent = `${TRIAL}-day free trial · No long contract · Cancel any month`; $("#faq-trial").textContent = `Yes. Every new business gets ${TRIAL} day${TRIAL > 1 ? "s" : ""} free with everything unlocked. Pay by UPI any time during the trial to keep going. If you don't pay, your account turns read-only and your data stays safe.`; }
-  else { $("#hero-fine").textContent = "Live in 48 hours · No long contract · Cancel any month"; $("#faq-trial").closest("details").remove(); }
+  if (TRIAL) { $("#hero-fine").innerHTML = `<span>${TRIAL}-day free trial</span><span>No long contract</span><span>Cancel any month</span>`; $("#faq-trial").textContent = `Yes. Every new business gets ${TRIAL} day${TRIAL > 1 ? "s" : ""} free with everything unlocked. Pay by UPI any time during the trial to keep going. If you don't pay, your account turns read-only and your data stays safe.`; }
+  else { $("#hero-fine").innerHTML = "<span>Live in 48 hours</span><span>No long contract</span><span>Cancel any month</span>"; $("#faq-trial").closest("details").remove(); }
   const gr = +(SET.gst?.rate ?? 0); $("#gst-note").textContent = gr > 0 ? `Prices are in Indian rupees and exclude ${Math.round(gr * 100)}% GST, which is added at checkout.` : "Prices are in Indian rupees. No GST is charged.";
   drawPlans(); drawServices();
 }
@@ -507,13 +613,24 @@ document.addEventListener("change", (e) => {
 });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && co) close(); });
 
-/* hero animation */
+/* hero animation: one orchestrated sequence, plus light scroll/pointer touches */
 (function () { const items = [...document.querySelectorAll(".anim")]; const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const h1 = $("#hero-h1"), bar = $("#topbar"), steps = $("#steps"), phone = $("#phone"), stage = $("#stage");
+  const onScroll = () => { bar.classList.toggle("solid", scrollY > 40);
+    if (!reduce && steps) { const r = steps.getBoundingClientRect(), vh = innerHeight; steps.style.setProperty("--p", Math.max(0, Math.min(1, (vh * .85 - r.top) / (r.height + vh * .35))).toFixed(3)); } };
+  addEventListener("scroll", onScroll, { passive: true }); onScroll();
   const fin = () => { $("#rate").textContent = "4.8"; $("#revs").textContent = "312"; };
-  if (reduce) { items.forEach((i) => i.classList.add("in")); return fin(); }
+  if (reduce) { h1.classList.add("in"); items.forEach((i) => i.classList.add("in")); if (steps) steps.style.setProperty("--p", 1); return fin(); }
+  [...h1.querySelectorAll(".w")].forEach((w, i) => (w.style.transitionDelay = i * 110 + "ms"));
+  requestAnimationFrame(() => h1.classList.add("in"));
   items.forEach((i) => setTimeout(() => i.classList.add("in"), +i.dataset.d || 0));
   setTimeout(() => { const t0 = performance.now(); (function tick(t) { const k = Math.min(1, (t - t0) / 1600), e = 1 - Math.pow(1 - k, 3); $("#rate").textContent = (4.1 + 0.7 * e).toFixed(1); $("#revs").textContent = Math.round(38 + 274 * e); if (k < 1) requestAnimationFrame(tick); })(t0); }, 2700);
-  setTimeout(() => items.forEach((i) => i.classList.add("in")), 4000); })();
+  setTimeout(() => items.forEach((i) => i.classList.add("in")), 4200);
+  if (matchMedia("(hover: hover)").matches && stage) {
+    stage.addEventListener("pointermove", (e) => { const r = stage.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
+      phone.style.setProperty("--ry", (x * 18).toFixed(1) + "deg"); phone.style.setProperty("--rx", (-y * 12).toFixed(1) + "deg"); });
+    stage.addEventListener("pointerleave", () => { phone.style.removeProperty("--ry"); phone.style.removeProperty("--rx"); }); }
+})();
 load();
 </script>
 </body>
