@@ -212,7 +212,9 @@ input:focus,select:focus{outline:2px solid var(--accent-soft);border-color:var(-
 @media (max-width:520px){
   .addons,.fields{grid-template-columns:1fr}
   .pay{grid-template-columns:1fr;justify-items:center;text-align:center}
-  .top .actions .btn.line{display:none}
+  .top .actions{gap:6px}
+  .top .actions .btn{padding:7px 11px;font-size:13px}
+  .top .logo b{display:none}
   section{padding:64px 0}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
@@ -234,7 +236,7 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
   <div class="wrap">
     <a class="logo" href="#top" aria-label="Branditude home"><span class="logo-mark">B</span><b>Branditude</b></a>
     <nav aria-label="Sections"><a href="#features">What you get</a><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a></nav>
-    <div class="actions"><a class="btn sm line" href="login.html">Sign in</a><a class="btn sm primary" href="#pricing">Get started</a></div>
+    <div class="actions"><a class="btn sm line" href="login.html" id="signin-btn">Sign in</a><a class="btn sm primary" href="#pricing">Get started</a></div>
   </div>
 </header>
 
@@ -249,6 +251,7 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
           <a class="btn primary" href="#pricing">See plans from ₹999/month</a>
           <a class="btn line" data-wa="Hi Branditude, I'd like to know more about the Growth Plan for my business." href="#" target="_blank" rel="noopener">Talk to us on WhatsApp</a>
         </div>
+        <p class="small" style="margin-top:14px">Already a client? <a href="login.html" id="signin-hero" style="font-weight:700">Sign in to your dashboard →</a></p>
         <p class="fine" id="hero-fine">3-day free trial · No long contract · Cancel any month</p>
       </div>
       <div class="phone" aria-label="Example: a café asks a customer for a Google review on WhatsApp">
@@ -328,7 +331,7 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
     </div>
   </section>
 </main>
-<footer><div class="wrap"><span id="foot-left"></span><span><a href="privacy.html" style="color:inherit">Privacy policy</a> · Branditude Growth Plan</span></div></footer>
+<footer><div class="wrap"><span id="foot-left"></span><span><a href="login.html" style="color:inherit">Sign in</a> · <a href="privacy.html" style="color:inherit">Privacy policy</a> · Branditude Growth Plan</span></div></footer>
 
 <div id="checkout-root"></div>
 
@@ -337,6 +340,10 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
 // Public store: plans, discounts and category services come live from the database (managed in the admin portal).
 import { sb, configured, friendly } from "./assets/js/sb.js";
 import { normPhone } from "./assets/js/ui.js";
+// Already signed in? Point the sign-in links straight at the dashboard.
+sb.auth.getSession().then(({ data }) => { if (!data?.session) return;
+  const b = document.getElementById("signin-btn"); if (b) { b.textContent = "My dashboard"; b.href = "app.html"; }
+  const h = document.getElementById("signin-hero"); if (h) { h.textContent = "Open your dashboard →"; h.href = "app.html"; } }).catch(() => {});
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
