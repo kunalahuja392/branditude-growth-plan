@@ -3,6 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#10183a">
+<link rel="icon" type="image/png" href="/assets/icons/favicon-64.png">
+<link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Branditude">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<script src="/assets/js/pwa.js" defer></script>
 <title>Branditude Growth Plan Store</title>
 <meta name="description" content="Get more Google reviews, repeat customers and WhatsApp sales for your local business. Plans from ₹999/month by Branditude.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -136,6 +145,43 @@ header.top.solid{background:rgba(16,24,58,.94)}
 }
 @keyframes bob{0%,100%{translate:0 0}50%{translate:0 -8px}}
 
+/* mobile menu + sticky bottom bar (shown under 900px) */
+.menu-btn{display:none;place-items:center;width:42px;height:42px;border-radius:12px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:#fff;cursor:pointer;margin-left:6px}
+.menu-btn span{display:block;width:18px;height:2px;background:currentColor;border-radius:2px;position:relative;transition:background .2s}
+.menu-btn span::before,.menu-btn span::after{content:"";position:absolute;left:0;width:18px;height:2px;background:currentColor;border-radius:2px;transition:transform .25s}
+.menu-btn span::before{top:-6px}.menu-btn span::after{top:6px}
+.top.open .menu-btn span{background:transparent}
+.top.open .menu-btn span::before{transform:translateY(6px) rotate(45deg)}
+.top.open .menu-btn span::after{transform:translateY(-6px) rotate(-45deg)}
+.mbar-cta{display:none;position:fixed;z-index:15;left:12px;right:12px;bottom:max(12px,env(safe-area-inset-bottom));gap:10px;padding:8px;border-radius:18px;background:rgba(16,24,58,.92);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.1);box-shadow:0 18px 40px rgba(0,0,0,.35);transform:translateY(140%);transition:transform .35s cubic-bezier(.2,.8,.2,1)}
+.mbar-cta.show{transform:none}
+.mbar-cta .btn{flex:1;justify-content:center;text-align:center}
+.mbar-cta .btn.wa{flex:0 0 auto;padding-left:16px;padding-right:16px}
+
+/* get the app */
+.getapp{background:var(--card);border-top:1px solid var(--line)}
+.ga-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.ga{border:1px solid var(--line);border-radius:20px;padding:22px;display:flex;flex-direction:column;gap:12px;background:var(--paper)}
+.ga-top{display:flex;align-items:center;gap:10px}
+.ga-top h3{font-size:18px;font-weight:700}
+.ga-ic{width:40px;height:40px;border-radius:12px;background:var(--card);border:1px solid var(--line);display:grid;place-items:center;font-size:20px}
+.ga-this{display:none;white-space:nowrap;margin-left:auto;font-size:12px;font-weight:700;color:var(--wa);background:var(--wa-soft);border-radius:99px;padding:3px 9px}
+.ga.mine{background:var(--band);color:var(--band-ink);border-color:transparent;box-shadow:0 24px 50px -24px rgba(16,24,58,.6)}
+.ga.mine .ga-this{display:inline-block}
+.ga.mine ol{color:var(--band-2)}
+.ga.mine .ga-ic{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.14)}
+.ga.mine .btn.line{color:#fff;border-color:rgba(255,255,255,.3)}
+.ga ol{margin:0;padding-left:20px;color:var(--ink-2);font-size:15px;display:grid;gap:6px}
+.ga-btn{justify-content:center;text-align:center}
+.ga-note{font-size:13px;color:var(--ink-3)}
+.ga.mine .ga-note{color:var(--band-2)}
+.ga-status{margin:-20px 0 22px;font-weight:600;color:var(--wa)}
+@media (max-width:1100px){.ga-grid{grid-template-columns:1fr 1fr}}
+@media (max-width:620px){.ga-grid{grid-template-columns:1fr}}
+
+[hidden]{display:none!important}
+section[id]{scroll-margin-top:72px}
+.top.open ~ .mbar-cta{display:none}
 /* marquee */
 .who{padding:22px 0;background:var(--card);border-bottom:1px solid var(--line);overflow:hidden;position:relative}
 .who .track{display:flex;gap:14px;width:max-content;animation:marquee 38s linear infinite}
@@ -289,19 +335,39 @@ input:focus,select:focus{outline:2px solid var(--accent-soft);border-color:var(-
   .tile.t-lg,.tile.t-sm,.tile.t-md{grid-column:1/-1}
   .plans{grid-template-columns:1fr}
   .steps{grid-template-columns:1fr;padding-top:0;padding-left:30px}
-  .steps::before,.steps::after{top:0;bottom:0;left:21px;right:auto;width:3px;height:auto;transform-origin:top;transform:scaleY(var(--p,1))}
-  .step .d{margin:0 0 0 -30px}
+  .steps::before,.steps::after{top:8px;bottom:8px;left:21px;right:auto;width:3px;height:auto}
+  .steps::after{transform-origin:top;transform:scaleY(var(--p,1))}
+  .steps{padding-left:0;gap:22px}
+  .step{display:grid;grid-template-columns:46px 1fr;column-gap:16px}
+  .step .d{margin:0;grid-row:span 2;background:var(--paper)}
+  .step h3{margin:10px 0 6px}
   .addons{grid-template-columns:1fr 1fr}
-  .top nav{display:none}
+  .menu-btn{display:grid}
+  .top nav{position:fixed;left:12px;right:12px;top:74px;flex-direction:column;gap:2px;padding:10px;margin:0;background:#0e1535;border:1px solid rgba(255,255,255,.1);border-radius:18px;box-shadow:0 24px 60px rgba(0,0,0,.45);opacity:0;visibility:hidden;transform:translateY(-8px) scale(.98);transform-origin:top right;transition:opacity .2s,transform .25s cubic-bezier(.2,.8,.2,1),visibility 0s .25s}
+  .top.open nav{opacity:1;visibility:visible;transform:none;transition:opacity .2s,transform .25s cubic-bezier(.2,.8,.2,1)}
+  .top nav a{padding:14px 16px;font-size:17px;border-radius:12px}
   .top .actions{margin-left:auto}
+  .hero{padding-top:110px}
+  .mbar-cta{display:flex}
 }
 @media (max-width:520px){
   .addons,.fields{grid-template-columns:1fr}
   .pay{grid-template-columns:1fr;justify-items:center;text-align:center}
   .top .actions{gap:6px}
   .top .actions .btn{padding:7px 11px;font-size:13px}
-  .top .logo b{display:none}
-  section{padding:64px 0}
+  .top .actions .btn.line{display:none}
+  section{padding:56px 0}
+  .wrap{padding-left:18px;padding-right:18px}
+  .hero h1{font-size:clamp(36px,11vw,46px);margin:18px 0 16px}
+  .hero p.lede{font-size:17px}
+  .hero .cta .btn{flex:1 1 100%;justify-content:center;text-align:center}
+  .stage{height:480px}
+  .phone{width:min(280px,76vw)}
+  .sec-head{margin-bottom:28px}
+  .sec-head p{font-size:16px}
+  .tile{padding:22px;border-radius:18px}
+  .who{padding:16px 0}.who span{font-size:14px;padding:7px 13px}
+  footer .wrap{flex-direction:column;gap:8px;text-align:center}
   .chipf{max-width:200px;font-size:12.5px}.chipf.c1{left:0;top:0}.chipf.c4{right:0;bottom:0}.chipf.c2,.chipf.c3{display:none}
   .hero{padding-bottom:64px}
 }
@@ -323,8 +389,8 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
 <header class="top" id="topbar">
   <div class="wrap">
     <a class="logo" href="#top" aria-label="Branditude home"><span class="logo-mark">B</span><b>Branditude</b></a>
-    <nav aria-label="Sections"><a href="#features">What you get</a><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a></nav>
-    <div class="actions"><a class="btn sm line" href="login.html" id="signin-btn">Sign in</a><a class="btn sm primary" href="#pricing">Get started</a></div>
+    <nav aria-label="Sections" id="site-nav"><a href="#features">What you get</a><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a><a href="#get-app">Get the app</a></nav>
+    <div class="actions"><a class="btn sm line" href="login.html" id="signin-btn">Sign in</a><a class="btn sm primary" href="#pricing">Get started</a><button class="menu-btn" id="menu-btn" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="site-nav"><span></span></button></div>
   </div>
 </header>
 
@@ -429,6 +495,36 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
     </div>
   </section>
 
+  <section class="getapp" id="get-app">
+    <div class="wrap">
+      <div class="sec-head"><h2>Your dashboard, as an app on every device.</h2><p>Install Branditude Growth on your phone, tablet or computer. It gets its own icon, opens full-screen without the browser bar, and loads faster. Same sign-in, same data everywhere.</p></div>
+      <p class="ga-status" id="ga-status" hidden></p>
+      <div class="ga-grid" id="ga-grid">
+        <article class="ga" data-os="android">
+          <div class="ga-top"><span class="ga-ic" aria-hidden="true">🤖</span><h3>Android</h3><span class="ga-this">This device</span></div>
+          <button class="btn primary ga-btn" type="button" data-install hidden>Install app</button>
+          <ol><li>Open this page in Chrome.</li><li>Tap the <b>⋮</b> menu, then <b>Install app</b> (or <b>Add to Home screen</b>).</li><li>Open Branditude from your home screen and sign in.</li></ol>
+        </article>
+        <article class="ga" data-os="ios">
+          <div class="ga-top"><span class="ga-ic" aria-hidden="true">🍎</span><h3>iPhone & iPad</h3><span class="ga-this">This device</span></div>
+          <ol><li>Open this page in Safari.</li><li>Tap <b>Share</b> <span class="ga-share" aria-hidden="true">⬆︎</span> at the bottom of the screen.</li><li>Scroll down and tap <b>Add to Home Screen</b>, then <b>Add</b>.</li></ol>
+        </article>
+        <article class="ga" data-os="windows">
+          <div class="ga-top"><span class="ga-ic" aria-hidden="true">🪟</span><h3>Windows</h3><span class="ga-this">This device</span></div>
+          <button class="btn primary ga-btn" type="button" data-install hidden>Install app</button>
+          <a class="btn line ga-btn" href="download/BranditudeGrowth-Windows.zip" download>Download for Windows</a>
+          <ol><li>Unzip the download and double-click <b>Install Branditude Growth</b>.</li><li>If Windows asks, click <b>More info</b>, then <b>Run anyway</b>.</li><li>Find Branditude Growth on your Desktop and in the Start menu.</li></ol>
+          <p class="ga-note">Runs in its own window using Edge or Chrome, which most PCs already have.</p>
+        </article>
+        <article class="ga" data-os="mac">
+          <div class="ga-top"><span class="ga-ic" aria-hidden="true">💻</span><h3>Mac</h3><span class="ga-this">This device</span></div>
+          <button class="btn primary ga-btn" type="button" data-install hidden>Install app</button>
+          <ol><li>In Chrome or Edge, click the install icon at the right of the address bar.</li><li>In Safari, choose <b>File</b>, then <b>Add to Dock</b>.</li><li>Open Branditude from your Dock or Launchpad.</li></ol>
+        </article>
+      </div>
+    </div>
+  </section>
+
   <section class="contact" id="contact">
     <div class="wrap">
       <div><h2>Not sure which plan fits?</h2><p class="lede">Tell us about your business and we'll suggest a plan. We usually reply within an hour during working hours.</p>
@@ -439,6 +535,7 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
 </main>
 <footer><div class="wrap"><span id="foot-left"></span><span><a href="login.html" style="color:inherit">Sign in</a> · <a href="privacy.html" style="color:inherit">Privacy policy</a> · Branditude Growth Plan</span></div></footer>
 
+<div class="mbar-cta" id="mbar-cta" aria-hidden="true"><a class="btn primary" href="#pricing" tabindex="-1">See plans</a><a class="btn wa" data-wa="Hi Branditude, I'd like to know more about the Growth Plan for my business." href="#" target="_blank" rel="noopener" tabindex="-1">WhatsApp us</a></div>
 <div id="checkout-root"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -618,7 +715,16 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape" && co) clos
   const h1 = $("#hero-h1"), bar = $("#topbar"), steps = $("#steps"), phone = $("#phone"), stage = $("#stage");
   const onScroll = () => { bar.classList.toggle("solid", scrollY > 40);
     if (!reduce && steps) { const r = steps.getBoundingClientRect(), vh = innerHeight; steps.style.setProperty("--p", Math.max(0, Math.min(1, (vh * .85 - r.top) / (r.height + vh * .35))).toFixed(3)); } };
-  addEventListener("scroll", onScroll, { passive: true }); onScroll();
+  const mb = $("#menu-btn"), mcta = $("#mbar-cta"), hero = document.querySelector(".hero"), pricing = $("#pricing"), contact = $("#contact");
+  const setMenu = (o) => { bar.classList.toggle("open", o); mb.setAttribute("aria-expanded", o); mb.setAttribute("aria-label", o ? "Close menu" : "Open menu"); };
+  mb.addEventListener("click", () => setMenu(!bar.classList.contains("open")));
+  $("#site-nav").addEventListener("click", (e) => { if (e.target.closest("a")) setMenu(false); });
+  document.addEventListener("click", (e) => { if (bar.classList.contains("open") && !bar.contains(e.target)) setMenu(false); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") setMenu(false); });
+  const ctaVis = () => { const inView = (el) => { const r = el.getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0; };
+    const show = hero.getBoundingClientRect().bottom < 0 && !inView(pricing) && !inView(contact) && !document.querySelector("#checkout-root .back");
+    mcta.classList.toggle("show", show); mcta.setAttribute("aria-hidden", !show); mcta.querySelectorAll("a").forEach((a) => (show ? a.removeAttribute("tabindex") : a.setAttribute("tabindex", "-1"))); };
+  addEventListener("scroll", () => { onScroll(); ctaVis(); }, { passive: true }); onScroll(); ctaVis();
   const fin = () => { $("#rate").textContent = "4.8"; $("#revs").textContent = "312"; };
   if (reduce) { h1.classList.add("in"); items.forEach((i) => i.classList.add("in")); if (steps) steps.style.setProperty("--p", 1); return fin(); }
   [...h1.querySelectorAll(".w")].forEach((w, i) => (w.style.transitionDelay = i * 110 + "ms"));
@@ -630,6 +736,20 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape" && co) clos
     stage.addEventListener("pointermove", (e) => { const r = stage.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
       phone.style.setProperty("--ry", (x * 18).toFixed(1) + "deg"); phone.style.setProperty("--rx", (-y * 12).toFixed(1) + "deg"); });
     stage.addEventListener("pointerleave", () => { phone.style.removeProperty("--ry"); phone.style.removeProperty("--rx"); }); }
+})();
+/* get the app: show the right steps for this device */
+(function () { const ua = navigator.userAgent, plat = navigator.userAgentData?.platform || navigator.platform || "";
+  const ios = /iPhone|iPad|iPod/.test(ua) || (/Mac/.test(plat) && navigator.maxTouchPoints > 1);
+  const os = ios ? "ios" : /Android/i.test(ua) ? "android" : /Win/i.test(plat) || /Windows/.test(ua) ? "windows" : /Mac/i.test(plat) ? "mac" : "";
+  const grid = $("#ga-grid"), mine = os && grid.querySelector(`[data-os="${os}"]`);
+  if (mine) { mine.classList.add("mine"); grid.prepend(mine); }
+  const status = $("#ga-status");
+  const apply = (st) => { grid.querySelectorAll("[data-install]").forEach((b) => (b.hidden = !st.canPrompt || b.closest(".ga") !== mine));
+    if (st.installed) { status.hidden = false; status.textContent = "You're using the installed app."; } };
+  const hook = () => window.bgpInstall ? bgpInstall.onChange(apply) : setTimeout(hook, 200); hook();
+  grid.addEventListener("click", async (e) => { const b = e.target.closest("[data-install]"); if (!b) return;
+    const r = await bgpInstall.prompt(); status.hidden = false;
+    status.textContent = r === "accepted" ? "Installed. Open Branditude Growth from your home screen or Start menu." : r === "dismissed" ? "No problem. You can install it any time from here." : "Use the steps below to install."; });
 })();
 load();
 </script>
