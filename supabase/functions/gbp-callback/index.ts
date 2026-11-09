@@ -5,7 +5,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
-const SITE = Deno.env.get("SITE_URL") ?? "https://kunalahuja392.github.io/branditude-growth-plan";
+const SITE = Deno.env.get("SITE_URL") ?? "https://growth.branditudeglobal.com";
 const back = (status: string, msg = "") => Response.redirect(`${SITE}/app.html#replies?gbp=${status}${msg ? "&msg=" + encodeURIComponent(msg) : ""}`, 302);
 
 async function gget(u: string, token: string) {
