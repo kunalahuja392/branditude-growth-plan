@@ -5,9 +5,9 @@
   const listeners = [];
   class Q {
     constructor(table) { this.op = { kind: "select", table, select: "*", filters: [], order: [], limit: null }; this.mode = null; }
-    select(s) { if (this.op.kind === "select") this.op.select = s || "*"; else this.ret = s; return this; }
+    select(s, o = {}) { if (this.op.kind === "select") { this.op.select = s || "*"; if (o.head) this.op.head = true; if (o.count) this.op.count = true; } else this.op.ret = s || "*"; return this; }
     insert(v) { this.op.kind = "insert"; this.op.values = v; return this; }
-    upsert(v) { this.op.kind = "upsert"; this.op.values = v; return this; }
+    upsert(v, o = {}) { this.op.kind = "upsert"; this.op.values = v; this.op.onConflict = o.onConflict || null; this.op.ignoreDuplicates = !!o.ignoreDuplicates; return this; }
     update(v) { this.op.kind = "update"; this.op.values = v; return this; }
     delete() { this.op.kind = "delete"; return this; }
     eq(c, v) { this.op.filters.push(["eq", c, v]); return this; } neq(c, v) { this.op.filters.push(["neq", c, v]); return this; }
@@ -16,6 +16,7 @@
     single() { this.mode = "single"; return this; } maybeSingle() { this.mode = "maybe"; return this; }
     then(res, rej) { return post("/__q", { user: getSess()?.user?.id || null, op: this.op }).then((r) => {
       if (r.error) return { data: null, error: r.error };
+      if (this.op.head) return { data: null, count: r.count, error: null };
       let d = r.data; if (this.mode === "single") { if (!d || d.length !== 1) return { data: null, error: { message: "JSON object requested, multiple (or no) rows returned" } }; d = d[0]; }
       if (this.mode === "maybe") d = d && d.length ? d[0] : null;
       return { data: d, error: null }; }).then(res, rej); }
@@ -24,6 +25,7 @@
   window.__BGP_FAKE_SB__ = {
     from: (t) => new Q(t),
     rpc: (fn, args) => post("/__q", { user: getSess()?.user?.id || null, op: { kind: "rpc", fn, args } }).then((r) => (r.error ? { data: null, error: r.error } : { data: r.data, error: null })),
+    storage: { from: () => ({ upload: async () => ({ error: { message: "Photo upload isn't available in the local test" } }), getPublicUrl: (p) => ({ data: { publicUrl: "https://example.test/" + p } }) }) },
     functions: { invoke: async () => ({ data: null, error: { message: "Edge functions aren't available in the local test", context: { json: async () => ({ error: "AI writing isn't switched on yet.", fallback: true }) } } }) },
     auth: {
       getSession: async () => ({ data: { session: getSess() } }),

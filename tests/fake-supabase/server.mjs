@@ -12,6 +12,7 @@ const lit = (v) => (v === null || v === undefined ? "NULL" : "'" + String(v).rep
 const ident = (s) => { if (!/^[a-z_][a-z0-9_]*$/i.test(s)) throw new Error("bad identifier " + s); return '"' + s + '"'; };
 function val(v) {
   if (v === null || v === undefined) return "NULL";
+  if (Array.isArray(v) && v.some((x) => x && typeof x === "object")) return lit(JSON.stringify(v));
   if (Array.isArray(v)) return lit("{" + v.map((x) => (x === null ? "NULL" : '"' + String(x).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"')).join(",") + "}");
   if (typeof v === "object") return lit(JSON.stringify(v));
   if (typeof v === "boolean") return v ? "true" : "false";
@@ -58,6 +59,8 @@ function where(f) {
     throw new Error("op " + op);
   }).join(" and ");
 }
+// Like PostgREST: return only the columns asked for with .select(); nothing otherwise
+const ret = (op) => (op.ret ? "returning " + (op.ret === "*" ? "t0.*" : op.ret.split(",").map((c) => "t0." + ident(c.trim())).join(", ")) : "returning 1 as ok");
 function handle(req) {
   const { user, op } = req;
   if (op.kind === "rpc") {
@@ -71,6 +74,7 @@ function handle(req) {
     let sql = `select ${cols(op.table, "t0", op.select)} from public.${T} t0${where(op.filters)}`;
     if (op.order.length) sql += " order by " + op.order.map(([c, o]) => `t0.${ident(c)} ${o.ascending === false ? "desc" : "asc"}${o.nullsFirst === false ? " nulls last" : o.nullsFirst ? " nulls first" : ""}`).join(", ");
     if (op.limit) sql += ` limit ${+op.limit}`;
+    if (op.head) { const r = run(`select count(*) from (${sql}) x`, user); return r.error ? r : { data: null, count: +r.data }; }
     return run(`select coalesce(jsonb_agg(x),'[]') from (${sql}) x`, user);
   }
   if (op.kind === "insert" || op.kind === "upsert") {
@@ -78,16 +82,17 @@ function handle(req) {
     const types = rawAdmin(`select json_object_agg(column_name, udt_name) from information_schema.columns where table_schema='public' and table_name=${lit(op.table)}`);
     const cast = (k, v) => (v === null || v === undefined ? "NULL" : val(v) + "::" + (types[k].startsWith("_") ? types[k].slice(1) + "[]" : types[k]));
     let sql = `insert into public.${T} as t0 (${keys.map(ident).join(",")}) values ${rows.map((r) => "(" + keys.map((k) => (k in r ? cast(k, r[k]) : "DEFAULT")).join(",") + ")").join(",")}`;
-    if (op.kind === "upsert") { const pk = rawAdmin(`select json_agg(a.attname) from pg_index i join pg_attribute a on a.attrelid=i.indrelid and a.attnum=any(i.indkey) where i.indrelid='public.${op.table}'::regclass and i.indisprimary`);
-      sql += ` on conflict (${pk.map(ident).join(",")}) do update set ${keys.filter((k) => !pk.includes(k)).map((k) => `${ident(k)} = excluded.${ident(k)}`).join(", ")}`; }
-    return run(`with r as (${sql} returning *) select coalesce(jsonb_agg(r),'[]') from r`, user);
+    if (op.kind === "upsert") { const pk = op.onConflict ? op.onConflict.split(",").map((x) => x.trim()) : rawAdmin(`select json_agg(a.attname) from pg_index i join pg_attribute a on a.attrelid=i.indrelid and a.attnum=any(i.indkey) where i.indrelid='public.${op.table}'::regclass and i.indisprimary`);
+      const upd = keys.filter((k) => !pk.includes(k));
+      sql += op.ignoreDuplicates || !upd.length ? ` on conflict (${pk.map(ident).join(",")}) do nothing` : ` on conflict (${pk.map(ident).join(",")}) do update set ${upd.map((k) => `${ident(k)} = excluded.${ident(k)}`).join(", ")}`; }
+    return run(`with r as (${sql} ${ret(op)}) select coalesce(jsonb_agg(r),'[]') from r`, user);
   }
   if (op.kind === "update") {
     const types = rawAdmin(`select json_object_agg(column_name, udt_name) from information_schema.columns where table_schema='public' and table_name=${lit(op.table)}`);
     const set = Object.entries(op.values).map(([k, v]) => `${ident(k)} = ${v === null ? "NULL" : val(v) + "::" + (types[k].startsWith("_") ? types[k].slice(1) + "[]" : types[k])}`).join(", ");
-    return run(`with r as (update public.${T} as t0 set ${set}${where(op.filters)} returning *) select coalesce(jsonb_agg(r),'[]') from r`, user);
+    return run(`with r as (update public.${T} as t0 set ${set}${where(op.filters)} ${ret(op)}) select coalesce(jsonb_agg(r),'[]') from r`, user);
   }
-  if (op.kind === "delete") return run(`with r as (delete from public.${T} as t0${where(op.filters)} returning *) select coalesce(jsonb_agg(r),'[]') from r`, user);
+  if (op.kind === "delete") return run(`with r as (delete from public.${T} as t0${where(op.filters)} ${ret(op)}) select coalesce(jsonb_agg(r),'[]') from r`, user);
   throw new Error("unknown op");
 }
 function auth(req) {

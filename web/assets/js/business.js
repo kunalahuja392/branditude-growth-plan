@@ -2,6 +2,8 @@
 import { sb, q } from "./sb.js";
 import { $, $$, esc, inr, inr2, nfmt, fmtDate, fmtShort, fmtDT, ago, daysSince, daysToBirthday, todayISO, normPhone, prettyPhone, toast, copy,
   openModal, closeModal, modalOpen, confirmBox, formModal, ico, shell, barChart, statusPill, THEMES, rwLabel, rwShort, rewardAt, nextReward, loyaltyCard } from "./ui.js";
+import { registerStaff } from "./staff.js";
+import { registerMenu, newOrderCount } from "./menu-admin.js";
 
 let C, D = {}, BID;
 const gstOn = () => +(D.settings?.gst?.rate ?? 0) > 0;
@@ -14,8 +16,12 @@ const waOn = () => !!D.biz?.wa_enabled;
 const ROUTES = () => [
   { label: "", items: [["dashboard", "Dashboard", "dash"], ["customers", "Customers", "users"], ["reviews", "Google reviews", "star"], ["feedback", "Feedback", "smile", openComplaints() || ""], ["seo", "Keywords & SEO", "spark"], ["replies", "Google replies", "star", gbpPending() || ""],
     ["offers", "Offers & coupons", "tag"], ["loyalty", "Loyalty card", "card"], ["whatsapp", "WhatsApp", "wa"], ["alerts", "Alerts", "bell", alerts().length || ""]] },
+  ...(hasMod("attendance") || hasMod("menu") ? [{ label: "Run the shop", items: [
+    ...(hasMod("menu") ? [["orders", "Orders", "receipt", D.newOrders || ""], ["menu", "QR menu", "food"]] : []),
+    ...(hasMod("attendance") ? [["staff", "Staff & attendance", "clock"], ["salary", "Salary", "rupee"]] : []) ] }] : []),
   { label: "Account", items: [["plan", "Plan & services", "box"], ["profile", "Business profile", "store"], ["signout", "Sign out", "out"]] },
 ];
+const hasMod = (m) => (D.biz?.packages?.modules || []).includes(m);
 const route = () => { const h = location.hash.slice(1).split("?")[0]; return ROUTES().flatMap((g) => g.items).some((r) => r[0] === h) ? h : "dashboard"; };
 
 export async function mount(ctx) {
@@ -25,6 +31,10 @@ export async function mount(ctx) {
   BID = m[0].business_id;
   window.addEventListener("hashchange", () => { if (location.hash === "#signout") return C.signOut(); render(); });
   await loadAll(); await gbpLoad().catch(() => {}); render();
+  if (hasMod("menu")) {
+    const tick = async () => { if (route() === "orders") return; try { const n = await newOrderCount(BID); if (n !== (D.newOrders || 0)) { D.newOrders = n; nav(); } } catch {} };
+    tick(); setInterval(tick, 30000);
+  }
 }
 
 async function loadAll() {
@@ -798,3 +808,8 @@ document.addEventListener("click", async (e) => {
     }
   } catch (err) { toast(err.message, "error"); }
 });
+
+/* ---------- Staff, salary, QR menu, orders (separate modules) ---------- */
+const moduleApi = { VIEWS, after, head, kpi, ctx: () => ({ D, BID, canWrite: canWrite() }), isRoute: (r) => route() === r, setOrderBadge: (n) => { if (D.newOrders !== n) { D.newOrders = n; nav(); } } };
+registerStaff(moduleApi);
+registerMenu(moduleApi);

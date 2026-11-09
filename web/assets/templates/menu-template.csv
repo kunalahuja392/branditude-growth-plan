@@ -1,0 +1,10 @@
+Category,Item name,Price,Description,Type,Image link,Available,Bestseller,Sort order
+Starters,Paneer tikka,240,"Smoky cottage cheese, mint chutney",Veg,,Yes,Yes,10
+Starters,Chicken 65,280,"Crispy, spicy, curry leaves",Non-veg,,Yes,No,20
+Starters,Masala fries,140,,Veg,,Yes,No,30
+Main course,Dal makhani,220,Slow-cooked black lentils,Veg,,Yes,Yes,10
+Main course,Butter chicken,340,,Non-veg,,Yes,No,20
+Main course,Egg curry,200,Two eggs in onion-tomato gravy,Egg,,Yes,No,30
+Breads,Butter naan,50,,Veg,,Yes,No,10
+Beverages,Masala chai,30,,Veg,,Yes,Yes,10
+Beverages,Cold coffee,120,,Veg,,No,No,20

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Staff check-in</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<style>
+  body{min-height:100%}.kiosk{position:static;min-height:100vh}
+  .punch{width:100%;max-width:380px;display:grid;gap:12px}
+  .punch input{font-size:20px;padding:14px;text-align:center;letter-spacing:.08em}
+  .clock{font:800 46px var(--display);letter-spacing:-.02em}
+  .res{font-size:64px;line-height:1}
+</style>
+</head>
+<body>
+<div class="kiosk"><div class="k-inner" id="k"><div class="loading"><span class="spinner"></span></div></div></div>
+<script type="module">
+// Staff check-in / check-out: a.html?b=<business-slug>. Phone + PIN, optional location check (enforced on the server).
+import { sb, friendly } from "./assets/js/sb.js";
+import { $, esc } from "./assets/js/ui.js";
+const slug = new URLSearchParams(location.search).get("b") || "";
+const k = $("#k");
+let B, timer;
+const remembered = () => { try { return localStorage.getItem("bgp_staff_phone_" + slug) || ""; } catch { return ""; } };
+const clock = () => new Date().toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
+function form(msg = "") {
+  clearTimeout(timer);
+  k.innerHTML = `<p class="k-biz">${esc(B.name)}</p><div class="clock" id="clk">${clock()}</div><p class="k-sub">${new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}</p>
+    <form class="punch" id="pf"><input id="ph" inputmode="tel" autocomplete="tel" placeholder="Your mobile number" value="${esc(remembered())}" aria-label="Mobile number" required>
+      <input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="PIN" aria-label="PIN" required>
+      <label class="check" style="justify-content:center"><input type="checkbox" id="rem" ${remembered() ? "checked" : ""}> Remember my number on this phone</label>
+      <p class="err" id="err" role="alert">${esc(msg)}</p>
+      <button class="btn primary k-btn" id="go">Check in / Check out</button></form>
+    <p class="k-quiet">Tap once when you arrive and once when you leave. Forgot your PIN? Ask the owner to reset it.</p>`;
+  const tick = setInterval(() => { const c = $("#clk"); if (!c) return clearInterval(tick); c.textContent = clock(); }, 15000);
+  $(remembered() ? "#pin" : "#ph").focus();
+  $("#pf").onsubmit = async (e) => {
+    e.preventDefault(); const btn = $("#go"); btn.disabled = true; btn.textContent = "Checking…"; $("#err").textContent = "";
+    const phone = $("#ph").value.trim(), pin = $("#pin").value.trim();
+    try { if ($("#rem").checked) localStorage.setItem("bgp_staff_phone_" + slug, phone); else localStorage.removeItem("bgp_staff_phone_" + slug); } catch {}
+    const pos = await new Promise((res) => { if (!navigator.geolocation) return res(null);
+      navigator.geolocation.getCurrentPosition((p) => res(p.coords), () => res(null), { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }); });
+    const { data, error } = await sb.rpc("staff_punch", { p_slug: slug, p_phone: phone, p_pin: pin, p_lat: pos?.latitude ?? null, p_lng: pos?.longitude ?? null });
+    if (error || data?.error) { btn.disabled = false; btn.textContent = "Check in / Check out"; $("#pin").value = ""; $("#err").textContent = data?.error || friendly(error); return; }
+    done(data);
+  };
+}
+function done(r) {
+  const first = (r.name || "").split(" ")[0];
+  k.innerHTML = r.action === "in"
+    ? `<div class="res">✅</div><h1 class="k-q">Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, ${esc(first)}!</h1><p class="k-sub">Checked in at <b>${esc(r.time)}</b>${r.late_minutes ? ` · <span style="color:var(--warn)">${r.late_minutes} min late</span>` : " · on time"}</p>`
+    : `<div class="res">👋</div><h1 class="k-q">Bye, ${esc(first)}!</h1><p class="k-sub">Checked out at <b>${esc(r.time)}</b>. See you tomorrow.</p>`;
+  k.insertAdjacentHTML("beforeend", `<div class="k-actions"><button class="btn k-btn" id="again">Done</button></div>`);
+  $("#again").onclick = () => form(); timer = setTimeout(() => form(), 8000);
+}
+(async () => {
+  const { data } = await sb.rpc("public_business", { p_slug: slug });
+  if (!data) { k.innerHTML = `<h1 class="k-q">This check-in link isn't active.</h1><p class="k-sub">Ask the owner for the latest QR code.</p>`; return; }
+  B = data; document.title = `Check-in · ${B.name}`; form();
+})();
+</script>
+</body>
+</html>

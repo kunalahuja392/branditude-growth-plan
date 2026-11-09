@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Menu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<style>
+  body{background:var(--paper);min-height:100vh;padding-bottom:96px}
+  .mh{background:var(--ink);color:var(--paper);padding:22px 18px 16px}
+  .mh h1{font:800 26px/1.1 var(--display);margin:0}
+  .mh p{margin:4px 0 0;opacity:.8;font-size:14px}
+  .mh .tbl{display:inline-block;margin-top:10px;background:var(--accent);color:var(--accent-ink);border-radius:99px;padding:3px 12px;font-weight:700;font-size:13px}
+  .mbar{position:sticky;top:0;z-index:5;background:var(--paper);border-bottom:1px solid var(--line);padding:10px 14px 8px;display:grid;gap:8px}
+  .mbar .tools{display:flex;gap:8px;align-items:center}
+  .mbar input{flex:1;padding:10px 12px;font-size:15px}
+  .cats{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+  .cats::-webkit-scrollbar{display:none}
+  .cats .chip{white-space:nowrap}
+  .sec{padding:6px 14px 0;max-width:760px;margin:0 auto}
+  .sec h2{font:800 20px var(--display);margin:18px 0 8px;scroll-margin-top:110px}
+  .dish{display:flex;gap:12px;padding:14px 0;border-bottom:1px solid var(--line)}
+  .dish .info{flex:1;min-width:0}
+  .dish .nm{font-weight:700;font-size:16px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .dish .ds{color:var(--ink-3);font-size:13px;margin:4px 0 6px}
+  .dish .pr{font-weight:700}
+  .dish .pic{width:108px;flex:none;display:flex;flex-direction:column;align-items:center;gap:0}
+  .dish .pic img{width:108px;height:96px;object-fit:cover;border-radius:12px;background:var(--soft)}
+  .dish.out{opacity:.5}
+  .qty{display:inline-flex;align-items:center;border:1.5px solid var(--accent);border-radius:10px;overflow:hidden;background:var(--card);margin-top:-14px}
+  .qty button{border:0;background:transparent;color:var(--accent);font:800 18px var(--body);width:34px;height:34px;cursor:pointer}
+  .qty b{min-width:22px;text-align:center;color:var(--accent)}
+  .add{border:1.5px solid var(--accent);background:var(--card);color:var(--accent);font:800 14px var(--body);border-radius:10px;padding:8px 22px;cursor:pointer;margin-top:-14px;box-shadow:0 2px 6px rgba(0,0,0,.08)}
+  .nopic .add,.nopic .qty{margin-top:0}
+  .cartbar{position:fixed;left:12px;right:12px;bottom:max(12px,env(safe-area-inset-bottom));z-index:10;background:var(--accent);color:var(--accent-ink);border-radius:14px;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;font-weight:700;border:0;font-size:16px;cursor:pointer;max-width:736px;margin:0 auto;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+  .sheet{position:fixed;inset:0;z-index:20;background:rgba(10,14,25,.5);display:flex;align-items:flex-end;justify-content:center}
+  .sheet .in{background:var(--card);width:100%;max-width:760px;max-height:90vh;overflow:auto;border-radius:18px 18px 0 0;padding:18px 18px max(18px,env(safe-area-inset-bottom))}
+  .line{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+  .line .grow{flex:1}
+  .status{max-width:520px;margin:30px auto;padding:0 18px;text-align:center}
+  .steps-o{display:flex;justify-content:space-between;margin:24px 0;position:relative}
+  .steps-o div{flex:1;font-size:13px;color:var(--ink-3)}
+  .steps-o div b{display:block;width:28px;height:28px;border-radius:50%;margin:0 auto 6px;background:var(--soft);line-height:28px;color:var(--ink-3)}
+  .steps-o div.on{color:var(--ink);font-weight:700}.steps-o div.on b{background:var(--good);color:#fff}
+  .foot{max-width:760px;margin:24px auto 0;padding:0 14px;color:var(--ink-3);font-size:13px}
+</style>
+</head>
+<body>
+<div id="app"><div class="loading" style="padding:60px"><span class="spinner"></span></div></div>
+<script type="module">
+// Public QR menu: m.html?b=<business-slug>&t=<table id>. Customers browse, add to cart and order; prices are re-checked on the server.
+import { sb, friendly } from "./assets/js/sb.js";
+import { $, esc, inr2 } from "./assets/js/ui.js";
+const P = new URLSearchParams(location.search), slug = P.get("b") || "", tableId = P.get("t") || null;
+const KEY = `bgp_order_${slug}_${tableId || "counter"}`;
+let MENU, cart = {}, filter = { q: "", veg: false }, poll;
+const mark = (t) => (t === "veg" || t === "nonveg" || t === "egg" ? `<span class="fmark fm-${t}" title="${{ veg: "Veg", nonveg: "Non-veg", egg: "Egg" }[t]}"></span>` : "");
+const price = (n) => (n == null ? "" : inr2(n));
+const cartCount = () => Object.values(cart).reduce((a, b) => a + b, 0);
+const cartTotal = () => Object.entries(cart).reduce((t, [id, n]) => t + (MENU.items.find((i) => i.id === id)?.price || 0) * n, 0);
+const app = $("#app");
+
+function control(i) {
+  if (!MENU.ordering_on) return "";
+  if (!i.available) return `<span class="small muted">Sold out</span>`;
+  const n = cart[i.id] || 0;
+  return n ? `<span class="qty"><button data-dec="${i.id}" aria-label="Remove one">−</button><b>${n}</b><button data-inc="${i.id}" aria-label="Add one">+</button></span>` : `<button class="add" data-inc="${i.id}">ADD</button>`;
+}
+function draw() {
+  const q = filter.q.toLowerCase();
+  const items = MENU.items.filter((i) => (!filter.veg || i.food_type === "veg") && (!q || i.name.toLowerCase().includes(q) || (i.description || "").toLowerCase().includes(q)));
+  const groups = [...MENU.categories.map((c) => [c, items.filter((i) => i.category_id === c.id)]), [{ id: "other", name: "More" }, items.filter((i) => !MENU.categories.some((c) => c.id === i.category_id))]].filter(([, l]) => l.length);
+  const best = !q && !filter.veg ? MENU.items.filter((i) => i.bestseller && i.available) : [];
+  app.innerHTML = `<header class="mh"><h1>${esc(MENU.name)}</h1><p>${esc(MENU.city || "")}</p>${MENU.table ? `<span class="tbl">${esc(MENU.table.label)}</span>` : ""}</header>
+    <div class="mbar"><div class="tools"><input id="q" type="search" placeholder="Search dishes" value="${esc(filter.q)}" aria-label="Search dishes"><label class="check small"><input type="checkbox" id="veg" ${filter.veg ? "checked" : ""}> ${mark("veg")} Veg only</label></div>
+      <div class="cats">${best.length ? `<button class="chip" data-go="best">★ Bestsellers</button>` : ""}${groups.map(([c]) => `<button class="chip" data-go="${c.id}">${esc(c.name)}</button>`).join("")}</div></div>
+    ${best.length ? `<section class="sec"><h2 id="sec-best">★ Bestsellers</h2>${best.map(dish).join("")}</section>` : ""}
+    ${groups.map(([c, l]) => `<section class="sec"><h2 id="sec-${c.id}">${esc(c.name)}</h2>${l.map(dish).join("")}</section>`).join("") || `<p class="foot">No dishes match.</p>`}
+    <p class="foot">${esc(MENU.note || "")}${MENU.note ? "<br>" : ""}${mark("veg")} Veg · ${mark("nonveg")} Non-veg · ${mark("egg")} Egg</p>
+    ${cartCount() ? `<button class="cartbar" id="viewcart"><span>${cartCount()} item${cartCount() > 1 ? "s" : ""} · ${inr2(cartTotal())}</span><span>View order ›</span></button>` : ""}`;
+  const qi = $("#q"); qi.oninput = () => { filter.q = qi.value; const pos = qi.selectionStart; draw(); const n = $("#q"); n.focus(); n.setSelectionRange(pos, pos); };
+  $("#veg").onchange = (e) => { filter.veg = e.target.checked; draw(); };
+  const vc = $("#viewcart"); if (vc) vc.onclick = sheet;
+}
+const dish = (i) => `<div class="dish ${i.available ? "" : "out"} ${i.image_url ? "" : "nopic"}"><div class="info"><div class="nm">${mark(i.food_type)} ${esc(i.name)}${i.bestseller ? ' <span class="pill acc">Bestseller</span>' : ""}</div>
+  ${i.description ? `<div class="ds">${esc(i.description)}</div>` : ""}<div class="pr">${price(i.price)}</div>${!i.image_url ? `<div style="margin-top:8px">${control(i)}</div>` : ""}</div>
+  ${i.image_url ? `<div class="pic"><img src="${esc(i.image_url)}" alt="" loading="lazy">${control(i)}</div>` : ""}</div>`;
+function sheet() {
+  const lines = Object.entries(cart).filter(([, n]) => n).map(([id, n]) => [MENU.items.find((i) => i.id === id), n]).filter(([i]) => i);
+  const el = document.createElement("div"); el.className = "sheet"; el.id = "sheet";
+  el.innerHTML = `<div class="in" role="dialog" aria-label="Your order"><div class="row" style="justify-content:space-between"><h2 style="margin:0;font:800 22px var(--display)">Your order</h2><button class="btn ghost" id="close">Close</button></div>
+    ${lines.map(([i, n]) => `<div class="line">${mark(i.food_type)}<div class="grow"><b>${esc(i.name)}</b><div class="small muted">${inr2(i.price)} each</div></div><span class="qty" style="margin:0"><button data-dec="${i.id}">−</button><b>${n}</b><button data-inc="${i.id}">+</button></span><b class="num" style="min-width:70px;text-align:right">${inr2(i.price * n)}</b></div>`).join("")}
+    <div class="line"><div class="grow"><b>Total</b></div><b class="num" style="font-size:18px">${inr2(cartTotal())}</b></div>
+    <div class="fields" style="margin-top:12px"><div class="field" style="grid-column:1/-1"><label for="note">Cooking instructions (optional)</label><input id="note" placeholder="Less spicy, no onion…"></div>
+      <div class="field"><label for="nm">Your name (optional)</label><input id="nm" autocomplete="name"></div><div class="field"><label for="phn">Phone (optional)</label><input id="phn" inputmode="tel" autocomplete="tel"></div></div>
+    <p class="err" id="err" role="alert"></p>
+    <button class="btn primary k-btn" id="place" style="width:100%;margin-top:8px">Place order · ${inr2(cartTotal())}</button>
+    <p class="small muted" style="text-align:center;margin-top:8px">${MENU.table ? `Order goes to the kitchen for ${esc(MENU.table.label)}.` : "Order goes to the counter."} Pay at the counter as usual.</p></div>`;
+  document.body.appendChild(el);
+  const closeS = () => { el.remove(); draw(); };
+  el.onclick = (e) => { if (e.target === el) closeS(); };
+  $("#close").onclick = closeS;
+  $("#place").onclick = async () => {
+    const btn = $("#place"); btn.disabled = true; btn.textContent = "Sending to kitchen…";
+    const { data, error } = await sb.rpc("place_order", { p_slug: slug, p_table: MENU.table?.id || null, p_items: lines.map(([i, n]) => ({ id: i.id, qty: n })), p_name: $("#nm").value, p_phone: $("#phn").value, p_note: $("#note").value });
+    if (error) { btn.disabled = false; btn.textContent = `Place order · ${inr2(cartTotal())}`; $("#err").textContent = friendly(error); return; }
+    cart = {}; try { localStorage.setItem(KEY, JSON.stringify({ id: data.id, token: data.token, at: Date.now() })); } catch {}
+    el.remove(); status(data.id, data.token);
+  };
+}
+const STEPS = [["new", "Received"], ["preparing", "Preparing"], ["ready", "Ready"], ["served", "Served"]];
+async function status(id, token) {
+  clearInterval(poll);
+  const show = async () => {
+    const { data } = await sb.rpc("order_status", { p_id: id, p_token: token });
+    if (!data) { try { localStorage.removeItem(KEY); } catch {} return draw(); }
+    const idx = STEPS.findIndex(([s]) => s === data.status);
+    app.innerHTML = `<header class="mh"><h1>${esc(MENU.name)}</h1>${MENU.table ? `<span class="tbl">${esc(MENU.table.label)}</span>` : ""}</header><div class="status">
+      ${data.status === "cancelled" ? `<div class="k-big">⚠️</div><h1 class="k-q">Order #${data.order_no} was cancelled</h1><p class="k-sub">Please ask the staff.</p>`
+        : `<div class="k-big">${data.status === "ready" ? "🔔" : data.status === "served" ? "😋" : "👨‍🍳"}</div><h1 class="k-q">Order #${data.order_no} ${data.status === "new" ? "sent to the kitchen" : data.status === "preparing" ? "is being prepared" : data.status === "ready" ? "is ready" : "served. Enjoy!"}</h1>
+        <div class="steps-o">${STEPS.map(([s, l], i) => `<div class="${i <= idx ? "on" : ""}"><b>${i < idx ? "✓" : i + 1}</b>${l}</div>`).join("")}</div>`}
+      <div class="card" style="text-align:left">${data.items.map((i) => `<div class="line"><div class="grow">${i.qty} × ${esc(i.name)}</div><b class="num">${inr2(i.qty * i.price)}</b></div>`).join("")}<div class="line"><div class="grow"><b>Total</b></div><b class="num">${inr2(data.total)}</b></div></div>
+      <div class="row" style="justify-content:center;margin-top:16px"><button class="btn primary" id="more">Order something more</button></div><p class="small muted" style="margin-top:10px">This page updates by itself.</p></div>`;
+    $("#more").onclick = () => { clearInterval(poll); try { localStorage.removeItem(KEY); } catch {} draw(); };
+    if (data.status === "served" || data.status === "cancelled") clearInterval(poll);
+  };
+  await show(); poll = setInterval(show, 6000);
+}
+document.addEventListener("click", (e) => {
+  const inc = e.target.closest("[data-inc]"), dec = e.target.closest("[data-dec]"), go = e.target.closest("[data-go]");
+  if (go) { document.getElementById("sec-" + go.dataset.go)?.scrollIntoView({ behavior: "smooth" }); return; }
+  if (!inc && !dec) return;
+  const id = (inc || dec).dataset.inc || (inc || dec).dataset.dec;
+  cart[id] = Math.max(0, Math.min(50, (cart[id] || 0) + (inc ? 1 : -1))); if (!cart[id]) delete cart[id];
+  const s = $("#sheet"); if (s) { s.remove(); if (cartCount()) sheet(); else draw(); } else draw();
+});
+(async () => {
+  const { data, error } = await sb.rpc("public_menu", { p_slug: slug, p_table: tableId });
+  if (error || !data) { app.innerHTML = `<div class="status"><div class="k-big">🍽️</div><h1 class="k-q">This menu isn't available right now.</h1><p class="k-sub">Please ask the staff.</p></div>`; return; }
+  MENU = data; document.title = `${MENU.name} · Menu`;
+  if (tableId && !MENU.table) MENU.ordering_on = false;
+  let saved; try { saved = JSON.parse(localStorage.getItem(KEY) || "null"); } catch {}
+  if (saved && Date.now() - saved.at < 4 * 3600e3) return status(saved.id, saved.token);
+  draw();
+  if (tableId && !MENU.table) app.insertAdjacentHTML("afterbegin", `<div class="note" style="margin:10px">This table QR is no longer active, so ordering is off. You can still see the menu.</div>`);
+})();
+</script>
+</body>
+</html>

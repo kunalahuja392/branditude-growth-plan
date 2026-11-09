@@ -194,9 +194,10 @@ VIEWS.packages = async () => {
     <div><b class="num" style="font-size:22px">${inr(p.monthly_price * (1 - p.discount_percent / 100))}</b><span class="muted">/month</span>${+p.discount_percent ? ` <s class="muted num">${inr(p.monthly_price)}</s> <span class="pill warn">${+p.discount_percent}% off${p.discount_label ? " · " + esc(p.discount_label) : ""}</span>` : ""}
       <div class="muted small num">${inr(p.yearly_price * (1 - p.discount_percent / 100))}/year · ${p.max_locations} location${p.max_locations > 1 ? "s" : ""}${p.includes_whatsapp ? " · WhatsApp on" : ""}</div></div>
     <ul class="small" style="margin:0;padding-left:18px">${p.features.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
+    <div class="row">${(p.modules || []).map((m) => `<span class="pill info">${m === "menu" ? "QR menu & orders" : "Attendance & salary"}</span>`).join("") || '<span class="small muted">No extra modules</span>'}</div>
     <div class="row"><button class="btn sm" data-a="pkg-edit" data-id="${p.id}">Edit</button></div></div>`).join("")}</div>`;
 };
-function pkgForm(p = { active: true, features: [], max_locations: 1, sort: 100, discount_percent: 0 }) {
+function pkgForm(p = { active: true, features: [], modules: ["attendance", "menu"], max_locations: 1, sort: 100, discount_percent: 0 }) {
   formModal({ title: p.id ? "Edit package" : "New package", values: p, submitLabel: "Save package",
     fields: [
       { key: "name", label: "Name", required: true }, { key: "slug", label: "Slug (URL)", placeholder: "growth", help: "Lower case, no spaces" },
@@ -205,6 +206,7 @@ function pkgForm(p = { active: true, features: [], max_locations: 1, sort: 100, 
       { key: "discount_percent", label: "Discount %", type: "number", min: 0, help: "0 for no sale" }, { key: "discount_label", label: "Discount label", placeholder: "Diwali sale" },
       { key: "max_locations", label: "Locations included", type: "number", min: 1 }, { key: "sort", label: "Order on page", type: "number" },
       { key: "features", label: "Features (one per line)", type: "lines", full: true },
+      { key: "modules", label: "Modules switched on for this plan", type: "multiselect", options: [["attendance", "Staff attendance & salary"], ["menu", "QR menu & table orders"]], full: true },
       { key: "includes_whatsapp", label: "Switch WhatsApp add-on on (credits still charged)", type: "checkbox", full: true },
       { key: "is_popular", label: "Highlight as most popular", type: "checkbox", full: true }, { key: "active", label: "Show on store", type: "checkbox", full: true },
     ],

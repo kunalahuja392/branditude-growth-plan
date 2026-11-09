@@ -270,4 +270,113 @@ do $$ declare n int; begin
   begin perform gbp_status((select id from businesses limit 1)); assert false; exception when insufficient_privilege then null; end;
 end $$;
 reset role;
+
+\echo '--- 12. Attendance: staff PINs hidden, self check-in/out, lockout, location fence, modules'
+reset role;
+update businesses set status='active', subscription_ends=current_date+30 where name='Spice Route Cafe';
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000a1');
+do $$ declare b uuid; sid uuid; n int; begin
+  select id into b from businesses where name='Spice Route Cafe';
+  insert into staff (business_id, name, phone, pay_rate, shift_start, shift_end) values (b, 'Ravi', '919811100001', 15000, '10:00', '19:00') returning id into sid;
+  perform set_staff_pin(sid, '4321');
+  begin perform set_staff_pin(sid, '12'); assert false, 'short pin'; exception when raise_exception then null; end;
+  begin perform pin_hash from staff; assert false, 'pin hash readable'; exception when insufficient_privilege then null; end;
+  begin update staff set failed_pins = 0; assert false, 'lockout writable'; exception when insufficient_privilege then null; end;
+  assert (select has_pin from staff_pin_status(b) where staff_id = sid), 'pin status';
+  insert into att_settings (business_id) values (b);
+end $$;
+reset role;
+select set_config('test.cafe', (select id::text from businesses where name='Spice Route Cafe'), false);
+select set_config('test.slug', (select slug from businesses where name='Spice Route Cafe'), false);
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000b1');
+do $$ begin
+  assert (select count(*) from staff) = 0, 'other business cannot see staff';
+  begin insert into staff (business_id, name) values (current_setting('test.cafe')::uuid, 'X'); assert false, 'cross insert'; exception when insufficient_privilege or check_violation then null; end;
+end $$;
+reset role;
+set role anon; select pg_temp.as_user(null);
+do $$ declare s text; j jsonb; i int; begin
+  s := current_setting('test.slug');
+  assert staff_punch(s, '9811100001', '0000')->>'error' like 'Phone number or PIN%', 'wrong pin';
+  j := staff_punch(s, '98111 00001', '4321'); assert j->>'action' = 'in', j::text;
+  begin perform staff_punch(s, '9811100001', '4321'); assert false, 'double punch'; exception when raise_exception then assert sqlerrm like 'You already checked in%', sqlerrm; end;
+end $$;
+reset role;
+update attendance set check_in = now() - interval '9 hours';
+set role anon; select pg_temp.as_user(null);
+do $$ declare s text; j jsonb; begin
+  s := current_setting('test.slug');
+  j := staff_punch(s, '9811100001', '4321'); assert j->>'action' = 'out', j::text;
+  begin perform staff_punch(s, '9811100001', '4321'); assert false; exception when raise_exception then assert sqlerrm like 'You already checked out%', sqlerrm; end;
+  for i in 1..5 loop perform staff_punch(s, '9811100001', '9999'); end loop;
+  assert staff_punch(s, '9811100001', '4321')->>'error' like 'Too many wrong PINs%', 'should be locked even with the right PIN';
+end $$;
+reset role;
+update staff set locked_until = null, failed_pins = 0; delete from attendance;
+update att_settings set geo_on = true, geo_lat = 18.5204, geo_lng = 73.8567, geo_radius = 150;
+set role anon; select pg_temp.as_user(null);
+do $$ declare s text; begin
+  s := current_setting('test.slug');
+  begin perform staff_punch(s, '9811100001', '4321'); assert false, 'needs location'; exception when raise_exception then assert sqlerrm like 'Turn on location%', sqlerrm; end;
+  begin perform staff_punch(s, '9811100001', '4321', 18.60, 73.90); assert false, 'too far'; exception when raise_exception then assert sqlerrm like 'You seem to be%', sqlerrm; end;
+  assert (staff_punch(s, '9811100001', '4321', 18.5206, 73.8568))->>'action' = 'in', 'near shop ok';
+end $$;
+reset role;
+update packages set modules = '{menu}' where id = (select package_id from businesses where name='Spice Route Cafe');
+set role anon; select pg_temp.as_user(null);
+do $$ declare s text; begin
+  s := current_setting('test.slug');
+  begin perform staff_punch(s, '9811100001', '4321', 18.5206, 73.8568); assert false, 'module off'; exception when raise_exception then assert sqlerrm like 'Attendance is not available%', sqlerrm; end;
+end $$;
+reset role;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000a1');
+do $$ begin
+  begin insert into holidays (business_id, day) select id, current_date from businesses where name='Spice Route Cafe'; assert false, 'module off blocks writes'; exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+update packages set modules = '{attendance,menu}';
+
+\echo '--- 13. QR menu: public menu, server-side prices, sold out, order tokens, privacy'
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000a1');
+do $$ declare b uuid; c uuid; begin
+  select id into b from businesses where name='Spice Route Cafe';
+  insert into menu_categories (business_id, name) values (b, 'Chai') returning id into c;
+  insert into menu_items (business_id, category_id, name, price) values (b, c, 'Masala chai', 30), (b, c, 'Bun maska', 40);
+  insert into menu_items (business_id, category_id, name, price, available) values (b, c, 'Kesar chai', 60, false);
+  insert into dining_tables (business_id, label) values (b, 'T1');
+end $$;
+reset role;
+select set_config('test.t', (select id::text from dining_tables limit 1), false), set_config('test.chai', (select id::text from menu_items where name='Masala chai'), false),
+       set_config('test.bun', (select id::text from menu_items where name='Bun maska'), false), set_config('test.kesar', (select id::text from menu_items where name='Kesar chai'), false);
+set role anon; select pg_temp.as_user(null);
+do $$ declare s text; m jsonb; t uuid; o jsonb; chai uuid; bun uuid; kesar uuid; st jsonb; begin
+  s := current_setting('test.slug'); t := current_setting('test.t'); chai := current_setting('test.chai'); bun := current_setting('test.bun'); kesar := current_setting('test.kesar');
+  m := public_menu(s, t);
+  assert m->'table'->>'label' = 'T1' and jsonb_array_length(m->'items') = 3, m::text;
+  o := place_order(s, t, jsonb_build_array(jsonb_build_object('id', chai, 'qty', 2, 'price', 1), jsonb_build_object('id', bun, 'qty', 1)), 'Neha', '98765 43210', 'less sugar');
+  assert (o->>'total')::numeric = 100, 'total from server prices: ' || o::text;
+  st := order_status((o->>'id')::uuid, o->>'token'); assert st->>'status' = 'new' and jsonb_array_length(st->'items') = 2, st::text;
+  assert order_status((o->>'id')::uuid, 'wrong') is null, 'token needed';
+  begin perform place_order(s, t, jsonb_build_array(jsonb_build_object('id', kesar, 'qty', 1))); assert false, 'sold out'; exception when raise_exception then assert sqlerrm like '%sold out%', sqlerrm; end;
+  begin perform place_order(s, t, '[]'::jsonb); assert false, 'empty'; exception when raise_exception then null; end;
+  begin insert into orders (business_id, order_no, token) select id, 1, 'x' from businesses limit 1; assert false, 'direct insert'; exception when insufficient_privilege then null; end;
+  assert (select count(*) from orders) = 0 and (select count(*) from order_items) = 0, 'anon reads orders';
+end $$;
+reset role;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000b1');
+do $$ begin assert (select count(*) from orders) = 0, 'other business sees orders'; assert (select count(*) from menu_items) = 0, 'other business sees menu'; end $$;
+reset role;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000a1');
+do $$ declare n int; begin
+  update orders set status = 'preparing'; get diagnostics n = row_count; assert n = 1, 'owner moves status';
+  begin update orders set total = 0; assert false, 'total locked'; exception when insufficient_privilege then null; end;
+  insert into menu_settings (business_id, ordering_on) select id, false from businesses where name='Spice Route Cafe';
+end $$;
+reset role;
+set role anon; select pg_temp.as_user(null);
+do $$ declare s text; chai uuid; begin
+  s := current_setting('test.slug'); chai := current_setting('test.chai');
+  begin perform place_order(s, null, jsonb_build_array(jsonb_build_object('id', chai, 'qty', 1))); assert false, 'ordering off'; exception when raise_exception then assert sqlerrm like 'Ordering from the table is switched off%', sqlerrm; end;
+end $$;
+reset role;
 \echo 'ALL TESTS PASSED'

@@ -1,0 +1,48 @@
+// node tests/payroll.test.mjs — salary rules, November 2026 (30 days, Sundays 1, 8, 15, 22, 29 off)
+import assert from "node:assert/strict";
+import { computeStaffMonth, monthDates } from "../web/assets/js/payroll.js";
+const T = (date, hm) => `${date}T${hm}:00+05:30`;
+const staff = { id: "s1", name: "Ravi", pay_type: "monthly", pay_rate: 30000, shift_start: "10:00", shift_end: "19:00", break_minutes: 0, weekly_off: [0], joined_on: "2026-01-01" };
+const workdays = monthDates(2026, 11).filter((d) => new Date(d + "T00:00:00Z").getUTCDay() !== 0);
+const rec = (date, inn = "10:00", out = "19:00", extra = {}) => ({ staff_id: "s1", day: date, check_in: T(date, inn), check_out: out ? T(date, out) : null, ...extra });
+const full = (except = {}) => workdays.filter((d) => !(d in except)).map((d) => rec(d)).concat(Object.entries(except).filter(([, v]) => v).map(([d, v]) => v));
+const run = (records, settings = {}, s = staff, extra = {}) => computeStaffMonth({ settings, staff: s, records, holidays: [], adjustments: [], year: 2026, month: 11, today: "2026-12-01", ...extra });
+let n = 0; const t = (name, fn) => { fn(); n++; console.log("✓", name); };
+
+t("full attendance = full salary", () => { const r = run(full()); assert.equal(workdays.length, 25); assert.equal(r.counts.P, 25); assert.equal(r.counts.WO, 5); assert.equal(r.net, 30000); });
+t("2 absences, 1 paid leave covers one → 1 day cut (30000/30)", () => { const r = run(full({ "2026-11-03": null, "2026-11-04": null })); assert.equal(r.counts.A, 1); assert.equal(r.counts.L, 1); assert.equal(r.net, 29000); });
+t("absence not covered when that option is off", () => { const r = run(full({ "2026-11-03": null }), { absent_uses_leave: false }); assert.equal(r.net, 29000); });
+t("5 lates, 3 allowed, half day per 3 extra → no cut", () => { const late = Object.fromEntries(workdays.slice(0, 5).map((d) => [d, rec(d, "10:12")])); const r = run(full(late)); assert.equal(r.lateCount, 5); assert.equal(r.latePenalty, 0); assert.equal(r.net, 30000); });
+t("7 lates → 4 extra → one half-day cut (500)", () => { const late = Object.fromEntries(workdays.slice(0, 7).map((d) => [d, rec(d, "10:12")])); const r = run(full(late)); assert.equal(r.latePenalty, 500); assert.equal(r.net, 29500); });
+t("within grace (10 min) is not late", () => { const r = run(full({ [workdays[0]]: rec(workdays[0], "10:09") })); assert.equal(r.lateCount, 0); });
+t("fixed ₹ per extra late", () => { const late = Object.fromEntries(workdays.slice(0, 5).map((d) => [d, rec(d, "10:30")])); const r = run(full(late), { late_rule: "fixed_per_late", late_rule_value: 100 }); assert.equal(r.latePenalty, 200); });
+t("per-minute cut on extra lates", () => { const late = Object.fromEntries(workdays.slice(0, 4).map((d) => [d, rec(d, "10:30")])); const r = run(full(late), { late_rule: "per_minute", late_rule_value: 1, late_allowed: 3 }); assert.equal(r.latePenalty, Math.round(30 * (1000 / 9) / 60 * 100) / 100); });
+t("leaving early counts as a late mark", () => { const early = Object.fromEntries(workdays.slice(0, 7).map((d) => [d, rec(d, "10:00", "18:30")])); const r = run(full(early)); assert.equal(r.lateCount, 7); assert.equal(r.latePenalty, 500); });
+t("worked 5 h (< 6) = half day → 500 cut", () => { const r = run(full({ [workdays[0]]: rec(workdays[0], "10:00", "15:00") })); assert.equal(r.counts.H, 1); assert.equal(r.net, 29500); });
+t("worked 2 h (< 3) = absent; paid leave covers it", () => { const r = run(full({ [workdays[0]]: rec(workdays[0], "10:00", "12:00") })); assert.equal(r.counts.L, 1); assert.equal(r.net, 30000); });
+t("hour-wise cut: 7 h on a 9 h shift → 2 h × 111.11", () => { const r = run(full({ [workdays[0]]: rec(workdays[0], "10:00", "17:00") }), { deduction_basis: "hour" }); assert.equal(r.shortHours, 2); assert.equal(r.latePenalty, 0); assert.equal(r.net, 30000 - 222.22); });
+t("working-days basis: 30000 / 25 = 1200 per day", () => { const r = run(full({ "2026-11-03": null }), { month_days: "working", paid_leaves: 0 }); assert.equal(r.basis, 25); assert.equal(r.net, 28800); });
+t("fixed 26-day basis", () => { const r = run(full({ "2026-11-03": null }), { month_days: "fixed", fixed_days: 26, paid_leaves: 0 }); assert.equal(r.dayRate, 1153.85); });
+t("sandwich rule: absent Sat + Mon makes Sunday absent too", () => { const r = run(full({ "2026-11-07": null, "2026-11-09": null }), { sandwich_rule: true, paid_leaves: 0 }); assert.equal(r.counts.A, 3); assert.equal(r.net, 27000); });
+t("no sandwich without the rule", () => { const r = run(full({ "2026-11-07": null, "2026-11-09": null }), { paid_leaves: 0 }); assert.equal(r.counts.A, 2); });
+t("unpaid weekly offs (calendar basis) are cut", () => { const r = run(full(), { paid_weekly_off: false }); assert.equal(r.net, 25000); });
+t("overtime 2 h × 111.11 × 1.5", () => { const r = run(full({ [workdays[0]]: rec(workdays[0], "10:00", "21:00") }), { overtime_on: true, overtime_multiplier: 1.5 }); assert.equal(r.otHours, 2); assert.equal(r.otPay, 333.33); });
+t("no overtime when switched off", () => { const r = run(full({ [workdays[0]]: rec(workdays[0], "10:00", "21:00") })); assert.equal(r.otPay, 0); assert.equal(r.net, 30000); });
+t("worked on a Sunday → extra day's pay", () => { const r = run(full().concat([rec("2026-11-08")])); assert.equal(r.offdayWorked, 1); assert.equal(r.net, 31000); });
+t("missed check-out: full / half / absent", () => {
+  const miss = { [workdays[0]]: rec(workdays[0], "10:00", null) };
+  assert.equal(run(full(miss)).net, 30000);
+  assert.equal(run(full(miss), { missed_checkout: "half" }).net, 29500);
+  assert.equal(run(full(miss), { missed_checkout: "absent", paid_leaves: 0 }).net, 29000);
+});
+t("owner's manual marks override punches", () => { const r = run(full({ [workdays[0]]: rec(workdays[0], "13:00", "14:00", { mark: "present" }) })); assert.equal(r.counts.P, 25); assert.equal(r.lateCount, 0); assert.equal(r.net, 30000); });
+t("leave beyond allowance is unpaid", () => { const lv = Object.fromEntries(workdays.slice(0, 3).map((d) => [d, { staff_id: "s1", day: d, mark: "leave" }])); const r = run(full(lv)); assert.equal(r.counts.L, 1); assert.equal(r.counts.UL, 2); assert.equal(r.net, 28000); });
+t("joined mid-month: days before joining are unpaid", () => { const r = run(full().filter((x) => x.day >= "2026-11-16"), {}, { ...staff, joined_on: "2026-11-16" }); assert.equal(r.counts.NJ, 15); assert.equal(r.net, 15000); });
+t("daily wage: 24 days + 1 half × 800", () => { const r = run(full({ [workdays[0]]: rec(workdays[0], "10:00", "15:00") }), { paid_leaves: 0 }, { ...staff, pay_type: "daily", pay_rate: 800 }); assert.equal(r.net, 24.5 * 800); });
+t("hourly: 2 days × 9 h × 100", () => { const r = run([rec(workdays[0]), rec(workdays[1])], { paid_leaves: 0 }, { ...staff, pay_type: "hourly", pay_rate: 100 }); assert.equal(r.net, 1800); });
+t("bonus and advance", () => { const r = computeStaffMonth({ settings: {}, staff, records: full(), holidays: [], year: 2026, month: 11, today: "2026-12-01", adjustments: [{ staff_id: "s1", kind: "bonus", amount: 1000, note: "Diwali" }, { staff_id: "s1", kind: "advance", amount: 2000 }] }); assert.equal(r.net, 29000); });
+t("holidays are paid like weekly offs", () => { const r = computeStaffMonth({ settings: {}, staff, records: full({ "2026-11-09": null }), holidays: [{ day: "2026-11-09" }], adjustments: [], year: 2026, month: 11, today: "2026-12-01" }); assert.equal(r.counts.HO, 1); assert.equal(r.net, 30000); });
+t("month in progress: future days don't count against pay", () => { const r = run(full().filter((x) => x.day <= "2026-11-10"), {}, staff, { today: "2026-11-10" }); assert.equal(r.inProgress, true); assert.equal(r.counts.A, 0); assert.equal(r.net, 30000); });
+t("night shift 22:00–06:00", () => { const s = { ...staff, shift_start: "22:00", shift_end: "06:00" }; const r = run([{ staff_id: "s1", day: "2026-11-02", check_in: T("2026-11-02", "22:05"), check_out: T("2026-11-03", "06:00") }], { paid_leaves: 0 }, s); assert.equal(r.days[1].code, "P"); assert.equal(r.days[1].worked, 475); });
+t("today without a check-in is 'not in yet', not absent", () => { const r = run(full().filter((x) => x.day < "2026-11-10"), {}, staff, { today: "2026-11-10" }); const d = r.days.find((x) => x.date === "2026-11-10"); assert.equal(d.pending, true); assert.equal(r.counts.A, 0); assert.equal(r.counts.L, 0); });
+console.log(`\n${n} payroll tests passed`);
