@@ -10,6 +10,7 @@ const S = { tab: "overview", period: "fy", from: null, to: null, heads: [], bal:
 const ctx = () => A.ctx();
 const BID = () => ctx().BID;
 const can = () => ctx().canWrite;
+const isAdmin = () => ["owner", "admin"].includes(ctx().D.me?.role);
 
 /* ---------- categories: kinds, classes and their Tally groups ---------- */
 export const CLASSES = {
@@ -31,8 +32,8 @@ const RATES = [0, 3, 5, 12, 18, 28, 40];
 // Entry types an owner chooses from
 const ENTRIES = {
   income: { t: "Money in: sale or income", head: (h) => h.kind === "income", money: "in", gst: true, verb: "Received in" },
-  expense: { t: "Money out: expense or purchase", head: (h) => h.kind === "expense", money: "out", gst: true, verb: "Paid from" },
-  asset: { t: "Bought an asset", sub: "furniture, equipment, deposit", head: (h) => h.kind === "asset" && !["cash", "bank", "receivable"].includes(h.class), money: "out", gst: true, verb: "Paid from" },
+  expense: { t: "Money out: expense or purchase", head: (h) => h.kind === "expense", money: "out", gst: true, verb: "Paid from", headLabel: "Expense category", bill: true },
+  asset: { t: "Bought an asset", sub: "furniture, equipment, deposit", head: (h) => h.kind === "asset" && !["cash", "bank", "receivable"].includes(h.class), money: "out", gst: true, verb: "Paid from", bill: true },
   capital_in: { t: "Owner put money in", head: (h) => h.class === "capital", money: "in", verb: "Received in" },
   drawings: { t: "Owner took money out", head: (h) => h.class === "drawings", money: "out", verb: "Paid from" },
   loan_in: { t: "Took a loan", head: (h) => h.kind === "liability" && h.class === "loan", money: "in", verb: "Received in" },
@@ -119,7 +120,7 @@ function gst() {
 }
 
 /* ---------- UI ---------- */
-const TABS = [["overview", "Overview"], ["entries", "Entries"], ["pnl", "Profit & loss"], ["bs", "Balance sheet"], ["gst", "GST"], ["tb", "Trial balance"], ["heads", "Categories"], ["export", "Export & Tally"]];
+const TABS = [["overview", "Overview"], ["entries", "Entries"], ["spend", "Expense report"], ["pnl", "Profit & loss"], ["bs", "Balance sheet"], ["gst", "GST"], ["tb", "Trial balance"], ["heads", "Categories"], ["export", "Export & Tally"]];
 const amt = (n, cls = "") => `<td class="num ${cls}" style="text-align:right;white-space:nowrap">${n < 0 ? "−" : ""}${inr2(Math.abs(n))}</td>`;
 const link = (id, name) => (id ? `<a href="#accounts" data-ac="ledger" data-id="${id}">${esc(name)}</a>` : esc(name));
 
@@ -165,8 +166,25 @@ const VIEW = {
       ${list.length ? list.slice(0, 800).map((v) => `<tr><td style="white-space:nowrap">${fmtDate(v.vdate)}<br><span class="muted small">${esc(v.vtype)} #${v.number}</span></td>
         <td>${esc(ENTRY_LABEL[v.entry])}${v.source !== "manual" ? `<br><span class="pill info">${SOURCE[v.source] || v.source}</span>` : ""}${v.party ? `<br><span class="small">${esc(v.party)}</span>` : ""}</td>
         <td>${link(v.head_id, H(v.head_id)?.name || "")}${v.narration ? `<br><span class="muted small">${esc(v.narration)}</span>` : ""}</td><td>${link(v.money_id, H(v.money_id)?.name || (v.entry === "opening" ? "Opening" : ""))}</td>
-        ${amt(+v.gst)}${amt(+v.total)}<td style="text-align:right;white-space:nowrap">${can() && v.source === "manual" ? `<button class="btn sm ghost" data-ac="edit" data-id="${v.id}">Edit</button>` : ""}${can() && ["manual", "visits", "salary"].includes(v.source) ? `<button class="btn sm ghost danger" data-ac="del" data-id="${v.id}" aria-label="Delete">✕</button>` : ""}</td></tr>`).join("")
+        ${amt(+v.gst)}${amt(+v.total)}<td style="text-align:right;white-space:nowrap">${v.bill_path ? `<button class="btn sm ghost" data-ac="bill" data-id="${esc(v.bill_path)}" title="View bill">📎</button>` : ""}${can() && v.source === "manual" ? `<button class="btn sm ghost" data-ac="edit" data-id="${v.id}">Edit</button>` : ""}${can() && ["manual", "visits", "salary"].includes(v.source) ? `<button class="btn sm ghost danger" data-ac="del" data-id="${v.id}" aria-label="Delete">✕</button>` : ""}</td></tr>`).join("")
         : `<tr><td colspan="7"><div class="empty">No entries match.</div></td></tr>`}</tbody></table></div>`;
+  },
+  spend() {
+    const X = spend(), cols = X.months.length <= 12 ? X.months : X.months.slice(-12), top = X.rows[0];
+    const exp = X.rows.filter((r) => !r.asset), assets = X.rows.filter((r) => r.asset);
+    const row = (r) => `<tr class="sel-row" data-ac="spend-cat" data-id="${r.id}"><td style="min-width:210px"><b>${esc(r.name)}</b><br><span class="muted small">${r.n} entr${r.n === 1 ? "y" : "ies"} · ${r.bills}/${r.n} with bill</span>
+        <div class="bar" style="margin-top:6px;max-width:220px"><i style="width:${X.total ? Math.round((r.total / X.total) * 100) : 0}%"></i></div></td>
+      ${cols.map((m) => (r.byMonth[m] ? amt(r.byMonth[m]) : `<td class="muted" style="text-align:right">—</td>`)).join("")}${amt(r.total)}<td class="num" style="text-align:right">${X.total ? Math.round((r.total / X.total) * 100) : 0}%</td></tr>`;
+    const missing = X.n - X.bills;
+    return `<div class="grid g4" style="margin-bottom:16px">${A.kpi("Spent this period", inr(X.total), `${X.n} entries`)}${A.kpi("Biggest category", top ? esc(top.name) : "—", top ? `${inr(top.total)} · ${Math.round((top.total / X.total) * 100)}%` : "")}
+      ${A.kpi("Monthly average", inr(X.total / Math.max(1, X.months.length)), `${X.months.length} month${X.months.length === 1 ? "" : "s"}`)}${A.kpi("Bills attached", `${X.bills}/${X.n}`, missing ? `<button class="btn sm ghost" data-ac="spend-missing" style="padding:0">${missing} without a bill: see them</button>` : "All entries have bills")}</div>
+      ${X.rows.length ? `<div class="card"><div class="card-head"><h2>Where the money is going</h2><button class="btn sm" data-ac="csv" data-id="expenses">Download CSV</button></div>
+        <p class="small muted" style="margin:-4px 0 10px">Amounts include GST. Tap a category to see each entry and its bill.${X.months.length > 12 ? " Showing the last 12 months in columns; totals cover the whole period." : ""}</p>
+        <div class="list spend-m">${X.rows.map((r) => `<div class="item sel-row" data-ac="spend-cat" data-id="${r.id}"><div class="grow"><b>${esc(r.name)}</b><span class="muted small">${r.asset ? "Asset · " : ""}${r.n} entr${r.n === 1 ? "y" : "ies"} · ${r.bills}/${r.n} with bill</span><div class="bar" style="margin-top:6px"><i style="width:${X.total ? Math.round((r.total / X.total) * 100) : 0}%"></i></div></div><div style="text-align:right"><b class="num">${inr(r.total)}</b><br><span class="muted small">${X.total ? Math.round((r.total / X.total) * 100) : 0}%</span></div></div>`).join("")}</div>
+        <div class="table-wrap spend-t"><table><thead><tr><th>Category</th>${cols.map((m) => `<th style="text-align:right">${monthLabel(m)}</th>`).join("")}<th style="text-align:right">Total</th><th style="text-align:right">Share</th></tr></thead><tbody>
+        ${exp.map(row).join("")}${assets.length ? `<tr class="sec"><td colspan="${cols.length + 3}"><b>Assets bought</b></td></tr>${assets.map(row).join("")}` : ""}
+        <tr class="tot"><td><b>Total</b></td>${cols.map((m) => amt(sum(X.rows, (r) => r.byMonth[m] || 0))).join("")}${amt(X.total)}<td></td></tr></tbody></table></div></div>`
+      : `<div class="card empty">No expenses in this period yet. Use <b>Money out</b> to add one, with its bill.</div>`}`;
   },
   pnl() {
     const P = pnl(), sec = (title, rows) => rows.length ? `<tr class="sec"><td colspan="2"><b>${title}</b></td></tr>${rows.map((r) => `<tr><td style="padding-left:18px">${link(r.id, r.name)}</td>${amt(r.v)}</tr>`).join("")}` : "";
@@ -211,10 +229,10 @@ const VIEW = {
   },
   heads() {
     return `<p class="muted" style="margin-bottom:12px">Every entry goes into a category. The type of each category decides where it shows: in profit & loss (income and expenses) or in the balance sheet (assets, loans, capital). Add your own, like <i>Swiggy commission</i> or <i>Generator diesel</i>.</p>
-      ${can() ? `<button class="btn primary" data-ac="head-new" style="margin-bottom:14px">+ Add a category</button>` : ""}
+      ${can() && isAdmin() ? `<button class="btn primary" data-ac="head-new" style="margin-bottom:14px">+ Add a category</button>` : `<p class="note" style="margin-bottom:14px">Only the owner or an admin can add or change categories.</p>`}
       ${Object.keys(KIND).map((k) => { const hs = S.heads.filter((h) => h.kind === k); return `<div class="card" style="margin-bottom:14px"><div class="card-head"><h2>${KIND[k]}</h2></div><div class="list">
         ${hs.map((h) => `<div class="item"><div class="grow"><b>${esc(h.name)}</b>${h.active ? "" : ' <span class="pill">Hidden</span>'}<span class="muted small">${esc(classLabel(k, h.class))}${+h.gst_rate ? ` · usual GST ${+h.gst_rate}%` : ""} · Tally: ${TALLY[h.class]}</span></div>
-          <span class="num small">${inr(clo(B(h.id)))}</span>${can() && h.class !== "tax" ? `<button class="btn sm ghost" data-ac="head-edit" data-id="${h.id}">Edit</button>` : ""}</div>`).join("")}</div></div>`; }).join("")}`;
+          <span class="num small">${inr(clo(B(h.id)))}</span>${can() && isAdmin() && h.class !== "tax" ? `<button class="btn sm ghost" data-ac="head-edit" data-id="${h.id}">Edit</button>` : ""}</div>`).join("")}</div></div>`; }).join("")}`;
   },
   export() {
     return `<div class="grid g2">
@@ -223,7 +241,7 @@ const VIEW = {
         <div class="row" style="gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn primary" data-ac="tally" data-id="masters">1. Download masters (ledgers)</button><button class="btn primary" data-ac="tally" data-id="vouchers">2. Download vouchers</button></div>
         <p class="small muted" style="margin-top:10px">Ledgers are created under Tally's standard groups (Sales Accounts, Indirect Expenses, Sundry Creditors, Duties & Taxes…). GST is split into CGST, SGST and IGST ledgers. Import into a test company first if you already have ledgers with the same names.</p></div>
       <div class="card"><div class="card-head"><h2>Excel / CSV for your CA</h2></div><div class="list">
-        ${[["daybook", "Day book: every entry with its debit and credit lines"], ["pnl", "Profit & loss"], ["bs", "Balance sheet"], ["tb", "Trial balance"], ["gst", "GST summary by rate"], ["b2b", "B2B sales with GSTIN"]]
+        ${[["daybook", "Day book: every entry with its debit and credit lines"], ["expenses", "Expense report by category and month"], ["pnl", "Profit & loss"], ["bs", "Balance sheet"], ["tb", "Trial balance"], ["gst", "GST summary by rate"], ["b2b", "B2B sales with GSTIN"]]
           .map(([k, l]) => `<div class="item"><div class="grow">${l}</div><button class="btn sm" data-ac="csv" data-id="${k}">Download</button></div>`).join("")}</div></div></div>`;
   },
 };
@@ -242,7 +260,7 @@ function entryForm(entry, v = null) {
   const m = openModal(`<div class="modal-head"><h2>${v ? "Edit entry" : esc(E.t)}</h2><button class="btn ghost" data-close>Close</button></div>
     <form id="ae-f"><div class="fields">
       <div class="field"><label for="ae-date">Date</label><input id="ae-date" type="date" required value="${v?.vdate || (today > S.to ? S.to : today)}"></div>
-      <div class="field"><label for="ae-head">${E.headLabel || (entry === "opening" ? "Account" : "Category")}</label><select id="ae-head" required>${group(heads)}${entry !== "opening" && entry !== "transfer" ? `<option value="__new">+ New category…</option>` : ""}</select></div>
+      <div class="field"><label for="ae-head">${E.headLabel || (entry === "opening" ? "Account" : "Category")}</label><select id="ae-head" required>${group(heads)}${entry !== "opening" && entry !== "transfer" && isAdmin() ? `<option value="__new">+ New category…</option>` : ""}</select>${!isAdmin() && entry === "expense" ? `<span class="small muted">The owner or an admin adds categories.</span>` : ""}</div>
       <div class="field"><label for="ae-amt">${E.gst ? "Amount" : "Amount ₹"}</label><input id="ae-amt" type="number" min="0.01" step="0.01" required inputmode="decimal" value="${v ? (+v.taxable).toFixed(2) : ""}"></div>
       ${E.money !== "none" ? `<div class="field"><label for="ae-money">${E.verb}</label><select id="ae-money" required>${moneyOpts.filter(Boolean).map((h) => `<option value="${h.id}" ${v?.money_id === h.id ? "selected" : ""}>${esc(label(h))}</option>`).join("")}</select></div>` : ""}
       ${E.gst ? `<div class="field"><label for="ae-rate">GST rate</label><select id="ae-rate">${RATES.map((r) => `<option value="${r}" ${+(v?.gst_rate ?? 0) === r ? "selected" : ""}>${r ? r + "%" : "No GST"}</option>`).join("")}</select></div>
@@ -251,6 +269,9 @@ function entryForm(entry, v = null) {
       ${E.gst ? `<div class="field ae-g"><label for="ae-gstin">Their GSTIN <span class="muted">(optional)</span></label><input id="ae-gstin" maxlength="15" style="text-transform:uppercase" value="${esc(v?.gstin || "")}"></div>
         <div class="field ae-g"><label for="ae-inv">Bill / invoice no. <span class="muted">(optional)</span></label><input id="ae-inv" value="${esc(v?.invoice_no || "")}"></div>` : ""}
       <div class="field" style="grid-column:1/-1"><label for="ae-note">Note <span class="muted">(optional)</span></label><input id="ae-note" value="${esc(v?.narration || "")}"></div>
+      ${E.bill ? `<div class="field" style="grid-column:1/-1"><label for="ae-bill">Bill <span class="muted">(optional: photo or PDF, up to 5 MB)</span></label>
+        ${v?.bill_path ? `<div class="row" style="gap:8px;margin-bottom:6px"><button type="button" class="btn sm" data-ac="bill" data-id="${esc(v.bill_path)}">📎 View current bill</button><label class="check" style="margin:0"><input type="checkbox" id="ae-bill-rm"> Remove it</label></div>` : ""}
+        <input id="ae-bill" type="file" accept="image/*,application/pdf"></div>` : ""}
     </div>
     <div id="ae-sum" class="note" style="margin-top:12px"></div><p class="err" id="ae-err"></p>
     <div class="modal-foot"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary">${v ? "Save changes" : "Save entry"}</button></div></form>`, { wide: true });
@@ -268,11 +289,16 @@ function entryForm(entry, v = null) {
   setRateFromHead();
   g("#ae-f").onsubmit = async (e) => {
     e.preventDefault(); const btn = m.querySelector("button.primary"); btn.disabled = true; const { taxable, rate } = calc();
+    let uploaded = null;
     try {
-      await q(sb.rpc("acc_post", { p_business: BID(), p: { id: v?.id || null, entry, date: g("#ae-date").value, head_id: g("#ae-head").value, money_id: g("#ae-money")?.value || null, amount: taxable,
+      const file = g("#ae-bill")?.files?.[0], rm = g("#ae-bill-rm")?.checked;
+      if (file) { btn.textContent = "Uploading bill…"; uploaded = await uploadBill(file); }
+      const billPart = uploaded ? { bill_path: uploaded } : rm ? { bill_path: null } : {};
+      await q(sb.rpc("acc_post", { p_business: BID(), p: { ...billPart, id: v?.id || null, entry, date: g("#ae-date").value, head_id: g("#ae-head").value, money_id: g("#ae-money")?.value || null, amount: taxable,
         gst_rate: rate, igst: !!(E.gst && g("#ae-igst")?.checked), party: g("#ae-party")?.value.trim() || "", gstin: g("#ae-gstin")?.value.trim() || "", invoice_no: g("#ae-inv")?.value.trim() || "", narration: g("#ae-note").value.trim() } }));
-      closeModal(); toast(v ? "Entry updated" : "Saved"); await refresh();
-    } catch (err) { g("#ae-err").textContent = err.message; btn.disabled = false; }
+      if (v?.bill_path && (uploaded || rm)) sb.storage.from("bills").remove([v.bill_path]).catch?.(() => {});
+      closeModal(); toast(v ? "Entry updated" : uploaded ? "Saved with bill" : "Saved"); await refresh();
+    } catch (err) { if (uploaded) sb.storage.from("bills").remove([uploaded]).catch?.(() => {}); g("#ae-err").textContent = err.message; btn.disabled = false; btn.textContent = v ? "Save changes" : "Save entry"; }
   };
 }
 function moreMenu() {
@@ -302,6 +328,61 @@ function headForm(h, E = null, after = null) {
       closeModal(); toast("Category saved"); await refresh(false); if (after) after(id); else draw();
     } catch (err) { m.querySelector("#ah-err").textContent = err.message; }
   };
+}
+
+/* ---------- bills ---------- */
+async function shrinkImage(file) {
+  if (!file.type.startsWith("image/") || file.size < 1.5e6) return file;
+  const img = await createImageBitmap(file).catch(() => null); if (!img) return file;
+  const k = Math.min(1, 1800 / Math.max(img.width, img.height)), c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+  c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+  return await new Promise((res) => c.toBlob((b) => res(b ? new File([b], "bill.jpg", { type: "image/jpeg" }) : file), "image/jpeg", 0.82));
+}
+async function uploadBill(file0) {
+  if (!/^image\/|^application\/pdf$/.test(file0.type)) throw new Error("The bill must be a photo or a PDF");
+  const file = await shrinkImage(file0);
+  if (file.size > 5 * 1024 * 1024) throw new Error("The bill is bigger than 5 MB. Take a photo instead, or make the PDF smaller.");
+  const ext = file.type === "application/pdf" ? "pdf" : file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+  const path = `${BID()}/${iso(new Date()).slice(0, 7)}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await sb.storage.from("bills").upload(path, file, { contentType: file.type, upsert: false });
+  if (error) throw new Error("Couldn't upload the bill: " + error.message);
+  return path;
+}
+async function openBill(path) {
+  const w = window.open("", "_blank");
+  const { data, error } = await sb.storage.from("bills").createSignedUrl(path, 300);
+  if (error || !data?.signedUrl) { w?.close(); throw new Error("Couldn't open the bill" + (error ? ": " + error.message : "")); }
+  if (w) w.location.href = data.signedUrl; else location.href = data.signedUrl;
+}
+
+/* ---------- expense report: where the money goes ---------- */
+const monthLabel = (m) => new Date(m + "-01T00:00:00").toLocaleDateString("en-IN", { month: "short", year: "2-digit" });
+const SPEND_ENTRIES = ["expense", "salary", "asset"];
+function spend() {
+  const last = [S.to.slice(0, 7), iso(new Date()).slice(0, 7)].sort()[0], months = [];   // stop at this month: no empty future columns
+  for (let d = new Date(S.from.slice(0, 7) + "-01T00:00:00"); iso(d).slice(0, 7) <= last; d.setMonth(d.getMonth() + 1)) months.push(iso(d).slice(0, 7));
+  if (!months.length) months.push(S.from.slice(0, 7));
+  const by = {};
+  for (const v of S.vouchers) {
+    if (!SPEND_ENTRIES.includes(v.entry)) continue;
+    const h = H(v.head_id); if (!h) continue;
+    const r = (by[h.id] = by[h.id] || { id: h.id, name: h.name, type: v.entry === "asset" ? "Asset bought" : classLabel("expense", h.class).split(" (")[0], asset: v.entry === "asset", total: 0, n: 0, bills: 0, byMonth: {} });
+    const amtV = +v.total, m = v.vdate.slice(0, 7);
+    r.total += amtV; r.n++; if (v.bill_path) r.bills++; r.byMonth[m] = r2((r.byMonth[m] || 0) + amtV);
+  }
+  const rows = Object.values(by).sort((a, b) => b.total - a.total);
+  return { months, rows, total: sum(rows, (r) => r.total), n: sum(rows, (r) => r.n), bills: sum(rows, (r) => r.bills) };
+}
+// headId = null lists every expense that has no bill yet
+function spendDetail(headId) {
+  const h = headId ? H(headId) : null; if (headId && !h) return;
+  const list = S.vouchers.filter((v) => SPEND_ENTRIES.includes(v.entry) && (headId ? v.head_id === headId : !v.bill_path));
+  openModal(`<div class="modal-head"><h2>${h ? esc(h.name) : "Expenses without a bill"}</h2><button class="btn ghost" data-close>Close</button></div>
+    <p class="muted small">${periodText()} · ${list.length} entr${list.length === 1 ? "y" : "ies"} · ${inr2(sum(list, (v) => +v.total))}</p>
+    <div class="table-wrap" style="margin-top:10px"><table style="min-width:0"><thead><tr><th>Date</th><th>Paid to / note</th><th style="text-align:right">Amount</th><th>Bill</th></tr></thead><tbody>
+    ${list.map((v) => `<tr><td style="white-space:nowrap">${fmtDate(v.vdate)}</td><td>${h ? "" : `<b>${esc(H(v.head_id)?.name || "")}</b><br>`}${esc(v.party || "—")}${v.narration ? `<br><span class="muted small">${esc(v.narration)}</span>` : ""}${v.invoice_no ? `<br><span class="muted small">Bill no. ${esc(v.invoice_no)}</span>` : ""}</td>${amt(+v.total)}
+      <td>${v.bill_path ? `<button class="btn sm" data-ac="bill" data-id="${esc(v.bill_path)}">📎 View</button>` : can() && v.source === "manual" ? `<button class="btn sm ghost" data-ac="edit" data-id="${v.id}">Add bill</button>` : `<span class="muted small">—</span>`}</td></tr>`).join("") || `<tr><td colspan="4" class="muted">Nothing here</td></tr>`}
+    </tbody></table></div>`, { wide: true });
 }
 
 /* ---------- ledger for one account ---------- */
@@ -355,6 +436,9 @@ async function dayLines() {
   const by = {}; lines.forEach((l) => (by[l.voucher_id] = by[l.voucher_id] || []).push(l)); return by;
 }
 async function csv(k) {
+  if (k === "expenses") { const X = spend(); return downloadCSV([["Category", "Type", ...X.months.map(monthLabel), "Total", "Share %", "Entries", "With bill"],
+    ...X.rows.map((r) => [r.name, r.type, ...X.months.map((m) => r.byMonth[m] || 0), r2(r.total), X.total ? Math.round((r.total / X.total) * 1000) / 10 : 0, r.n, r.bills]),
+    ["Total", "", ...X.months.map((m) => r2(sum(X.rows, (r) => r.byMonth[m] || 0))), r2(X.total)]], fname("expense-report", "csv")); }
   if (k === "pnl") { const P = pnl(); return downloadCSV([["Profit & loss", periodText()], [], ["Sales"], ...P.sales.map((r) => [r.name, r2(r.v)]), ["Total sales", r2(P.revenue)],
     ["Stock & direct costs"], ...P.cogs.map((r) => [r.name, r2(r.v)]), ["Gross profit", r2(P.gross)], ["Other income"], ...P.other.map((r) => [r.name, r2(r.v)]),
     ["Running expenses"], ...P.opex.map((r) => [r.name, r2(r.v)]), ["Interest, bank charges & depreciation"], ...P.fin.map((r) => [r.name, r2(r.v)]), [P.net >= 0 ? "Net profit" : "Net loss", r2(P.net)]], fname("profit-and-loss", "csv")); }
@@ -400,8 +484,11 @@ document.addEventListener("click", async (e) => {
     if (a === "new") { closeModal(); entryForm(id); }
     if (a === "more") moreMenu();
     if (a === "edit") { const v = S.vouchers.find((x) => x.id === id); entryForm(v.entry, v); }
-    if (a === "del") { if (!(await confirmBox("Delete this entry?", "It's removed from all reports.", "Delete", { danger: true }))) return; await q(sb.rpc("acc_delete", { p_business: BID(), p_id: id })); toast("Deleted"); await refresh(); }
+    if (a === "del") { if (!(await confirmBox("Delete this entry?", "It's removed from all reports.", "Delete", { danger: true }))) return; const bp = S.vouchers.find((x) => x.id === id)?.bill_path; await q(sb.rpc("acc_delete", { p_business: BID(), p_id: id })); if (bp) sb.storage.from("bills").remove([bp]).catch?.(() => {}); toast("Deleted"); await refresh(); }
     if (a === "ledger") { closeModal(); await ledger(id); }
+    if (a === "bill") await openBill(id);
+    if (a === "spend-cat") spendDetail(id);
+    if (a === "spend-missing") spendDetail(null);
     if (a === "head-new") headForm(null);
     if (a === "head-edit") headForm(H(id));
     if (a === "import-visits") importVisits();

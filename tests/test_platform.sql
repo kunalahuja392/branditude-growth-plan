@@ -647,4 +647,27 @@ reset role;
 set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000e1');
 do $$ begin assert (select count(*) from acc_vouchers) > 5, 'admin reads accounts'; end $$;
 reset role;
+
+\echo '--- 21. Expense bills and admin-only categories'
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000b1');
+do $$ declare b uuid := current_setting('test.glow'); v uuid; begin
+  perform team_save(b, 'cashier@example.test', 'staff', '{customers,accounts}');
+  v := acc_post(b, jsonb_build_object('entry', 'expense', 'head_id', (select id from acc_heads where business_id = b and name = 'Rent'), 'money_id', pg_temp.sys(b, 'cash'), 'amount', 900, 'bill_path', b::text || '/rent-nov.pdf'));
+  assert (select bill_path from acc_vouchers where id = v) = b::text || '/rent-nov.pdf', 'bill saved';
+  perform acc_post(b, jsonb_build_object('id', v, 'entry', 'expense', 'head_id', (select id from acc_heads where business_id = b and name = 'Rent'), 'money_id', pg_temp.sys(b, 'cash'), 'amount', 950));
+  assert (select bill_path from acc_vouchers where id = v) = b::text || '/rent-nov.pdf', 'bill kept on edit';
+  perform acc_post(b, jsonb_build_object('id', v, 'entry', 'expense', 'head_id', (select id from acc_heads where business_id = b and name = 'Rent'), 'money_id', pg_temp.sys(b, 'cash'), 'amount', 950, 'bill_path', null));
+  assert (select bill_path from acc_vouchers where id = v) is null, 'bill removed';
+  begin perform acc_post(b, jsonb_build_object('entry', 'expense', 'head_id', (select id from acc_heads where business_id = b and name = 'Rent'), 'money_id', pg_temp.sys(b, 'cash'), 'amount', 1, 'bill_path', gen_random_uuid()::text || '/x.pdf')); assert false;
+  exception when raise_exception then assert sqlerrm like 'Bill file%'; end;
+  perform acc_head_save(b, '{"name":"Gas cylinders","kind":"expense","class":"direct"}');
+end $$;
+reset role;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000e2');
+do $$ declare b uuid := current_setting('test.glow'); begin
+  begin perform acc_head_save(b, '{"name":"Snacks","kind":"expense","class":"operating"}'); assert false; exception when raise_exception then assert sqlerrm like 'Only the owner or an admin%', sqlerrm; end;
+  begin update acc_heads set name = 'Hacked' where business_id = b and name = 'Rent'; assert false; exception when insufficient_privilege then null; end;
+  perform acc_post(b, jsonb_build_object('entry', 'expense', 'head_id', (select id from acc_heads where business_id = b and name = 'Gas cylinders'), 'money_id', pg_temp.sys(b, 'cash'), 'amount', 1100));
+end $$;
+reset role;
 \echo 'ALL TESTS PASSED'

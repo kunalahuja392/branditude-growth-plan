@@ -305,3 +305,6 @@ td .who span{font-size:13px;color:var(--ink-3)}
 .statement a,.table-wrap td a{color:inherit;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
 .acc-tabs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
 .acc-tabs .chip{white-space:nowrap}
+
+.spend-m{display:none}
+@media (max-width:640px){.spend-t{display:none}.spend-m{display:block}}
