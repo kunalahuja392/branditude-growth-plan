@@ -22,12 +22,12 @@ do $$ declare n int; q jsonb; begin
   select count(*) into n from leads; assert n=0, 'anon cannot read leads';
   q := submit_lead(jsonb_build_object('business_name','Chai Point','phone','98765 11111','package_id',(select id from packages where slug='growth'),'billing','monthly','promo_code','launch20',
         'category_id',(select id from categories where slug='cafe-restaurant'),'product_ids',jsonb_build_array((select id from products where name='Zomato & Swiggy listing optimisation'))));
-  assert (q->>'subtotal')::numeric = 2499*0.8 + 4999, 'quote: growth -20% + zomato = '||(q->>'subtotal');
-  assert (q->>'gst')::numeric = round((2499*0.8+4999)*0.18,2), 'gst 18%';
+  assert (q->>'subtotal')::numeric = 599*0.8 + 4999, 'quote: growth -20% + zomato = '||(q->>'subtotal');
+  assert (q->>'gst')::numeric = round((599*0.8+4999)*0.18,2), 'gst 18%';
   raise notice 'lead ok: % total %', q->>'ref', q->>'total';
   -- a salon cannot buy the Zomato product: it is silently excluded from the quote
   q := quote((select id from packages where slug='starter'),'monthly', array[(select id from products where name='Zomato & Swiggy listing optimisation')], null, (select id from categories where slug='salon-spa'));
-  assert (q->>'subtotal')::numeric = 999, 'category filter on products';
+  assert (q->>'subtotal')::numeric = 299, 'category filter on products';
 end $$;
 reset role;
 
@@ -146,7 +146,7 @@ do $$ declare r jsonb; b uuid; begin
   r := create_order(b,'wa_credits',(select id from wa_credit_packs where credits=500),null);
   assert (r->>'total')::numeric = 599*1.18;
   begin r := create_order(b,'product',(select id from products where name='Property lead ads'),null); assert false; exception when others then assert sqlerrm like 'Service not available%'; end;
-  r := create_order(b,'product',(select id from products where name='Digital QR menu'),null);
+  r := create_order(b,'product',(select id from products where name='Review QR standee'),null);
   perform set_config('bgp.wa_payment', (select id::text from payments where kind='wa_credits'), false);
 end $$;
 reset role;
@@ -271,6 +271,7 @@ do $$ declare n int; begin
 end $$;
 reset role;
 
+update packages set modules = array(select distinct unnest(modules || '{attendance,menu}')) where slug='growth';
 \echo '--- 12. Attendance: staff PINs hidden, self check-in/out, lockout, location fence, modules'
 reset role;
 update businesses set status='active', subscription_ends=current_date+30 where name='Spice Route Cafe';
@@ -334,7 +335,7 @@ do $$ begin
   begin insert into holidays (business_id, day) select id, current_date from businesses where name='Spice Route Cafe'; assert false, 'module off blocks writes'; exception when insufficient_privilege then null; end;
 end $$;
 reset role;
-update packages set modules = '{attendance,menu}';
+update packages set modules = '{reviews,customers,loyalty,campaigns,seo,google_replies,attendance,menu}' where slug in ('growth','pro');
 
 \echo '--- 13. QR menu: public menu, server-side prices, sold out, order tokens, privacy'
 set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000a1');
@@ -379,4 +380,76 @@ do $$ declare s text; chai uuid; begin
   begin perform place_order(s, null, jsonb_build_array(jsonb_build_object('id', chai, 'qty', 1))); assert false, 'ordering off'; exception when raise_exception then assert sqlerrm like 'Ordering from the table is switched off%', sqlerrm; end;
 end $$;
 reset role;
+\echo '--- 14. Plans & modules: gating, add-on purchase, renewal with add-ons, trial unlocks all'
+update packages set modules = '{reviews,customers,loyalty,campaigns,seo}' where slug='growth';
+update packages set modules = '{reviews,customers}' where slug='starter';
+update businesses set status='active', subscription_ends=current_date+20, package_id=(select id from packages where slug='starter'), billing='monthly', addon_modules='{}'
+ where id = (select business_id from business_members where user_id='00000000-0000-0000-0000-0000000000b1' limit 1);
+select set_config('test.glow', (select business_id::text from business_members where user_id='00000000-0000-0000-0000-0000000000b1' limit 1), false);
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000b1');
+do $$ declare b uuid := current_setting('test.glow'); r jsonb; begin
+  assert has_module(b,'reviews') and has_module(b,'customers'), 'core modules always on';
+  assert not has_module(b,'loyalty') and not has_module(b,'attendance'), 'starter has no loyalty/attendance';
+  begin insert into coupons (business_id, code, type, value) values (b, 'X10', 'percent', 10); assert false, 'coupon without loyalty'; exception when insufficient_privilege then null; end;
+  begin perform save_loyalty(b, '{"stamps":8}'); assert false, 'loyalty save blocked'; exception when raise_exception then assert sqlerrm like 'Loyalty card isn%', sqlerrm; end;
+  assert not (preview_visit(b, '9811122233', 500, null)->>'loyalty_enabled')::boolean, 'no stamps without module';
+  r := create_order(b, 'module', (select id from modules where key='attendance'), null);
+  assert (r->>'amount')::numeric = 199 and r->>'description' like 'Add-on: Staff attendance%', r::text;
+  begin perform create_order(b, 'module', (select id from modules where key='attendance'), null); assert false, 'duplicate pending'; exception when raise_exception then null; end;
+  begin perform create_order(b, 'module', (select id from modules where key='reviews'), null); assert false, 'core not sold'; exception when raise_exception then null; end;
+  begin update businesses set addon_modules = '{menu}' where id = b; exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+do $$ begin assert (select addon_modules from businesses where id = current_setting('test.glow')::uuid) = '{}', 'owner cannot grant add-ons'; end $$;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-00000000000b');
+do $$ declare b uuid := current_setting('test.glow'); begin
+  perform admin_confirm_payment((select id from payments where business_id = b and kind='module' and status='pending'), true);
+end $$;
+reset role;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000b1');
+do $$ declare b uuid := current_setting('test.glow'); r jsonb; begin
+  assert has_module(b,'attendance'), 'add-on switched on after payment';
+  r := create_order(b, 'subscription', (select id from packages where slug='starter'), 'monthly');
+  assert (r->>'amount')::numeric = 299 + 199 and r->>'description' like '%add-ons: Staff attendance%', 'renewal includes add-on: ' || r::text;
+  r := create_order(b, 'subscription', (select id from packages where slug='pro'), 'yearly');
+  assert (r->>'amount')::numeric = 8990, 'pro already has attendance: ' || r::text;
+  perform set_config('test.propay', r->>'payment_id', false);
+end $$;
+reset role;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-00000000000b');
+do $$ begin perform admin_confirm_payment(current_setting('test.propay')::uuid, true); end $$;
+reset role;
+do $$ declare b uuid := current_setting('test.glow'); begin
+  assert (select addon_modules from businesses where id = b) = '{}', 'pro covers the add-on';
+  assert has_module(b,'menu') and has_module(b,'google_replies'), 'pro has everything';
+  update businesses set status='trial', package_id=(select id from packages where slug='starter') where id = b;
+  assert has_module(b,'google_replies') and has_module(b,'loyalty'), 'trial unlocks every module';
+end $$;
+set role anon; select pg_temp.as_user(null);
+do $$ begin assert (select count(*) from modules) >= 8, 'store can read modules';
+  begin perform has_module(gen_random_uuid(),'menu'); assert false, 'anon cannot call has_module'; exception when insufficient_privilege then null; end; end $$;
+reset role;
+\echo '--- 15. Razorpay: only the service role can mark paid; order and amount must match'
+update packages set modules = '{reviews,customers}' where slug='starter';
+update businesses set status='active', package_id=(select id from packages where slug='starter'), addon_modules='{}' where id = current_setting('test.glow')::uuid;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000b1');
+do $$ declare b uuid := current_setting('test.glow'); r jsonb; begin
+  r := create_order(b, 'module', (select id from modules where key='menu'), null);
+  perform set_config('test.rzp', r->>'payment_id', false);
+  begin perform razorpay_paid((r->>'payment_id')::uuid, 'order_x', 'pay_x', 19900); assert false, 'browser cannot mark paid'; exception when insufficient_privilege then null; end;
+  begin perform apply_payment((r->>'payment_id')::uuid, true, null); assert false, 'browser cannot apply'; exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+update payments set meta = meta || '{"rzp_order":"order_ok"}' where id = current_setting('test.rzp')::uuid;
+set role service_role;
+do $$ declare p uuid := current_setting('test.rzp'); r jsonb; begin
+  begin perform razorpay_paid(p, 'order_other', 'pay_1', 19900); assert false, 'wrong order'; exception when raise_exception then null; end;
+  begin perform razorpay_paid(p, 'order_ok', 'pay_1', 100); assert false, 'wrong amount'; exception when raise_exception then null; end;
+  r := razorpay_paid(p, 'order_ok', 'pay_1', round((select total from payments where id = p) * 100)::bigint);
+  assert (r->>'ok')::boolean, r::text;
+  r := razorpay_paid(p, 'order_ok', 'pay_1', 0); assert (r->>'already')::boolean, 'webhook + verify both arrive';
+end $$;
+reset role;
+do $$ begin assert has_module(current_setting('test.glow')::uuid, 'menu'), 'razorpay payment switched add-on on';
+  assert (select status from payments where id = current_setting('test.rzp')::uuid) = 'confirmed'; end $$;
 \echo 'ALL TESTS PASSED'

@@ -4,6 +4,7 @@ import { $, $$, esc, inr, inr2, nfmt, fmtDate, fmtShort, fmtDT, ago, daysSince, 
   openModal, closeModal, modalOpen, confirmBox, formModal, ico, shell, barChart, statusPill, THEMES, rwLabel, rwShort, rewardAt, nextReward, loyaltyCard } from "./ui.js";
 import { registerStaff } from "./staff.js";
 import { registerMenu, newOrderCount } from "./menu-admin.js";
+import { rzpOn, payOnline } from "./razorpay.js";
 
 let C, D = {}, BID;
 const gstOn = () => +(D.settings?.gst?.rate ?? 0) > 0;
@@ -13,15 +14,19 @@ const trialOpen = () => D.biz?.status === "trial" && D.biz.subscription_ends >= 
 const canWrite = () => D.biz?.status === "active" || trialOpen() || (["trial", "pending_payment"].includes(D.biz?.status) && D.payWaiting);
 const waOn = () => !!D.biz?.wa_enabled;
 
+// Which module each page belongs to. Pages without an entry are in every plan.
+const ROUTE_MOD = { offers: "loyalty", loyalty: "loyalty", whatsapp: "campaigns", alerts: "campaigns", seo: "seo", replies: "google_replies", orders: "menu", menu: "menu", staff: "attendance", salary: "attendance" };
+const lockBadge = (r, badge) => (ROUTE_MOD[r] && !hasMod(ROUTE_MOD[r]) ? "🔒" : badge);
+const item = (r, label, icon, badge = "") => [r, label, icon, lockBadge(r, badge)];
 const ROUTES = () => [
-  { label: "", items: [["dashboard", "Dashboard", "dash"], ["customers", "Customers", "users"], ["reviews", "Google reviews", "star"], ["feedback", "Feedback", "smile", openComplaints() || ""], ["seo", "Keywords & SEO", "spark"], ["replies", "Google replies", "star", gbpPending() || ""],
-    ["offers", "Offers & coupons", "tag"], ["loyalty", "Loyalty card", "card"], ["whatsapp", "WhatsApp", "wa"], ["alerts", "Alerts", "bell", alerts().length || ""]] },
-  ...(hasMod("attendance") || hasMod("menu") ? [{ label: "Run the shop", items: [
-    ...(hasMod("menu") ? [["orders", "Orders", "receipt", D.newOrders || ""], ["menu", "QR menu", "food"]] : []),
-    ...(hasMod("attendance") ? [["staff", "Staff & attendance", "clock"], ["salary", "Salary", "rupee"]] : []) ] }] : []),
+  { label: "", items: [item("dashboard", "Dashboard", "dash"), item("customers", "Customers", "users"), item("reviews", "Google reviews", "star"), item("feedback", "Feedback", "smile", openComplaints() || ""), item("seo", "Keywords & SEO", "spark"), item("replies", "Google replies", "star", hasMod("google_replies") ? gbpPending() || "" : ""),
+    item("offers", "Offers & coupons", "tag"), item("loyalty", "Loyalty card", "card"), item("whatsapp", "WhatsApp", "wa"), item("alerts", "Alerts", "bell", hasMod("campaigns") ? alerts().length || "" : "")] },
+  { label: "Run the shop", items: [item("orders", "Orders", "receipt", hasMod("menu") ? D.newOrders || "" : ""), item("menu", "QR menu", "food"), item("staff", "Staff & attendance", "clock"), item("salary", "Salary", "rupee")] },
   { label: "Account", items: [["plan", "Plan & services", "box"], ["profile", "Business profile", "store"], ["signout", "Sign out", "out"]] },
 ];
-const hasMod = (m) => (D.biz?.packages?.modules || []).includes(m);
+// On when: core module, in the plan, bought as an add-on, or on the free trial (everything unlocked). The database checks the same rule.
+const hasMod = (m) => D.biz?.status === "trial" || !!(D.mods || []).find((x) => x.key === m && x.core) || (D.biz?.packages?.modules || []).includes(m) || (D.biz?.addon_modules || []).includes(m);
+const modInfo = (k) => (D.mods || []).find((x) => x.key === k);
 const route = () => { const h = location.hash.slice(1).split("?")[0]; return ROUTES().flatMap((g) => g.items).some((r) => r[0] === h) ? h : "dashboard"; };
 
 export async function mount(ctx) {
@@ -49,8 +54,9 @@ async function loadAll() {
     q(sb.from("loyalty_programs").select("*").eq("business_id", BID).maybeSingle()),
     q(sb.from("loyalty_rewards").select("*").eq("business_id", BID).order("visit_no")),
     q(sb.from("wa_wallets").select("balance").eq("business_id", BID).maybeSingle()),
-    q(sb.from("settings").select("key,value").in("key", ["payment", "whatsapp", "agency", "gst"])),
+    q(sb.from("settings").select("key,value").in("key", ["payment", "whatsapp", "agency", "gst", "razorpay"])),
   ]);
+  D.mods = await q(sb.from("modules").select("*").eq("active", true).order("sort")).catch(() => []);
   D.payWaiting = (await q(sb.from("payments").select("id").eq("business_id", BID).eq("kind", "subscription").eq("status", "pending").not("utr", "is", null).limit(1))).length > 0;
   Object.assign(D, { biz, customers, coupons, feedback, reminders, visits, prog: prog || { enabled: false, name: "Loyalty card", stamps: 10, theme: "saffron" }, rewards, wallet: wallet?.balance ?? 0 });
   D.settings = Object.fromEntries(settings.map((s) => [s.key, s.value]));
@@ -112,7 +118,8 @@ function nav() {
 let pendingRender = false;
 function render() {
   nav(); const r = route(), m = $("#main");
-  m.innerHTML = banner() + VIEWS[r](); after[r] && after[r](); m.scrollTop = 0;
+  const lock = ROUTE_MOD[r] && !hasMod(ROUTE_MOD[r]);
+  m.innerHTML = banner() + (lock ? lockedView(ROUTE_MOD[r]) : VIEWS[r]()); !lock && after[r] && after[r](); m.scrollTop = 0;
 }
 function softRender() { const a = document.activeElement; if (a && $("#main").contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) { pendingRender = true; nav(); return; } render(); }
 document.addEventListener("focusout", () => { if (pendingRender) setTimeout(() => { const a = document.activeElement; if (a && $("#main").contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) return; pendingRender = false; render(); }); });
@@ -416,21 +423,43 @@ after.plan = async () => {
     ${pkgs.map((p) => `<div class="coupon" style="border-style:solid;${p.id === b.package_id ? "border-color:var(--accent)" : ""}"><div class="row" style="justify-content:space-between"><b style="font-size:18px">${esc(p.name)}</b>${p.id === b.package_id ? '<span class="pill acc">Current</span>' : p.is_popular ? '<span class="pill">Popular</span>' : ""}</div>
       <div><b class="num" style="font-size:20px">${inr(price(p, "monthly"))}</b><span class="muted">/month</span>${+p.discount_percent ? ` <span class="pill warn">${+p.discount_percent}% off</span>` : ""}<div class="muted small num">or ${inr(price(p, "yearly"))}/year</div></div>
       <p class="small muted">${esc(p.tagline)}</p>${p.id !== b.package_id ? `<div class="row"><button class="btn sm" data-a="renew" data-id="${p.id}" data-bill="monthly">Monthly</button><button class="btn sm" data-a="renew" data-id="${p.id}" data-bill="yearly">Yearly</button></div>` : ""}</div>`).join("")}</div></div>
+  ${addonsCard(pend)}
   <div class="card" style="margin-top:16px"><div class="card-head"><h2>Services for ${esc(b.categories?.name || "you")}</h2></div>
     ${services.length ? `<div class="list">${services.map((p) => `<div class="item"><div class="grow"><b>${esc(p.name)}</b><span class="muted small">${esc(p.description || "")}</span></div><b class="num">${inr(p.price)}${p.billing === "monthly" ? "/mo" : ""}</b><button class="btn sm" data-a="buy-product" data-id="${p.id}" ${b.status === "active" ? "" : "disabled"}>Buy</button></div>`).join("")}</div>` : `<div class="empty">No extra services right now.</div>`}</div>
   <div class="card" style="margin-top:16px"><div class="card-head"><h2>Payment history</h2></div>${pays.filter((p) => p.status !== "pending").map((p) => `<div class="item"><div class="grow"><b>${esc(p.description)}</b><span class="muted small">${fmtDT(p.created_at)}</span></div><span class="num">${inr2(p.total)}</span>${statusPill(p.status)}</div>`).join("") || `<div class="empty">No payments yet.</div>`}</div>`;
   D.pays = pays;
 };
+function addonsCard(pend) {
+  const b = D.biz, mods = (D.mods || []).filter((m) => !m.core), yr = b.billing === "yearly";
+  if (!mods.length) return "";
+  const inPlan = (k) => (b.packages?.modules || []).includes(k), bought = (k) => (b.addon_modules || []).includes(k);
+  const waiting = (k) => pend.some((p) => p.kind === "module" && p.meta?.module === k);
+  return `<div class="card" style="margin-top:16px"><div class="card-head"><h2>Features & add-ons</h2>${b.status === "trial" ? '<span class="pill acc">All unlocked on trial</span>' : ""}</div>
+    <p class="muted small" style="margin-top:-6px">Add any single feature to your plan. Add-ons renew with your plan.</p>
+    <div class="list">${(D.mods || []).map((m) => `<div class="item"><span style="font-size:20px" aria-hidden="true">${esc(m.icon)}</span><div class="grow"><b>${esc(m.name)}</b><span class="muted small">${esc(m.blurb)}</span></div>
+      ${m.core || inPlan(m.key) ? '<span class="pill good">In your plan</span>' : bought(m.key) ? '<span class="pill good">Add-on on</span>' : waiting(m.key) ? '<span class="pill warn">Payment waiting</span>'
+        : m.addon_price != null ? `<b class="num">${inr(m.addon_price * (yr ? 10 : 1))}${yr ? "/yr" : "/mo"}</b><button class="btn sm" data-a="buy-module" data-id="${m.id}">Add</button>` : ""}</div>`).join("")}</div></div>`;
+}
 async function payModal(paymentId) {
   const p = D.pays?.find((x) => x.id === paymentId) || (await q(sb.from("payments").select("*").eq("id", paymentId).single()));
   const upi = D.settings.payment || {}; const ref = "BGP-" + p.id.slice(0, 8).toUpperCase();
   const link = upi.upi_id ? `upi://pay?pa=${encodeURIComponent(upi.upi_id)}&pn=${encodeURIComponent(upi.upi_name || "Branditude")}&am=${(+p.total).toFixed(2)}&cu=INR&tn=${encodeURIComponent(ref)}` : "";
   const m = openModal(`<div class="modal-head"><h2>Pay ${inr2(p.total)}</h2><button class="btn ghost" data-close>Close</button></div>
     <p class="muted small">${esc(p.description)}${+p.gst ? ` · ${inr2(p.amount)} + GST ${inr2(p.gst)}` : ""}</p>
+    ${rzpOn(D.settings) ? `<div class="rzp-box"><button class="btn primary" id="rzp-go" style="width:100%;justify-content:center">Pay ${inr2(p.total)} online</button><p class="small muted" style="margin-top:6px;text-align:center">UPI, cards, netbanking or wallets. Switches on instantly.</p></div>
+      ${upi.upi_id ? `<p class="small muted" style="text-align:center;margin:14px 0 0">or pay to our UPI ID and enter the reference</p>` : ""}` : ""}
     ${upi.upi_id ? `<div class="row" style="gap:18px;margin-top:14px;align-items:center"><div class="qr" id="pay-qr"></div><div><p class="small muted">Scan with any UPI app, or pay to</p><p style="font:800 18px var(--display)">${esc(upi.upi_id)}</p><p class="small muted">Add <b>${ref}</b> in the note</p><a class="btn sm primary" href="${esc(link)}" style="margin-top:8px">Open UPI app</a></div></div>` : `<div class="note">Branditude hasn't added a UPI ID yet. Contact them to pay.</div>`}
     <div class="field" style="margin-top:18px"><label for="utr">UPI transaction ID (12-digit UTR)</label><input id="utr" inputmode="numeric" placeholder="e.g. 431298765012"></div><p class="err" id="utr-err"></p>
     <div class="modal-foot"><button class="btn" data-close>Later</button><button class="btn primary" id="utr-go">I've paid</button></div>`);
   if (link && window.QRCode) new QRCode(m.querySelector("#pay-qr"), { text: link, width: 150, height: 150, colorDark: "#16203a", colorLight: "#ffffff" });
+  const rz = m.querySelector("#rzp-go");
+  if (rz) rz.onclick = async () => {
+    rz.disabled = true; rz.innerHTML = `<span class="spinner"></span> Opening…`;
+    try { const r = await payOnline(sb, p.id);
+      if (r === "paid") { closeModal(); toast("Payment received. Thank you!"); D.pays = null; await reload("biz"); render(); return; } }
+    catch (e) { toast(e.message, "error"); }
+    rz.disabled = false; rz.textContent = `Pay ${inr2(p.total)} online`;
+  };
   m.querySelector("#utr-go").onclick = async () => {
     try { await q(sb.rpc("submit_utr", { p_payment: p.id, p_utr: m.querySelector("#utr").value.trim() })); closeModal(); toast("Thanks! We'll confirm your payment shortly."); if (p.kind === "subscription") D.payWaiting = true; render(); }
     catch (e) { m.querySelector("#utr-err").textContent = e.message; }
@@ -439,6 +468,24 @@ async function payModal(paymentId) {
 async function order(kind, ref, billing) {
   const r = await q(sb.rpc("create_order", { p_business: BID, p_kind: kind, p_ref: ref, p_billing: billing || "monthly" }));
   D.pays = null; await payModal(r.payment_id);
+}
+
+/* ---------- Locked feature: explain it and offer the add-on or the plan that has it ---------- */
+let PKGS_CACHE = null;
+function lockedView(key) {
+  const md = modInfo(key) || { name: "This feature", blurb: "", icon: "🔒" };
+  setTimeout(async () => {
+    PKGS_CACHE = PKGS_CACHE || (await q(sb.from("packages").select("*").eq("active", true).order("sort")).catch(() => []));
+    const plan = PKGS_CACHE.find((p) => (p.modules || []).includes(key)), el = $("#lock-plan");
+    if (el && plan) el.innerHTML = `<button class="btn" data-a="renew" data-id="${plan.id}" data-bill="${esc(D.biz.billing || "monthly")}">Switch to ${esc(plan.name)} · ${inr(plan.monthly_price)}/month</button>`;
+  });
+  const yr = D.biz.billing === "yearly", price = md.addon_price != null ? md.addon_price * (yr ? 10 : 1) : null;
+  return head(`${esc(md.icon)} ${esc(md.name)}`, "") + `<div class="card lock-card"><div class="lock-ic" aria-hidden="true">🔒</div>
+    <h2>${esc(md.name)} isn't in your ${esc(D.biz.packages?.name || "")} plan yet</h2><p class="muted">${esc(md.blurb)}</p>
+    <div class="row" style="justify-content:center;margin-top:16px;flex-wrap:wrap;gap:10px">
+      ${price != null ? `<button class="btn primary" data-a="buy-module" data-id="${md.id}">Add it for ${inr(price)}${yr ? "/year" : "/month"}${plusGst()}</button>` : ""}
+      <span id="lock-plan"></span></div>
+    <p class="small muted" style="margin-top:14px">Your data is safe. Pay by UPI and it switches on as soon as Branditude confirms the payment.</p></div>`;
 }
 
 /* ---------- Profile ---------- */
@@ -796,6 +843,16 @@ document.addEventListener("click", async (e) => {
       case "wa-buy": location.hash = "whatsapp"; document.querySelector("#wa-view") && openModal(`<div class="modal-head"><h2>Buy WhatsApp credits</h2><button class="btn ghost" data-close>Close</button></div><div class="list">${(D.packs || []).map((p) => `<div class="item"><div class="grow"><b>${esc(p.name)}</b><span class="muted small num">${nfmt(p.credits)} messages · ${inr2(p.price / p.credits)}/message</span></div><b class="num">${inr(p.price)}${plusGst()}</b><button class="btn sm primary" data-a="buy-pack" data-id="${p.id}">Buy</button></div>`).join("")}</div>`); break;
       case "buy-pack": closeModal(); await order("wa_credits", id); break;
       case "buy-product": if (await confirmBox("Buy this service?", "We'll create a payment for it. Branditude's team will contact you to get started once it's paid.", "Continue to payment")) await order("product", id); break;
+      case "buy-module": {
+        const m = (D.mods || []).find((x) => x.id === id); if (!m) break;
+        const want = [...new Set([...(D.biz.addon_modules || []), m.key])];
+        PKGS_CACHE = PKGS_CACHE || (await q(sb.from("packages").select("*").eq("active", true).order("sort")).catch(() => []));
+        const cost = (D.biz.packages?.monthly_price || 0) + want.reduce((t, k) => t + (+(modInfo(k)?.addon_price) || 0), 0);
+        const better = PKGS_CACHE.find((p) => p.id !== D.biz.package_id && want.every((k) => (p.modules || []).includes(k)) && +p.monthly_price <= cost);
+        const msg = better ? `The ${better.name} plan (${inr(better.monthly_price)}/month) already includes ${m.name}${want.length > 1 ? " and your other add-ons" : ""}, for the same or less than adding them one by one.` : m.blurb;
+        if (better && await confirmBox(`Switch to ${better.name} instead?`, msg, `Switch to ${better.name}`)) { await order("subscription", better.id, D.biz.billing || "monthly"); break; }
+        if (await confirmBox(`Add ${m.name}?`, better ? "We'll create a payment for the add-on only." : msg, "Continue to payment")) await order("module", id);
+        break; }
       case "renew": await order("subscription", id, el.dataset.bill); break;
       case "pay": await payModal(id); break;
       case "wa-send": {

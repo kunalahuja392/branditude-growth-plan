@@ -54,6 +54,9 @@ Deno.serve(async (req: Request) => {
   if (!m) return json({ error: "Not allowed" }, 403);
   const { data: open } = await admin.rpc("biz_open", { b: business_id });
   if (!open) return json({ error: "Your plan isn't active. Pay for your plan to use AI writing." }, 403);
+  const mod = kind === "reply" ? ["seo", "google_replies"] : ["seo"];
+  const ok = await Promise.all(mod.map((k) => admin.rpc("has_module", { b: business_id, m: k }).then((r) => !!r.data)));
+  if (!ok.some(Boolean)) return json({ error: "Keywords & SEO isn't in your plan. Add it from Plan & services.", module: "seo" }, 403);
 
   const since = new Date(Date.now() - 864e5).toISOString();
   const { count } = await admin.from("ai_usage").select("id", { count: "exact", head: true }).eq("business_id", business_id).gte("created_at", since);

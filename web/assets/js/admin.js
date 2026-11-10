@@ -18,6 +18,8 @@ export async function mount(ctx) {
 }
 async function loadStats() { try { D.stats = await q(sb.rpc("admin_stats")); } catch (e) { toast(e.message, "error"); D.stats = {}; } }
 const cats = async (force) => (D.cats && !force ? D.cats : (D.cats = await q(sb.from("categories").select("*").order("sort"))));
+const mods = async (force) => (D.mods && !force ? D.mods : (D.mods = await q(sb.from("modules").select("*").order("sort"))));
+const modName = (k) => (D.mods || []).find((m) => m.key === k)?.name || k;
 const pkgs = async (force) => (D.pkgs && !force ? D.pkgs : (D.pkgs = await q(sb.from("packages").select("*").order("sort"))));
 
 function nav() {
@@ -131,6 +133,7 @@ after.businesses = () => {
 };
 const fmtShort = (d) => (d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "—");
 async function openBiz(id) {
+  await mods();
   const b = D.biz.find((x) => x.id === id); if (!b) return;
   const [rep, pays, owner, ledger] = await Promise.all([
     q(sb.rpc("business_report", { p_business: id })),
@@ -155,6 +158,8 @@ async function openBiz(id) {
       <div class="field"><label for="bz-cat">Category</label><select id="bz-cat">${D.cats.map((c) => `<option value="${c.id}" ${b.category_id === c.id ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></div>
       <div class="field"><label for="bz-waid">WhatsApp sender id (optional)</label><input id="bz-waid" value="${esc(b.wa_phone_number_id || "")}" placeholder="Uses agency number if empty"></div>
       <label class="check" style="grid-column:1/-1"><input type="checkbox" id="bz-wa" ${b.wa_enabled ? "checked" : ""}> WhatsApp add-on on</label>
+      <fieldset style="grid-column:1/-1;border:0;padding:0;margin:0"><legend class="small" style="font-weight:700;margin-bottom:6px">Add-on modules (on top of the plan)</legend>
+        <div class="row" style="flex-wrap:wrap;gap:8px 16px">${(D.mods || []).filter((x) => !x.core).map((x) => `<label class="check"><input type="checkbox" data-addon="${esc(x.key)}" ${(b.addon_modules || []).includes(x.key) ? "checked" : ""}> ${esc(x.name)}</label>`).join("")}</div></fieldset>
     </div>
     <div class="row" style="margin-top:12px"><button class="btn primary" id="bz-save">Save account</button></div>
     <h3 style="margin:18px 0 8px">WhatsApp credits · balance ${nfmt(rep.wa_balance ?? 0)}</h3>
@@ -163,7 +168,8 @@ async function openBiz(id) {
     <h3 style="margin:18px 0 8px">Payments</h3>
     ${pays.length ? `<div class="list">${pays.map((p) => `<div class="item small"><div class="grow"><b>${esc(p.description)}</b><span class="muted">${fmtDT(p.created_at)}${p.utr ? " · UTR " + esc(p.utr) : ""}</span></div><span class="num">${inr2(p.total)}</span>${statusPill(p.status)}</div>`).join("")}</div>` : `<div class="empty">No payments.</div>`}`, { wide: true });
   m.querySelector("#bz-save").onclick = async () => {
-    try { await q(sb.rpc("admin_update_business", { p_business: id, p: { status: $("#bz-status").value, package_id: $("#bz-pkg").value, billing: $("#bz-bill").value, subscription_ends: $("#bz-ends").value, category_id: $("#bz-cat").value, wa_enabled: $("#bz-wa").checked, wa_phone_number_id: $("#bz-waid").value.trim() } }));
+    try { await q(sb.rpc("admin_update_business", { p_business: id, p: { status: $("#bz-status").value, package_id: $("#bz-pkg").value, billing: $("#bz-bill").value, subscription_ends: $("#bz-ends").value, category_id: $("#bz-cat").value, wa_enabled: $("#bz-wa").checked, wa_phone_number_id: $("#bz-waid").value.trim(),
+      addon_modules: [...m.querySelectorAll("[data-addon]:checked")].map((x) => x.dataset.addon) } }));
       toast("Business updated"); closeModal(); render(); } catch (e) { toast(e.message, "error"); }
   };
   m.querySelector("#bz-crb").onclick = async () => {
@@ -187,17 +193,23 @@ VIEWS.payments = async () => {
 
 /* ---------------- Packages ---------------- */
 VIEWS.packages = async () => {
-  await pkgs(true);
+  await pkgs(true); await mods(true);
   return head("Packages", "The plans businesses buy on the store. A discount here shows a sale price to everyone.", `<button class="btn primary" data-a="pkg-new">${ico("plus")} New package</button>`) + `
   <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">${D.pkgs.map((p) => `<div class="coupon" style="border-style:solid">
     <div class="row" style="justify-content:space-between"><span class="code" style="font-size:20px">${esc(p.name)}</span>${p.active ? (p.is_popular ? '<span class="pill acc">Most popular</span>' : '<span class="pill good">Live</span>') : '<span class="pill">Hidden</span>'}</div>
     <div><b class="num" style="font-size:22px">${inr(p.monthly_price * (1 - p.discount_percent / 100))}</b><span class="muted">/month</span>${+p.discount_percent ? ` <s class="muted num">${inr(p.monthly_price)}</s> <span class="pill warn">${+p.discount_percent}% off${p.discount_label ? " · " + esc(p.discount_label) : ""}</span>` : ""}
       <div class="muted small num">${inr(p.yearly_price * (1 - p.discount_percent / 100))}/year · ${p.max_locations} location${p.max_locations > 1 ? "s" : ""}${p.includes_whatsapp ? " · WhatsApp on" : ""}</div></div>
     <ul class="small" style="margin:0;padding-left:18px">${p.features.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
-    <div class="row">${(p.modules || []).map((m) => `<span class="pill info">${m === "menu" ? "QR menu & orders" : "Attendance & salary"}</span>`).join("") || '<span class="small muted">No extra modules</span>'}</div>
-    <div class="row"><button class="btn sm" data-a="pkg-edit" data-id="${p.id}">Edit</button></div></div>`).join("")}</div>`;
+    <div class="row" style="flex-wrap:wrap">${(p.modules || []).map((m) => `<span class="pill info">${esc(modName(m))}</span>`).join("") || '<span class="small muted">No modules</span>'}</div>
+    <div class="row"><button class="btn sm" data-a="pkg-edit" data-id="${p.id}">Edit</button></div></div>`).join("")}</div>
+  <div class="card" style="margin-top:16px"><div class="card-head"><h2>Modules & add-on prices</h2></div>
+    <p class="muted small" style="margin-top:-6px">Core modules are in every plan. Others can be bought on their own per month (yearly = 10 × monthly). Leave the price empty to stop selling it on its own.</p>
+    <div class="table-wrap"><table><thead><tr><th>Module</th><th>What it does</th><th>Add-on ₹/month</th><th></th></tr></thead><tbody>
+    ${D.mods.map((m) => `<tr><td><b>${esc(m.icon)} ${esc(m.name)}</b>${m.core ? ' <span class="pill good">Core</span>' : ""}</td><td class="small muted">${esc(m.blurb)}</td>
+      <td>${m.core ? '<span class="muted">In every plan</span>' : `<input type="number" min="0" id="mp-${m.id}" value="${m.addon_price ?? ""}" style="max-width:110px" aria-label="Add-on price for ${esc(m.name)}">`}</td>
+      <td>${m.core ? "" : `<button class="btn sm" data-a="mod-save" data-id="${m.id}">Save</button>`}</td></tr>`).join("")}</tbody></table></div></div>`;
 };
-function pkgForm(p = { active: true, features: [], modules: ["attendance", "menu"], max_locations: 1, sort: 100, discount_percent: 0 }) {
+function pkgForm(p = { active: true, features: [], modules: ["reviews", "customers"], max_locations: 1, sort: 100, discount_percent: 0 }) {
   formModal({ title: p.id ? "Edit package" : "New package", values: p, submitLabel: "Save package",
     fields: [
       { key: "name", label: "Name", required: true }, { key: "slug", label: "Slug (URL)", placeholder: "growth", help: "Lower case, no spaces" },
@@ -206,7 +218,7 @@ function pkgForm(p = { active: true, features: [], modules: ["attendance", "menu
       { key: "discount_percent", label: "Discount %", type: "number", min: 0, help: "0 for no sale" }, { key: "discount_label", label: "Discount label", placeholder: "Diwali sale" },
       { key: "max_locations", label: "Locations included", type: "number", min: 1 }, { key: "sort", label: "Order on page", type: "number" },
       { key: "features", label: "Features (one per line)", type: "lines", full: true },
-      { key: "modules", label: "Modules switched on for this plan", type: "multiselect", options: [["attendance", "Staff attendance & salary"], ["menu", "QR menu & table orders"]], full: true },
+      { key: "modules", label: "Modules switched on for this plan", type: "multiselect", options: (D.mods || []).map((m) => [m.key, m.name + (m.core ? " (core)" : "")]), full: true },
       { key: "includes_whatsapp", label: "Switch WhatsApp add-on on (credits still charged)", type: "checkbox", full: true },
       { key: "is_popular", label: "Highlight as most popular", type: "checkbox", full: true }, { key: "active", label: "Show on store", type: "checkbox", full: true },
     ],
@@ -365,7 +377,7 @@ VIEWS.team = async () => {
 VIEWS.settings = async () => {
   if (!isSuper()) return `<div class="card empty">Only a super admin can change settings.</div>`;
   const rows = await q(sb.from("settings").select("*")); const g = (k) => rows.find((r) => r.key === k)?.value || {};
-  D.settings = { agency: g("agency"), payment: g("payment"), gst: g("gst"), whatsapp: g("whatsapp"), trial: g("trial") };
+  D.settings = { agency: g("agency"), payment: g("payment"), gst: g("gst"), whatsapp: g("whatsapp"), trial: g("trial"), razorpay: g("razorpay") };
   const a = D.settings.agency, p = D.settings.payment;
   const f = (id, label, val, ph = "") => `<div class="field"><label for="${id}">${label}</label><input id="${id}" value="${esc(val || "")}" placeholder="${esc(ph)}"></div>`;
   return head("Settings", "Agency details shown on the store and in emails, and how businesses pay you.") + `
@@ -377,6 +389,8 @@ VIEWS.settings = async () => {
     <h2 style="margin:22px 0 12px">Payments</h2>
     <div class="fields">${f("s-upi", "UPI ID", p.upi_id, "branditude@okicici")}${f("s-upiname", "UPI payee name", p.upi_name)}${f("s-gstin", "GSTIN", p.gstin)}
       <div class="field"><label for="s-gst">GST rate %</label><input id="s-gst" type="number" min="0" max="28" value="${Math.round((D.settings.gst.rate ?? 0.18) * 100)}"></div></div>
+    <label class="check" style="margin-top:14px"><input type="checkbox" id="s-rzp" ${D.settings.razorpay?.enabled ? "checked" : ""}> Show "Pay online" (Razorpay) at checkout and in dashboards</label>
+    <p class="small muted" style="margin-top:6px">Needs the Razorpay keys saved as Supabase secrets RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET, and a webhook to <code>https://dumninwceiqvevndpupc.supabase.co/functions/v1/razorpay</code> (events payment.captured and order.paid) with its secret in RAZORPAY_WEBHOOK_SECRET. Paid online = confirmed automatically. UPI + UTR stays as a backup.</p>
     <h2 style="margin:22px 0 12px">Free trial</h2>
     <div class="fields"><div class="field"><label for="s-trial">Free trial for new businesses (days, 0 = no trial)</label><input id="s-trial" type="number" min="0" max="60" value="${D.settings.trial.days ?? 3}"></div></div>
     <h2 style="margin:22px 0 12px">WhatsApp</h2>
@@ -392,6 +406,7 @@ after.settings = () => {
       { key: "payment", public: true, value: { upi_id: v("s-upi"), upi_name: v("s-upiname"), gstin: v("s-gstin") } },
       { key: "gst", public: true, value: { rate: (+v("s-gst") || 0) / 100 } },
       { key: "whatsapp", public: true, value: { price_note: v("s-wanote") } },
+      { key: "razorpay", public: true, value: { enabled: $("#s-rzp").checked } },
       { key: "trial", public: true, value: { days: Math.max(0, Math.min(60, parseInt(v("s-trial"), 10) || 0)) } },
     ].map((r) => ({ ...r, updated_at: new Date().toISOString() }));
     try { await q(sb.from("settings").upsert(up)); toast("Settings saved"); } catch (err) { toast(err.message, "error"); } };
@@ -414,6 +429,8 @@ document.addEventListener("click", async (e) => {
       case "pay-no": if (await confirmBox("Reject this payment?", "The business will see it as rejected and can pay again.", "Reject", { danger: true })) { await q(sb.rpc("admin_confirm_payment", { p_payment: id, p_approve: false })); toast("Payment rejected"); await loadStats(); render(); } break;
       case "pkg-new": pkgForm(); break;
       case "pkg-edit": pkgForm(D.pkgs.find((p) => p.id === id)); break;
+      case "mod-save": { const v = $("#mp-" + id).value.trim();
+        await q(sb.from("modules").update({ addon_price: v === "" ? null : +v }).eq("id", id)); D.mods = null; toast("Add-on price saved"); break; }
       case "promo-new": promoForm(); break;
       case "promo-edit": promoForm(D.promos.find((p) => p.id === id)); break;
       case "cat-new": catForm(); break;

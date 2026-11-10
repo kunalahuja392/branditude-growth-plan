@@ -269,6 +269,24 @@ section{padding:96px 0}
 .addon i{font-style:normal;font-weight:700;color:var(--accent);margin-top:6px}
 .gst{color:var(--ink-3);font-size:14px;margin-top:18px}
 
+.compare-wrap{margin-top:56px}
+.cmp-title{font-size:22px;font-weight:700}
+.cmp-scroll{overflow-x:auto;margin-top:18px;border:1px solid var(--line);border-radius:18px;background:var(--paper)}
+.cmp{width:100%;border-collapse:collapse;min-width:640px;font-size:15px}
+.cmp th,.cmp td{padding:14px 16px;text-align:center;border-bottom:1px solid var(--line)}
+.cmp tr:last-child td{border-bottom:0}
+.cmp th{font:700 15px var(--body);background:var(--card);position:sticky;top:0}
+.cmp th small{display:block;font-weight:600;color:var(--ink-3);font-size:13px}
+.cmp th.pop{color:var(--accent)}
+.cmp td:first-child,.cmp th:first-child{text-align:left}
+.cmp td:first-child b{display:block;font-weight:700}
+.cmp td:first-child span{color:var(--ink-3);font-size:13px}
+.cmp .yes{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--wa-soft);color:var(--wa);font-weight:900}
+.cmp .add{font-size:13px;font-weight:700;color:var(--ink-2);background:var(--soft);border-radius:99px;padding:4px 10px;white-space:nowrap}
+.cmp td.popc{background:rgba(240,122,26,.05)}
+.plan .mods{display:flex;flex-wrap:wrap;gap:6px;margin-top:-6px}
+.plan .mods span{font-size:12.5px;font-weight:600;border-radius:99px;padding:4px 10px;background:var(--soft);color:var(--ink-2)}
+
 /* faq */
 .faq{display:grid;gap:12px;max-width:820px}
 details{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 20px;transition:border-color .2s,box-shadow .2s}
@@ -403,7 +421,7 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
         <h1 id="hero-h1"><span class="w">Turn every </span><span class="w">customer into </span><span class="w">a 5-star review.</span></h1>
         <p class="lede">One simple system for local businesses. Collect Google reviews on WhatsApp, build your own customer list, send offers that bring people back, and see what's working. We set it all up for you.</p>
         <div class="cta">
-          <a class="btn primary glow" href="#pricing">See plans from ₹999/month</a>
+          <a class="btn primary glow" href="#pricing" id="hero-cta">See plans from ₹299/month</a>
           <a class="btn ghost-light" data-wa="Hi Branditude, I'd like to know more about the Growth Plan for my business." href="#" target="_blank" rel="noopener">Talk to us on WhatsApp</a>
         </div>
         <p class="fine" id="hero-fine"><span>3-day free trial</span><span>No long contract</span><span>Cancel any month</span></p>
@@ -474,6 +492,11 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
       </div>
       <div class="field cat-pick"><label for="cat">What kind of business do you run?</label><select id="cat"><option value="">Loading…</option></select></div>
       <div class="plans" id="plans"><p class="gst">Loading plans…</p></div>
+      <div class="compare-wrap" id="compare-wrap" hidden>
+        <h3 class="cmp-title">Compare what's in each plan</h3>
+        <p class="gst" style="margin-top:6px">Need just one extra feature? Add it to any plan for a small monthly price, from your dashboard.</p>
+        <div class="cmp-scroll"><table class="cmp" id="compare"></table></div>
+      </div>
       <h3 style="font-size:20px;margin-top:56px" id="svc-title">Extra services</h3>
       <p class="gst" style="margin-top:6px">Pick these at checkout. Services change with your business type.</p>
       <div class="addons" id="addons"></div>
@@ -485,9 +508,10 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
     <div class="wrap">
       <div class="sec-head"><h2>Before you buy</h2></div>
       <div class="faq">
-        <details><summary>Do I need a Google Business Profile already?</summary><p>No. If you don't have one, the Growth and Pro plans include creating and verifying it. On Starter, you can add the profile setup add-on.</p></details>
+        <details><summary>Do I need a Google Business Profile already?</summary><p>No. We can create and verify it for you with the Google Business Profile setup service, which you can add at checkout.</p></details>
         <details><summary>How do WhatsApp messages get sent?</summary><p>Messages go from your own WhatsApp number. The app opens each chat with the message ready, so you tap send. The Pro plan can add the official WhatsApp Business API for one-click bulk sending. Meta charges its own per-message fees for that.</p></details>
         <details><summary>Is my customer data safe?</summary><p>Your customer list is private to your account. We never message your customers ourselves unless you ask us to, and you can export or delete your data at any time.</p></details>
+        <details><summary>Can I add just one feature without upgrading?</summary><p>Yes. Every feature that isn't in your plan can be added on its own for a monthly price (shown in the table above), from Plan &amp; services in your dashboard. If your add-ons cost more than the next plan, we'll show you the plan instead.</p></details>
         <details><summary>Can I cancel?</summary><p>Monthly plans can be cancelled before the next billing date. Yearly plans are paid upfront and get two months free.</p></details>
         <details><summary>Is there a free trial?</summary><p id="faq-trial">Yes. Every new business gets 3 days free with everything unlocked. Pay by UPI any time during the trial to keep going. If you don't pay, your account turns read-only and your data stays safe.</p></details>
         <details><summary>How do I pay?</summary><p>Pay by UPI from any app (GPay, PhonePe, Paytm, BHIM). You'll get an invoice on WhatsApp and email after we confirm the payment.</p></details>
@@ -543,6 +567,7 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
 // Public store: plans, discounts and category services come live from the database (managed in the admin portal).
 import { sb, configured, friendly } from "./assets/js/sb.js";
 import { normPhone } from "./assets/js/ui.js";
+import { rzpOn, payOnline } from "./assets/js/razorpay.js";
 // Already signed in? Point the sign-in links straight at the dashboard.
 sb.auth.getSession().then(({ data }) => { if (!data?.session) return;
   const b = document.getElementById("signin-btn"); if (b) { b.textContent = "My dashboard"; b.href = "app.html"; }
@@ -553,7 +578,7 @@ const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const inr = (n) => "₹" + new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(+n || 0);
 function toast(m) { const t = document.createElement("div"); t.className = "toast"; t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 2800); }
 
-let CATS = [], PKGS = [], PRODS = [], SET = {}, billing = "monthly", cat = "", TRIAL = 0;
+let CATS = [], PKGS = [], PRODS = [], MODS = [], SET = {}, billing = "monthly", cat = "", TRIAL = 0;
 const price = (p, b = billing) => (b === "yearly" ? p.yearly_price : p.monthly_price) * (1 - p.discount_percent / 100);
 const full = (p, b = billing) => (b === "yearly" ? p.yearly_price : p.monthly_price);
 const forCat = (p) => !p.product_categories.length || p.product_categories.some((x) => x.category_id === cat);
@@ -562,12 +587,14 @@ const waLink = (t) => (waNum() ? "https://wa.me/" + waNum() + "?text=" + encodeU
 
 async function load() {
   if (!configured) { $("#plans").innerHTML = `<p class="gst">Setup needed: add the Supabase URL and anon key in assets/js/config.js.</p>`; return; }
-  const [c, p, pr, s] = await Promise.all([
+  const [c, p, pr, s, md] = await Promise.all([
     sb.from("categories").select("*").order("sort"), sb.from("packages").select("*").order("sort"),
     sb.from("products").select("*, product_categories(category_id)").order("sort"), sb.from("settings").select("key,value"),
+    sb.from("modules").select("*").eq("active", true).order("sort"),
   ]);
   if (c.error || p.error) { $("#plans").innerHTML = `<p class="gst">Couldn't load plans. ${esc(friendly(c.error || p.error))}</p>`; return; }
-  CATS = c.data; PKGS = p.data; PRODS = pr.data || []; SET = Object.fromEntries((s.data || []).map((x) => [x.key, x.value]));
+  CATS = c.data; PKGS = p.data.filter((x) => x.active !== false); PRODS = pr.data || []; MODS = md?.data || [];
+  const lo = Math.min(...PKGS.map((x) => price(x, "monthly"))); if (isFinite(lo)) $("#hero-cta").textContent = `See plans from ${inr(Math.round(lo))}/month`; SET = Object.fromEntries((s.data || []).map((x) => [x.key, x.value]));
   const saved = (() => { try { return localStorage.getItem("bgp_cat") || ""; } catch { return ""; } })();
   cat = CATS.some((x) => x.id === saved) ? saved : "";
   $("#cat").innerHTML = `<option value="">Choose your business type</option>` + CATS.map((x) => `<option value="${x.id}" ${x.id === cat ? "selected" : ""}>${esc(x.icon)} ${esc(x.name)}</option>`).join("");
@@ -590,6 +617,17 @@ function drawPlans() {
     <ul>${p.features.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
     <button class="btn ${p.is_popular ? "primary" : "line"}" data-buy="${p.id}">${TRIAL ? `Start ${TRIAL}-day free trial` : `Get ${esc(p.name)}`}</button></div>`).join("");
   document.querySelectorAll("[data-bill]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.bill === billing));
+  drawCompare();
+}
+function drawCompare() {
+  if (!MODS.length || !PKGS.length) return;
+  const yr = billing === "yearly", unit = yr ? "/yr" : "/mo";
+  $("#compare").innerHTML = `<thead><tr><th scope="col">Feature</th>${PKGS.map((p) => `<th scope="col" class="${p.is_popular ? "pop" : ""}">${esc(p.name)}<small class="num">${inr(Math.round(price(p)))}${yr ? "/year" : "/month"}</small></th>`).join("")}</tr></thead>
+    <tbody>${MODS.map((m) => `<tr><td><b>${esc(m.icon)} ${esc(m.name)}</b><span>${esc(m.blurb)}</span></td>${PKGS.map((p) => {
+      const inc = m.core || (p.modules || []).includes(m.key);
+      return `<td class="${p.is_popular ? "popc" : ""}">${inc ? '<span class="yes" aria-label="Included">✓</span>' : m.addon_price != null ? `<span class="add num">+${inr(m.addon_price * (yr ? 10 : 1))}${unit}</span>` : '<span aria-label="Not available">–</span>'}</td>`; }).join("")}</tr>`).join("")}
+    <tr><td><b>📍 Locations</b></td>${PKGS.map((p) => `<td class="${p.is_popular ? "popc" : ""}"><b class="num">${p.max_locations}</b></td>`).join("")}</tr></tbody>`;
+  $("#compare-wrap").hidden = false;
 }
 function drawServices() {
   const c = CATS.find((x) => x.id === cat), list = PRODS.filter(forCat);
@@ -649,7 +687,8 @@ function draw() {
     const p = SET.payment || {}, ref = "BGP-" + co.payment_id.slice(0, 8).toUpperCase();
     const link = p.upi_id ? `upi://pay?pa=${encodeURIComponent(p.upi_id)}&pn=${encodeURIComponent(p.upi_name || "Branditude")}&am=${(+co.result.total).toFixed(2)}&cu=INR&tn=${encodeURIComponent(ref)}` : "";
     const trialNote = co.result.trial ? `<div class="note" style="margin-bottom:18px"><b>Everything is unlocked until ${new Date(co.result.trial_ends + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "long" })}.</b> Pay now or any time before then to keep it running after the trial.</div>` : "";
-    body = trialNote + (p.upi_id ? `<div class="pay"><div class="qrbox" id="upi-qr"></div><div><p style="color:var(--ink-2);font-size:15px">Scan with any UPI app, or pay to</p><p class="upi">${esc(p.upi_id)}</p>
+    const online = rzpOn(SET) ? `<div style="margin-bottom:18px"><button class="btn primary" data-co="rzp" style="width:100%;justify-content:center">Pay ${inr(co.result.total)} online</button><p style="color:var(--ink-3);font-size:13px;text-align:center;margin-top:6px">UPI, cards, netbanking or wallets. Your plan switches on instantly.</p>${p.upi_id ? `<p style="color:var(--ink-3);font-size:13px;text-align:center;margin-top:14px">or scan and pay by UPI</p>` : ""}</div>` : "";
+    body = trialNote + online + (p.upi_id ? `<div class="pay"><div class="qrbox" id="upi-qr"></div><div><p style="color:var(--ink-2);font-size:15px">Scan with any UPI app, or pay to</p><p class="upi">${esc(p.upi_id)}</p>
         <p style="margin-top:10px">Amount <b class="num">${inr(co.result.total)}</b></p><p style="color:var(--ink-3);font-size:14px">Add <b>${ref}</b> in the payment note</p><a class="btn sm primary" href="${esc(link)}" style="margin-top:10px">Open UPI app</a></div></div>
       <div class="field" style="margin-top:20px"><label for="utr">UPI transaction ID (12-digit UTR)</label><input id="utr" inputmode="numeric" placeholder="e.g. 431298765012"></div><p class="err" id="err"></p>`
       : `<div class="note">Your account is ready. Branditude will share payment details with you shortly.</div>`);
@@ -659,7 +698,7 @@ function draw() {
   } else {
     body = `<div class="done-mark"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></div>
       <h3 style="font-size:22px">${co.pendingConfirm ? "Check your email" : co.enquiry ? "Thanks! We'll be in touch" : "You're all set"}</h3>
-      <p style="color:var(--ink-2);margin-top:8px">${co.pendingConfirm ? "We've sent you a link to confirm your email. Open it, sign in, and your business will be set up automatically." : co.enquiry ? "Our team will call or WhatsApp you within one working day." : (co.result?.trial ? "Thanks for paying. Your free trial carries on while we confirm the payment, and your plan starts as soon as it's confirmed." : "We'll confirm your payment and activate your plan within one working day. You can start setting up your dashboard now.")}</p>
+      <p style="color:var(--ink-2);margin-top:8px">${co.pendingConfirm ? "We've sent you a link to confirm your email. Open it, sign in, and your business will be set up automatically." : co.enquiry ? "Our team will call or WhatsApp you within one working day." : (co.paidOnline ? "Payment received. Your plan is active now. Open your dashboard to get started." : co.result?.trial ? "Thanks for paying. Your free trial carries on while we confirm the payment, and your plan starts as soon as it's confirmed." : "We'll confirm your payment and activate your plan within one working day. You can start setting up your dashboard now.")}</p>
       ${co.ref ? `<p style="margin-top:10px">Reference: <b>${esc(co.ref)}</b></p>` : ""}`;
     foot = co.enquiry || co.pendingConfirm ? `<button class="btn primary" data-co="close">Close</button>` : `<a class="btn primary" href="app.html">Go to my dashboard</a>`;
   }
@@ -692,6 +731,10 @@ document.addEventListener("click", async (e) => {
       if (r.error) { el.disabled = false; return err(/registered/i.test(r.error.message) ? "This email already has an account. Sign in instead." : /Invalid login/i.test(r.error.message) ? "Wrong email or password." : friendly(r.error)); }
       if (!r.data.session) { try { localStorage.setItem("bgp_pending_registration", JSON.stringify(regPayload())); } catch {} co.pendingConfirm = true; co.step = 4; return draw(); }
       await register(); }
+    if (a === "rzp") { el.disabled = true; el.textContent = "Opening…";
+      try { const r = await payOnline(sb, co.payment_id); if (r === "paid") { co.paidOnline = true; co.step = 4; return draw(); } }
+      catch (x) { err(x.message); }
+      el.disabled = false; el.textContent = `Pay ${inr(co.result.total)} online`; return; }
     if (a === "paid") { const utr = $("#utr").value.trim(); el.disabled = true;
       const { error } = await sb.rpc("submit_utr", { p_payment: co.payment_id, p_utr: utr }); if (error) { el.disabled = false; return err(friendly(error)); }
       co.step = 4; draw(); }

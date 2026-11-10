@@ -261,3 +261,9 @@ td .who span{font-size:13px;color:var(--ink-3)}
 .order-card.st-ready{border-left-color:var(--good)}
 .order-card .oi{display:flex;gap:6px;align-items:center;font-size:14px}
 @media (max-width:860px){.oboard{grid-template-columns:1fr}}
+/* locked feature page */
+.lock-card{text-align:center;padding:40px 24px;max-width:620px;margin:8px auto 0}
+.lock-card .lock-ic{width:64px;height:64px;border-radius:20px;margin:0 auto 14px;display:grid;place-items:center;font-size:28px;background:var(--accent-soft,#fde9d6)}
+.lock-card h2{font-size:22px}
+.lock-card p.muted{max-width:46ch;margin:8px auto 0}
+.rzp-box{margin:16px 0 4px}

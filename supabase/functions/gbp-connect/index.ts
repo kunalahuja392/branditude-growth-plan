@@ -25,6 +25,8 @@ Deno.serve(async (req: Request) => {
   if (!m) return json({ error: "Not allowed" }, 403);
   const { data: open } = await admin.rpc("biz_open", { b: bid });
   if (!open) return json({ error: "Your plan isn't active." }, 403);
+  const { data: modOn } = await admin.rpc("has_module", { b: bid, m: "google_replies" });
+  if (!modOn) return json({ error: "Google auto-replies aren't in your plan. Add them from Plan & services.", module: "google_replies" }, 403);
 
   const state = crypto.randomUUID() + crypto.randomUUID();
   await admin.from("oauth_states").delete().lt("created_at", new Date(Date.now() - 3600e3).toISOString());

@@ -121,7 +121,7 @@ Deno.serve(async (req: Request) => {
     const { data: conns } = await admin.from("gbp_connections").select("business_id").not("location_name", "is", null);
     const out: Record<string, unknown> = {};
     for (const c of conns ?? []) {
-      const { data: open } = await admin.rpc("biz_open", { b: c.business_id });
+      const { data: open } = await admin.rpc("module_open", { b: c.business_id, m: "google_replies" });
       if (!open) continue;
       try { out[c.business_id] = await syncOne(admin, c.business_id); } catch (e) { out[c.business_id] = { error: (e as Error).message }; }
     }
@@ -139,6 +139,8 @@ Deno.serve(async (req: Request) => {
   const { data: open } = await admin.rpc("biz_open", { b: bid });
   if (!open) return json({ error: "Your plan isn't active." }, 403);
   if (body.action === "disconnect") { await admin.from("gbp_connections").delete().eq("business_id", bid); return json({ ok: true }); }
+  const { data: modOn } = await admin.rpc("has_module", { b: bid, m: "google_replies" });
+  if (!modOn) return json({ error: "Google auto-replies aren't in your plan. Add them from Plan & services.", module: "google_replies" }, 403);
   if (!configured) return json({ error: "Branditude is still finishing the Google connection setup.", setup: true }, 503);
 
   try {
