@@ -48,8 +48,8 @@
   color-scheme:dark;
 }
 *{box-sizing:border-box}
-html{scroll-behavior:smooth}
-body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.6 var(--body);-webkit-font-smoothing:antialiased}
+html{scroll-behavior:smooth;overflow-x:hidden}
+body{margin:0;overflow-x:hidden;background:var(--paper);color:var(--ink);font:17px/1.6 var(--body);-webkit-font-smoothing:antialiased}
 h1,h2,h3{margin:0;font-family:var(--display);text-wrap:balance;letter-spacing:-.025em;line-height:1.08}
 p{margin:0}
 a{color:inherit}
@@ -90,11 +90,13 @@ header.top.solid{background:rgba(16,24,58,.94)}
 @keyframes drift1{to{transform:translate(-8vw,6vh) scale(1.15)}}
 @keyframes drift2{to{transform:translate(-12vw,-8vh) scale(.9)}}
 @keyframes drift3{to{transform:translate(10vw,-6vh) scale(1.1)}}
-.hero .wrap{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center}
+.hero .wrap{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:40px;align-items:center}
+.hero .wrap>*{min-width:0}
 .pill-tag{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:99px;padding:6px 14px 6px 8px;font-size:14px;font-weight:600;color:var(--band-ink)}
 .pill-tag b{background:var(--wa);color:#fff;border-radius:99px;font-size:12px;padding:2px 8px}
 .hero h1{font-size:clamp(40px,6vw,76px);font-weight:900;margin:22px 0 22px;line-height:1.02}
-.hero h1 .w{display:inline-block;white-space:pre}
+.hero h1 .w{display:inline-block;white-space:normal;max-width:100%}
+.hero h1{overflow-wrap:break-word}
 .hero p.lede{font-size:19px;color:var(--band-2);max-width:50ch}
 .hero .cta{display:flex;gap:12px;flex-wrap:wrap;margin-top:32px}
 .hero .fine{margin-top:20px;color:var(--band-2);font-size:14px;display:flex;gap:16px;flex-wrap:wrap}
@@ -400,7 +402,7 @@ input:focus,select:focus{outline:2px solid var(--accent-soft);border-color:var(-
   .top .actions .btn.line{display:none}
   section{padding:56px 0}
   .wrap{padding-left:18px;padding-right:18px}
-  .hero h1{font-size:clamp(36px,11vw,46px);margin:18px 0 16px}
+  .hero h1{font-size:clamp(30px,9.2vw,42px);margin:18px 0 16px}
   .hero p.lede{font-size:17px}
   .hero .cta .btn{flex:1 1 100%;justify-content:center;text-align:center}
   .stage{height:480px}
