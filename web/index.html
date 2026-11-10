@@ -198,6 +198,25 @@ section[id]{scroll-margin-top:72px}
 
 /* sections */
 section{padding:96px 0}
+/* founder */
+.founder{background:var(--card);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.founder .wrap{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:56px;align-items:center}
+.f-photo{position:relative;margin:0}
+.f-photo img{width:100%;aspect-ratio:4/5;object-fit:cover;object-position:50% 20%;border-radius:28px;display:block;background:var(--soft)}
+.f-photo::before{content:"";position:absolute;inset:18px -18px -18px 18px;border-radius:28px;border:2px solid var(--accent);z-index:-1}
+.f-photo{z-index:0}
+.f-photo.noimg img{visibility:hidden}.f-photo.noimg::after{content:"KA";position:absolute;inset:0;display:grid;place-items:center;font:800 72px var(--display);color:var(--accent);border-radius:28px;background:var(--accent-soft)}
+.f-photo figcaption{position:absolute;left:16px;bottom:16px;background:rgba(16,24,58,.88);color:#fff;border-radius:14px;padding:10px 14px;line-height:1.3;backdrop-filter:blur(6px)}
+.f-photo figcaption b{display:block;font:700 16px var(--display)}
+.f-photo figcaption small{color:#c9cfe2;font-size:13px}
+.f-body h2{font-size:clamp(28px,3.6vw,44px);font-weight:700;letter-spacing:-.02em;max-width:18ch}
+.f-body p{color:var(--ink-2);font-size:17.5px;line-height:1.65;margin-top:16px;max-width:62ch}
+.f-body blockquote{margin:24px 0 0;padding:4px 0 4px 20px;border-left:4px solid var(--accent);font-size:19px;line-height:1.5;color:var(--ink);font-weight:600;max-width:56ch}
+.f-stats{display:flex;flex-wrap:wrap;gap:28px;margin-top:28px}
+.f-stats div{min-width:110px}.f-stats b{display:block;font:800 30px var(--display);color:var(--ink)}.f-stats span{color:var(--ink-3);font-size:14px}
+.f-sign{margin-top:22px;color:var(--ink-3);font-size:15px}.f-sign b{color:var(--ink)}
+@media (max-width:820px){.f-stats{gap:14px;display:grid;grid-template-columns:repeat(3,1fr)}.f-stats div{min-width:0}.f-stats b{font-size:24px}.f-stats span{font-size:12.5px}.founder .wrap{grid-template-columns:1fr;gap:40px}.f-photo{max-width:320px;margin:0 auto}.f-body blockquote{font-size:17px}}
+
 .sec-head{max-width:720px;margin-bottom:44px}
 .sec-head h2{font-size:clamp(30px,4vw,48px);font-weight:700}
 .sec-head p{color:var(--ink-2);margin-top:14px;font-size:18px}
@@ -446,7 +465,7 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
 <header class="top" id="topbar">
   <div class="wrap">
     <a class="logo" href="#top" aria-label="Branditude home"><span class="logo-mark"><img src="/assets/img/branditude-mark.svg" alt="" width="26" height="26"></span><b>Branditude</b></a>
-    <nav aria-label="Sections" id="site-nav"><a href="#features">What you get</a><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a><a href="#get-app">Get the app</a></nav>
+    <nav aria-label="Sections" id="site-nav"><a href="#features">What you get</a><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="#founder">Founder</a><a href="#faq">FAQ</a><a href="#get-app">Get the app</a></nav>
     <div class="actions"><a class="btn sm line" href="login.html" id="signin-btn">Sign in</a><a class="btn sm primary" href="#pricing">Get started</a><button class="menu-btn" id="menu-btn" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="site-nav"><span></span></button></div>
   </div>
 </header>
@@ -561,6 +580,23 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
       <p class="gst" style="margin-top:6px">Pick these at checkout. Services change with your business type.</p>
       <div class="addons" id="addons"></div>
       <p class="gst" id="gst-note">Prices are in Indian rupees.</p>
+    </div>
+  </section>
+
+  <section class="founder" id="founder" aria-labelledby="founder-h">
+    <div class="wrap">
+      <figure class="f-photo">
+        <img src="https://www.branditudeglobal.com/assets/images/teams/KA.png" alt="Kunal Ahuja, founder of Branditude" width="340" height="425" loading="lazy" onerror="this.parentNode.classList.add('noimg')">
+        <figcaption><b>Kunal Ahuja</b><small>Founder, Branditude Global · Nagpur</small></figcaption>
+      </figure>
+      <div class="f-body">
+        <h2 id="founder-h">Big-brand growth tools, at a local-shop price</h2>
+        <p>Kunal Ahuja started Branditude in Nagpur to help businesses grow online. Over 5+ years the team has delivered 150+ projects for 80+ clients, from local shops to names like Unacademy and HP, across branding, ads, SEO, websites and social media.</p>
+        <p>Along the way he saw the same thing again and again: the café down the road, the salon, the clinic, the gym all do great work, but they can't afford a marketing team. Their happy customers leave without a review, regulars forget to come back, and offers never reach the people who would use them.</p>
+        <blockquote>“Every local business deserves the same growth tools big brands use. The Growth Plan puts reviews, loyalty, offers and WhatsApp in one simple app, starting at ₹299 a month.”</blockquote>
+        <div class="f-stats"><div><b>5+</b><span>years in digital growth</span></div><div><b>150+</b><span>projects delivered</span></div><div><b>80+</b><span>happy clients</span></div></div>
+        <p class="f-sign"><b>Kunal Ahuja</b>, founder · <a href="https://www.branditudeglobal.com/our-teams.html" target="_blank" rel="noopener" style="color:var(--accent)">Meet the team</a></p>
+      </div>
     </div>
   </section>
 
