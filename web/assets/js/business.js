@@ -15,12 +15,12 @@ const canWrite = () => D.biz?.status === "active" || trialOpen() || (["trial", "
 const waOn = () => !!D.biz?.wa_enabled;
 
 // Which module each page belongs to. Pages without an entry are in every plan.
-const ROUTE_MOD = { offers: "loyalty", loyalty: "loyalty", whatsapp: "campaigns", alerts: "campaigns", seo: "seo", replies: "google_replies", orders: "menu", menu: "menu", staff: "attendance", salary: "attendance" };
+const ROUTE_MOD = { offers: "loyalty", loyalty: "loyalty", templates: "bulk_whatsapp", alerts: "campaigns", seo: "seo", replies: "google_replies", orders: "menu", menu: "menu", staff: "attendance", salary: "attendance" };
 const lockBadge = (r, badge) => (ROUTE_MOD[r] && !hasMod(ROUTE_MOD[r]) ? "🔒" : badge);
 const item = (r, label, icon, badge = "") => [r, label, icon, lockBadge(r, badge)];
 const ROUTES = () => [
   { label: "", items: [item("dashboard", "Dashboard", "dash"), item("customers", "Customers", "users"), item("reviews", "Google reviews", "star"), item("feedback", "Feedback", "smile", openComplaints() || ""), item("seo", "Keywords & SEO", "spark"), item("replies", "Google replies", "star", hasMod("google_replies") ? gbpPending() || "" : ""),
-    item("offers", "Offers & coupons", "tag"), item("loyalty", "Loyalty card", "card"), item("whatsapp", "WhatsApp", "wa"), item("alerts", "Alerts", "bell", hasMod("campaigns") ? alerts().length || "" : "")] },
+    item("offers", "Offers & coupons", "tag"), item("loyalty", "Loyalty card", "card"), item("whatsapp", "WhatsApp & reminders", "wa"), item("templates", "Message templates", "send"), item("alerts", "Alerts", "bell", hasMod("campaigns") ? alerts().length || "" : "")] },
   { label: "Run the shop", items: [item("orders", "Orders", "receipt", hasMod("menu") ? D.newOrders || "" : ""), item("menu", "QR menu", "food"), item("staff", "Staff & attendance", "clock"), item("salary", "Salary", "rupee")] },
   { label: "Account", items: [["plan", "Plan & services", "box"], ["profile", "Business profile", "store"], ["signout", "Sign out", "out"]] },
 ];
@@ -314,18 +314,29 @@ after.whatsapp = async () => {
   const note = D.settings.whatsapp?.price_note || "";
   const packsHtml = `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">${packs.map((p) => `<div class="coupon" style="border-style:solid"><b style="font-size:17px">${esc(p.name)}</b><div class="num"><b style="font-size:22px">${nfmt(p.credits)}</b> messages</div><div class="muted small num">${inr(p.price)}${plusGst()} · ${inr2(p.price / p.credits)}/message</div><button class="btn sm primary" data-a="buy-pack" data-id="${p.id}" ${D.biz.status === "active" ? "" : "disabled"}>Buy</button></div>`).join("")}</div>`;
   const el = $("#wa-view"); if (!el) return;
+  D.autoRules = await q(sb.from("auto_msgs").select("*").eq("business_id", BID)).catch(() => []);
+  D.autoPrev = await q(sb.rpc("auto_msgs_preview", { p_business: BID })).catch(() => ({}));
+  D.autoLog = await q(sb.from("auto_msg_log").select("kind,status,created_at").eq("business_id", BID).order("created_at", { ascending: false }).limit(200)).catch(() => []);
+  const perMsg = packs.length ? [Math.min(...packs.map((p) => p.price / p.credits)), Math.max(...packs.map((p) => p.price / p.credits))] : null;
+  D.perMsg = perMsg;
   if (!waOn()) {
-    el.innerHTML = head("WhatsApp add-on", "Optional. Send offers, birthday wishes, loyalty updates and review requests on WhatsApp from a verified business number.") + `
-    <div class="card"><div class="card-head"><h2>How it's charged</h2><span class="pill">Off</span></div><p>Buy a prepaid credit pack. Each message uses credits, and failed messages are refunded automatically. ${esc(note)}</p>
+    el.innerHTML = head("WhatsApp & reminders", "Optional. Birthday wishes, loyalty and offer reminders, and messages to single customers from a verified WhatsApp business number.") + `
+    <div class="card"><div class="card-head"><h2>Charges</h2><span class="pill">Off</span></div><p><b>Charges apply per message.</b> Buy a prepaid credit pack; each message uses ${perMsg ? `1 credit (about ${inr2(perMsg[0])}–${inr2(perMsg[1])})` : "credits"}. Failed messages are refunded automatically. ${esc(note)}</p>
     ${D.biz.status === "active" ? "" : `<p class="note" style="margin-top:10px">Your plan needs to be active before you can buy credits.</p>`}<div style="margin-top:16px">${packsHtml}</div>
-    <p class="small muted" style="margin-top:12px">Buying your first pack switches WhatsApp on once Branditude confirms the payment.</p></div>`;
+    <p class="small muted" style="margin-top:12px">Buying your first pack switches WhatsApp on once the payment is confirmed. You can set up reminders below now; nothing is sent until you have credits.</p></div>
+    ${remindersCard()}${bulkUpsell()}`;
+    return;
+  }
+  if (!hasMod("bulk_whatsapp")) {
+    el.innerHTML = head("WhatsApp & reminders", `Balance: <b class="num">${nfmt(D.wallet)} credits</b>. Charges apply per message${perMsg ? ` (about ${inr2(perMsg[0])}–${inr2(perMsg[1])} each)` : ""}.`, `<button class="btn" data-a="wa-buy">${ico("plus")} Buy credits</button>`) + remindersCard() + bulkUpsell() + `
+    <div class="card" style="margin-top:16px"><div class="card-head"><h2>Credit history</h2></div>${ledger.length ? `<div class="list">${ledger.map((x) => `<div class="item small"><div class="grow">${esc(x.reason)} <span class="muted">${fmtDT(x.created_at)}</span></div><b class="num">${x.delta > 0 ? "+" : ""}${x.delta}</b></div>`).join("")}</div>` : `<div class="empty">No credits used yet.</div>`}</div>`;
     return;
   }
   if (!WA.tpl && tpls.length) WA.tpl = tpls[0].id;
   const t = tpls.find((x) => x.id === WA.tpl) || tpls[0], aud = audience(WA.aud).filter((c) => c.phone), cost = aud.length * (t?.credits_per_message || 1);
   const sg = segments();
   const preview = t ? t.body_preview.replace(/\{\{(\d+)\}\}/g, (m, n) => (n === "1" ? (aud[0]?.name || "Priya").split(" ")[0] : WA.params[n - 2] || `[${t.params[n - 2] || "…"}]`)) : "";
-  el.innerHTML = head("WhatsApp", `Balance: <b class="num">${nfmt(D.wallet)} credits</b>. ${esc(note)}`, `<button class="btn" data-a="wa-buy">${ico("plus")} Buy credits</button>`) + `
+  el.innerHTML = head("WhatsApp & reminders", `Balance: <b class="num">${nfmt(D.wallet)} credits</b>. Charges apply per message. ${esc(note)}`, `<button class="btn" data-a="wa-buy">${ico("plus")} Buy credits</button>`) + remindersCard() + `<div style="height:16px"></div>` + `
   <div class="grid g2">
     <div class="card"><div class="card-head"><h2>New broadcast</h2></div>
       <div class="fields">
@@ -347,6 +358,68 @@ after.whatsapp = async () => {
   $$("[data-wp]").forEach((inp) => (inp.oninput = () => { WA.params[+inp.dataset.wp] = inp.value; const tt = tpls.find((x) => x.id === WA.tpl);
     $("#wa-prev").textContent = tt.body_preview.replace(/\{\{(\d+)\}\}/g, (m, n) => (n === "1" ? (aud[0]?.name || "Priya").split(" ")[0] : WA.params[n - 2] || `[${tt.params[n - 2]}]`)); }));
   $$("[data-wp]").forEach((inp) => { if (WA.params[+inp.dataset.wp] == null) WA.params[+inp.dataset.wp] = inp.value; });
+};
+/* ---------- Automatic reminders (every plan, optional, charged per message) ---------- */
+const AUTO = {
+  birthday: { t: "Birthday wish", when: "days before their birthday", d: 3, times: false, offer: "Birthday treat in the message", ex: "Happy birthday Priya! 🎂 Everyone at {biz} wishes you a wonderful year. Enjoy {offer} this week." },
+  loyalty: { t: "Loyalty reward reminder", when: "days after their last visit", d: 7, times: true, ex: "Hi Priya, your {card} has 4 of 10 stamps. Next reward: visit 5: 15% off." },
+  offer_expiry: { t: "Offer ending reminder", when: "days before an offer ends", d: 3, times: true, ex: "Hi Priya! 🎉 {biz} has a treat for you: 20% off with code DIWALI20. Valid till 14 Nov.", help: "Goes to customers who visited in the last 120 days, for offers marked 'show to customers'." },
+  win_back: { t: "We miss you", when: "days after their last visit", d: 30, times: true, offer: "Offer in the message", ex: "Hi Priya, it's been a while! We'd love to see you again at {biz}. Here's {offer} on your next visit." },
+};
+function remindersCard() {
+  const rule = (k) => (D.autoRules || []).find((r) => r.kind === k) || { kind: k, enabled: false, days: AUTO[k].d, times: 1, gap_days: 3, offer: "", daily_cap: 50 };
+  const sentMonth = (k) => (D.autoLog || []).filter((l) => l.kind === k && l.status === "sent" && l.created_at >= new Date(Date.now() - 30 * 864e5).toISOString()).length;
+  const pm = D.perMsg ? ` (about ${inr2(D.perMsg[0])}–${inr2(D.perMsg[1])})` : "";
+  return `<div class="card" style="margin-top:16px"><div class="card-head"><h2>Automatic reminders</h2><span class="pill">Optional</span></div>
+    <p class="small muted" style="margin-top:-6px">Sent every morning around 10 am to the customers who are due. <b>Charges apply:</b> each message uses 1 WhatsApp credit${pm}. Nothing is sent while a reminder is off or you have no credits.</p>
+    <div class="auto-grid">${Object.keys(AUTO).map((k) => { const r = rule(k), a = AUTO[k], loyOff = k === "loyalty" && !hasMod("loyalty");
+      const ex = a.ex.replace("{biz}", D.biz.name).replace("{card}", D.prog?.name || "Loyalty").replace("{offer}", r.offer || "a special treat");
+      return `<div class="auto ${r.enabled ? "on" : ""}" data-auto="${k}">
+        <div class="row" style="justify-content:space-between;align-items:center"><b>${a.t}</b><label class="switch"><input type="checkbox" data-am="enabled" ${r.enabled ? "checked" : ""} ${loyOff ? "disabled" : ""} aria-label="Turn ${a.t} on"><span></span></label></div>
+        <div class="bubble small">${esc(ex)}</div>
+        <div class="auto-f"><label>Send <input type="number" min="0" max="365" data-am="days" value="${r.days}" aria-label="Days"> ${a.when}</label>
+          ${a.times ? `<label>Up to <input type="number" min="1" max="5" data-am="times" value="${r.times}" aria-label="Times"> time(s), every <input type="number" min="1" max="60" data-am="gap_days" value="${r.gap_days}" aria-label="Gap days"> days</label>` : ""}
+          ${a.offer ? `<label class="full">${a.offer}<input data-am="offer" maxlength="80" value="${esc(r.offer)}" placeholder="e.g. 20% off"></label>` : ""}
+          <label>At most <input type="number" min="1" max="1000" data-am="daily_cap" value="${r.daily_cap}" aria-label="Daily limit"> messages a day</label></div>
+        ${a.help ? `<p class="small muted">${a.help}</p>` : ""}
+        <p class="small muted">${loyOff ? "Needs the loyalty card." : `Due today: <b class="num">${D.autoPrev?.[k] ?? 0}</b> · sent in 30 days: <b class="num">${sentMonth(k)}</b>${r.last_note ? ` · last run: ${esc(r.last_note)}` : ""}`}</p>
+        <button class="btn sm" data-a="am-save" data-id="${k}">Save</button></div>`; }).join("")}</div></div>`;
+}
+function bulkUpsell() {
+  if (hasMod("bulk_whatsapp")) return "";
+  return `<div class="card upsell" style="margin-top:16px"><div><h2>📣 Bulk messaging is in Pro</h2><p class="muted">Send one offer to hundreds of customers in one click, with your own message templates approved by WhatsApp. Starter and Growth can message customers one at a time and use automatic reminders.</p></div>
+    <button class="btn primary" data-a="upgrade-to" data-id="bulk_whatsapp">Upgrade to Pro</button></div>`;
+}
+
+/* ---------- Message templates (Pro): submit your own for bulk messaging ---------- */
+VIEWS.templates = () => `<div id="tpl-view"><div class="loading"><span class="spinner"></span></div></div>`;
+after.templates = async () => {
+  const all = await q(sb.from("wa_templates").select("*").order("created_at", { ascending: false }));
+  const mine = all.filter((t) => t.business_id === BID), shared = all.filter((t) => !t.business_id);
+  const el = $("#tpl-view"); if (!el) return;
+  const st = { pending: ["warn", "Waiting for Branditude"], submitted: ["info", "With WhatsApp for approval"], approved: ["good", "Approved"], rejected: ["bad", "Not approved"] };
+  el.innerHTML = head("Message templates", "WhatsApp only allows business messages from approved templates. Write yours here; Branditude checks it and sends it to WhatsApp for approval (usually within a day).") + `
+  <div class="grid g2">
+    <div class="card"><div class="card-head"><h2>New template</h2></div>
+      <div class="fields">
+        <div class="field full"><label for="nt-title">Title (for you)</label><input id="nt-title" maxlength="60" placeholder="Diwali offer"></div>
+        <div class="field"><label for="nt-cat">Type</label><select id="nt-cat"><option value="marketing">Offer or promotion</option><option value="utility">Update about their account or order</option></select></div>
+        <div class="field"><label for="nt-lang">Language</label><select id="nt-lang"><option value="en">English</option><option value="hi">Hindi</option><option value="mr">Marathi</option><option value="gu">Gujarati</option></select></div>
+        <div class="field full"><label for="nt-body">Message</label><textarea id="nt-body" rows="5" maxlength="1024" placeholder="Hi {{1}}, this Diwali enjoy {{2}} at ${esc(D.biz.name)}. Valid till {{3}}."></textarea>
+          <p class="small muted">Start with <b>{{1}}</b>, which becomes the customer's first name. Use {{2}}, {{3}}… for parts you fill in each time.</p></div>
+      </div>
+      <div id="nt-params"></div><div class="bubble" id="nt-prev" style="margin-top:12px">Your preview appears here.</div><p class="err" id="nt-err"></p>
+      <div class="row" style="margin-top:12px"><button class="btn primary" data-a="tpl-submit">Send for approval</button></div>
+      <p class="small muted" style="margin-top:8px">Avoid: all-caps, many emojis, links to other businesses, and asking for payments or passwords. Charges apply per message when you send.</p></div>
+    <div class="card"><div class="card-head"><h2>Your templates</h2></div>${mine.length ? `<div class="list">${mine.map((t) => `<div class="item"><div class="grow"><b>${esc(t.title)}</b><span class="muted small">${esc(t.body_preview)}</span>${t.reject_reason ? `<span class="small" style="color:var(--bad)">${esc(t.reject_reason)}</span>` : ""}</div><span class="pill ${st[t.status][0]}">${st[t.status][1]}</span></div>`).join("")}</div>` : `<div class="empty">No templates yet. Approved ones appear in WhatsApp → New broadcast.</div>`}
+      <h3 style="margin:18px 0 8px;font-size:16px">Ready-made templates</h3><div class="list">${shared.map((t) => `<div class="item small"><div class="grow"><b>${esc(t.title)}</b><span class="muted">${esc(t.body_preview)}</span></div></div>`).join("")}</div></div>
+  </div>`;
+  const body = $("#nt-body"), params = () => { const n = Math.max(1, ...[...(body.value.matchAll(/\{\{(\d+)\}\}/g))].map((m) => +m[1]));
+    const cur = [...$$("[data-ntp]")].map((i) => [i.value, $("#nt-s" + i.dataset.ntp)?.value || ""]);
+    $("#nt-params").innerHTML = Array.from({ length: n - 1 }, (_, i) => `<div class="fields" style="margin-top:10px"><div class="field"><label for="nt-p${i}">Label for {{${i + 2}}}</label><input id="nt-p${i}" data-ntp="${i}" value="${esc(cur[i]?.[0] || "")}" placeholder="${i === 0 ? "Offer" : "Valid till"}"></div><div class="field"><label for="nt-s${i}">Example</label><input id="nt-s${i}" value="${esc(cur[i]?.[1] || "")}" placeholder="${i === 0 ? "20% off" : "14 Nov"}"></div></div>`).join("");
+    prev(); $$("#nt-params input").forEach((x) => (x.oninput = prev)); };
+  const prev = () => { $("#nt-prev").textContent = body.value.replace(/\{\{(\d+)\}\}/g, (m, n) => (n === "1" ? "Priya" : $("#nt-s" + (n - 2))?.value || `[${$("#nt-p" + (n - 2))?.value || "…"}]`)) || "Your preview appears here."; };
+  body.oninput = params; params();
 };
 function defaultParam(label) {
   const l = label.toLowerCase();
@@ -477,11 +550,12 @@ function lockedView(key) {
   setTimeout(async () => {
     PKGS_CACHE = PKGS_CACHE || (await q(sb.from("packages").select("*").eq("active", true).order("sort")).catch(() => []));
     const plan = PKGS_CACHE.find((p) => (p.modules || []).includes(key)), el = $("#lock-plan");
-    if (el && plan) el.innerHTML = `<button class="btn" data-a="renew" data-id="${plan.id}" data-bill="${esc(D.biz.billing || "monthly")}">Switch to ${esc(plan.name)} · ${inr(plan.monthly_price)}/month</button>`;
+    if (el && plan) el.innerHTML = `<button class="btn ${md.addon_price == null ? "primary" : ""}" data-a="renew" data-id="${plan.id}" data-bill="${esc(D.biz.billing || "monthly")}">Upgrade to ${esc(plan.name)} · ${inr(plan.monthly_price)}/month</button>`;
   });
   const yr = D.biz.billing === "yearly", price = md.addon_price != null ? md.addon_price * (yr ? 10 : 1) : null;
   return head(`${esc(md.icon)} ${esc(md.name)}`, "") + `<div class="card lock-card"><div class="lock-ic" aria-hidden="true">🔒</div>
     <h2>${esc(md.name)} isn't in your ${esc(D.biz.packages?.name || "")} plan yet</h2><p class="muted">${esc(md.blurb)}</p>
+    <p class="small" style="margin-top:10px">${md.addon_price == null ? "Upgrade your plan to use it." : "Add just this feature, or upgrade to get it with more."}</p>
     <div class="row" style="justify-content:center;margin-top:16px;flex-wrap:wrap;gap:10px">
       ${price != null ? `<button class="btn primary" data-a="buy-module" data-id="${md.id}">Add it for ${inr(price)}${yr ? "/year" : "/month"}${plusGst()}</button>` : ""}
       <span id="lock-plan"></span></div>
@@ -854,6 +928,21 @@ document.addEventListener("click", async (e) => {
         if (await confirmBox(`Add ${m.name}?`, better ? "We'll create a payment for the add-on only." : msg, "Continue to payment")) await order("module", id);
         break; }
       case "renew": await order("subscription", id, el.dataset.bill); break;
+      case "upgrade-to": { PKGS_CACHE = PKGS_CACHE || (await q(sb.from("packages").select("*").eq("active", true).order("sort")));
+        const pl = PKGS_CACHE.find((p) => (p.modules || []).includes(id));
+        if (pl && await confirmBox(`Upgrade to ${pl.name}?`, `${pl.name} is ${inr(pl.monthly_price)}/month and includes ${modInfo(id)?.name || "this"}. Your current plan's paid days carry on until you pay.`, `Continue to payment`)) await order("subscription", pl.id, D.biz.billing || "monthly");
+        break; }
+      case "am-save": { const box = el.closest("[data-auto]"), v = (k) => box.querySelector(`[data-am="${k}"]`);
+        const row = { business_id: BID, kind: id, enabled: v("enabled").checked, days: +v("days").value || 0, times: v("times") ? Math.min(5, Math.max(1, +v("times").value || 1)) : 1,
+          gap_days: v("gap_days") ? Math.min(60, Math.max(1, +v("gap_days").value || 3)) : 3, offer: v("offer") ? v("offer").value.trim() : "", daily_cap: Math.min(1000, Math.max(1, +v("daily_cap").value || 50)), updated_at: new Date().toISOString() };
+        if (row.enabled && !(await confirmBox("Turn this reminder on?", `Charges apply: each message uses 1 WhatsApp credit${D.perMsg ? ` (about ${inr2(D.perMsg[0])}–${inr2(D.perMsg[1])})` : ""}. Up to ${row.daily_cap} messages a day. You can turn it off any time.`, "Turn on")))
+          break;
+        await q(sb.from("auto_msgs").upsert(row, { onConflict: "business_id,kind" })); toast(row.enabled ? "Reminder on. It runs every morning." : "Reminder saved (off)"); after.whatsapp(); break; }
+      case "tpl-submit": { const v = (x) => $("#" + x).value.trim(); const n = $$("[data-ntp]").length;
+        try { await q(sb.rpc("submit_wa_template", { p_business: BID, p: { title: v("nt-title"), category: v("nt-cat"), language: v("nt-lang"), body: v("nt-body"),
+            params: Array.from({ length: n }, (_, i) => v("nt-p" + i)), sample: Array.from({ length: n }, (_, i) => v("nt-s" + i)) } }));
+          toast("Sent to Branditude for approval"); after.templates(); } catch (e) { $("#nt-err").textContent = e.message; }
+        break; }
       case "pay": await payModal(id); break;
       case "wa-send": {
         const t = D.tpls.find((x) => x.id === WA.tpl), aud = audience(WA.aud).filter((c) => c.phone);

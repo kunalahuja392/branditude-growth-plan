@@ -54,14 +54,17 @@ Deno.serve(async (req: Request) => {
   if (!member) return json({ error: "Not allowed" }, 403);
   const { data: biz } = await admin.from("businesses").select("id,name,status,wa_enabled,wa_phone_number_id").eq("id", business_id).single();
   if (!biz || biz.status !== "active") return json({ error: "Your account isn't active yet." }, 403);
-  const { data: modOn } = await admin.rpc("has_module", { b: business_id, m: "campaigns" });
-  if (!modOn) return json({ error: "WhatsApp offers aren't in your plan. Add them from Plan & services.", module: "campaigns" }, 403);
+  // One customer at a time: every plan (charged per message). Many customers at once: Pro (bulk messaging).
+  if (customerIds.length > 1) {
+    const { data: bulkOn } = await admin.rpc("has_module", { b: business_id, m: "bulk_whatsapp" });
+    if (!bulkOn) return json({ error: "Bulk messaging is part of the Pro plan. Upgrade to Pro to message many customers at once.", module: "bulk_whatsapp" }, 403);
+  }
   if (!biz.wa_enabled) return json({ error: "The WhatsApp add-on is off for your account. Buy a credit pack to switch it on." }, 403);
   const phoneNumberId = biz.wa_phone_number_id || defaultPhoneId;
   if (!phoneNumberId) return json({ error: "No WhatsApp sender number is set up." }, 503);
 
-  const { data: tpl } = await admin.from("wa_templates").select("*").eq("id", template_id).eq("active", true).single();
-  if (!tpl) return json({ error: "Template not available" }, 400);
+  const { data: tpl } = await admin.from("wa_templates").select("*").eq("id", template_id).eq("active", true).eq("status", "approved").maybeSingle();
+  if (!tpl || (tpl.business_id && tpl.business_id !== business_id)) return json({ error: "Template not available" }, 400);
   const expectedParams = (tpl.params as string[]).length;
   if (params.length < expectedParams || params.slice(0, expectedParams).some((p) => !p.trim()))
     return json({ error: `Fill in all ${expectedParams} message fields.` }, 400);

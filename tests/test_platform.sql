@@ -452,4 +452,51 @@ end $$;
 reset role;
 do $$ begin assert has_module(current_setting('test.glow')::uuid, 'menu'), 'razorpay payment switched add-on on';
   assert (select status from payments where id = current_setting('test.rzp')::uuid) = 'confirmed'; end $$;
+\echo '--- 16. Automatic reminders: due lists respect days/times/gap; template submissions are Pro-only and private'
+do $$ declare b uuid := current_setting('test.glow'); c1 uuid; c2 uuid; begin
+  delete from customers where business_id = b;
+  insert into customers (business_id, name, phone, birthday, last_visit, stamps) values
+    (b, 'Asha Rao', '919811000001', (now() at time zone 'Asia/Kolkata')::date + 3 - interval '30 years', now() - interval '40 days', 4) returning id into c1;
+  insert into customers (business_id, name, phone, last_visit, stamps) values (b, 'Ravi K', '919811000002', now() - interval '2 days', 1) returning id into c2;
+  insert into auto_msgs (business_id, kind, enabled, days, times, gap_days, offer) values
+    (b, 'birthday', true, 3, 1, 3, '20% off'), (b, 'win_back', true, 30, 2, 7, 'a free coffee'), (b, 'loyalty', true, 7, 1, 3, ''), (b, 'offer_expiry', false, 3, 2, 2, '');
+  insert into coupons (business_id, code, type, value, expiry, show_to_customers) values (b, 'BYE10', 'percent', 10, (now() at time zone 'Asia/Kolkata')::date + 2, true);
+end $$;
+set role service_role;
+do $$ declare b uuid := current_setting('test.glow'); r record; n int; begin
+  select count(*) into n from due_auto_msgs(b, 'birthday'); assert n = 1, 'birthday in 3 days: ' || n;
+  select * into r from due_auto_msgs(b, 'win_back'); assert r.name = 'Asha Rao' and r.n = 1 and r.params[2] = 'a free coffee', 'win back 30+ days';
+  select count(*) into n from due_auto_msgs(b, 'win_back'); assert n = 1, 'recent visitor not in win-back';
+  select count(*) into n from due_auto_msgs(b, 'offer_expiry'); assert n = 0, 'disabled rule sends nothing';
+  insert into auto_msg_log (business_id, kind, customer_id, ref, n, status) select b, 'win_back', customer_id, ref, 1, 'sent' from due_auto_msgs(b, 'win_back');
+  select count(*) into n from due_auto_msgs(b, 'win_back'); assert n = 0, 'gap days respected';
+  update auto_msg_log set created_at = now() - interval '8 days' where kind = 'win_back';
+  select * into r from due_auto_msgs(b, 'win_back'); assert r.n = 2, 'second reminder after gap';
+  insert into auto_msg_log (business_id, kind, customer_id, ref, n, status) values (b, 'win_back', r.customer_id, r.ref, 2, 'sent');
+  update auto_msg_log set created_at = now() - interval '30 days' where kind = 'win_back';
+  select count(*) into n from due_auto_msgs(b, 'win_back'); assert n = 0, 'stops after times';
+  update auto_msgs set enabled = true where business_id = b and kind = 'offer_expiry';
+  select count(*) into n from due_auto_msgs(b, 'offer_expiry'); assert n = 2, 'offer ending goes to customers seen in 120 days: ' || n;
+end $$;
+reset role;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000b1');
+do $$ declare b uuid := current_setting('test.glow'); r jsonb; begin
+  begin perform due_auto_msgs(b, 'birthday'); assert false, 'browser cannot list due customers'; exception when insufficient_privilege then null; end;
+  r := auto_msgs_preview(b); assert (r->>'birthday')::int = 1, r::text;
+  begin perform submit_wa_template(b, '{"title":"Diwali","body":"Hi {{1}}, Diwali offer: {{2}}","params":["Offer"]}'); assert false, 'starter cannot submit'; exception when raise_exception then assert sqlerrm like '%Pro plan%', sqlerrm; end;
+end $$;
+reset role;
+update packages set modules = array(select distinct unnest(modules || '{bulk_whatsapp}')) where slug='pro';
+update businesses set package_id = (select id from packages where slug='pro') where id = current_setting('test.glow')::uuid;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000b1');
+do $$ declare b uuid := current_setting('test.glow'); r jsonb; begin
+  begin perform submit_wa_template(b, '{"title":"Diwali","body":"Hello there, Diwali offer: {{2}}","params":["Offer"]}'); assert false, 'needs {{1}}'; exception when raise_exception then null; end;
+  begin perform submit_wa_template(b, '{"title":"Diwali","body":"Hi {{1}}, Diwali offer: {{2}} till {{3}}","params":["Offer"]}'); assert false, 'labels needed'; exception when raise_exception then null; end;
+  r := submit_wa_template(b, '{"title":"Diwali offer","body":"Hi {{1}}, Diwali offer at our salon: {{2}}","params":["Offer"],"sample":["20% off"]}');
+  assert (select status from wa_templates where id = (r->>'id')::uuid) = 'pending', 'pending after submit';
+end $$;
+reset role;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000a1');
+do $$ begin assert (select count(*) from wa_templates where business_id is not null) = 0, 'other business cannot see private templates'; end $$;
+reset role;
 \echo 'ALL TESTS PASSED'

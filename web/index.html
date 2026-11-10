@@ -228,6 +228,30 @@ section{padding:96px 0}
 .tag-row span{font-size:12.5px;font-weight:600;border-radius:99px;padding:4px 10px;background:var(--soft);color:var(--ink-2)}
 .tag-row span.hot{background:var(--wa-soft);color:var(--wa)}
 
+/* main features */
+.main4{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.m4{position:relative;border-radius:26px;padding:30px;display:flex;flex-direction:column;gap:12px;overflow:hidden;border:1px solid var(--line);background:var(--card);min-height:300px}
+.m4 h3{font-size:clamp(22px,2.4vw,28px);font-weight:800;letter-spacing:-.02em;max-width:18ch}
+.m4 p{color:var(--ink-2);max-width:44ch}
+.m4-plan{align-self:flex-start;font-size:13px;font-weight:700;border-radius:99px;padding:5px 12px;background:var(--wa-soft);color:var(--wa)}
+.m4-rev{background:var(--band);color:var(--band-ink);border-color:transparent}
+.m4-rev p{color:var(--band-2)}
+.m4-rev .m4-plan{background:rgba(255,255,255,.1);color:#fff}
+.m4-rev .meter .bars span{background:rgba(255,255,255,.12)}.m4-rev .meter .bars div{color:var(--band-2)}
+.m4-loy{background:linear-gradient(160deg,#fff7ec,#ffe9d1);border-color:#f8d9b6}
+.m4-att{background:linear-gradient(160deg,#eef3ff,#e2eaff);border-color:#cfdaf8}
+.m4-menu{background:var(--band);color:var(--band-ink);border-color:transparent}
+.m4-menu p{color:var(--band-2)}.m4-menu .m4-plan{background:var(--accent);color:#fff}
+.m4 .viz{margin-top:auto}
+.also{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:18px}
+.also div{border:1px solid var(--line);border-radius:18px;padding:18px;background:var(--card);display:flex;flex-direction:column;gap:6px}
+.also b{font-size:15.5px}.also span{color:var(--ink-2);font-size:14.5px}
+.plan li.key{font-weight:700}
+.plan li.key::before{background-color:var(--accent-soft);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23f07a1a'%3E%3Cpath d='M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7-6.2-3.7-6.2 3.7 1.6-7L2 9.2l7.1-.6z'/%3E%3C/svg%3E")}
+.cmp tr.key td:first-child b::after{content:"Main feature";margin-left:8px;font-size:11.5px;font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:99px;padding:2px 8px;vertical-align:2px}
+@media (max-width:900px){.main4{grid-template-columns:1fr}.also{grid-template-columns:1fr 1fr}}
+@media (max-width:520px){.also{grid-template-columns:1fr}.m4{padding:24px;min-height:0}}
+
 /* steps: a real sequence, with a progress line */
 .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:28px;position:relative;padding-top:30px}
 .steps::before,.steps::after{content:"";position:absolute;top:22px;left:22px;right:22px;height:3px;border-radius:3px;background:var(--line)}
@@ -454,23 +478,39 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
 
   <section id="features">
     <div class="wrap">
-      <div class="sec-head"><h2>Everything a local business needs to grow from the customers it already has.</h2><p>Your plan includes the Growth Plan app, set up by our team, plus the done-for-you work your plan covers.</p></div>
-      <div class="bento">
-        <div class="tile t-lg dark"><h3>More Google reviews, fewer bad surprises</h3><p>A 5-second rating screen at the counter. Happy customers get a one-tap Google review. Unhappy ones can tell you privately first, so you fix it the same day.</p>
-          <div class="viz meter"><div class="score">4.8</div><div class="bars"><div>5<span><i style="--w:82%"></i></span></div><div>4<span><i style="--w:12%"></i></span></div><div>3<span><i style="--w:4%"></i></span></div><div>2<span><i style="--w:1%"></i></span></div><div>1<span><i style="--w:1%"></i></span></div></div></div></div>
-        <div class="tile t-sm"><h3>Your own customer list</h3><p>Every visit adds the customer's name, number, birthday and spend. You own the list, not a delivery app.</p>
-          <div class="viz tag-row"><span class="hot">Regular</span><span>Birthday in May</span><span>₹4,200 spent</span></div></div>
-        <div class="tile t-md"><h3>Loyalty cards & coupons</h3><p>A digital stamp card with rewards on the visits you choose, plus festival and birthday coupon codes.</p>
-          <div class="viz stamps" aria-hidden="true"><i class="on">✓</i><i class="on">✓</i><i class="on">✓</i><i class="on">✓</i><i class="gift">🎁</i><i></i><i></i><i></i><i></i><i>🍽️</i></div></div>
-        <div class="tile t-md"><h3>WhatsApp broadcasts</h3><p>Send a personal message to the right group: birthdays this month, regulars, or people who haven't visited in 30 days.</p>
-          <div class="viz tag-row"><span class="hot">12 birthdays</span><span>214 regulars</span><span>47 not seen in 30 days</span></div></div>
-        <div class="tile t-sm"><h3>Daily alerts</h3><p>Every morning: upcoming birthdays, regulars who stopped coming, and offers about to end.</p></div>
-        <div class="tile t-sm"><h3>Staff attendance & salary</h3><p>Staff check in with a PIN. Late marks, leave and salary slips work themselves out.</p>
-          <div class="viz punch"><span class="clock">09:58</span><span>Priya checked in<br><small style="color:var(--wa);font-weight:700">On time</small></span></div></div>
-        <div class="tile t-sm dark"><h3>QR menu & table orders</h3><p>Guests scan, order from their table, and the kitchen sees it live.</p>
-          <div class="viz mini-menu"><div>Masala dosa <em>Table 4</em></div><div>Filter coffee ×2 <em>Table 7</em></div></div></div>
+      <div class="sec-head"><h2>Four tools that run a local shop, in one app.</h2><p>Set up by our team. Your staff learn it in ten minutes.</p></div>
+      <div class="main4">
+        <article class="m4 m4-rev">
+          <span class="m4-plan">Every plan</span>
+          <h3>Review QR and counter rating screen</h3>
+          <p>A 5-second rating screen at the counter and a QR on every table. Happy customers go straight to Google. Unhappy ones tell you privately first, so you fix it the same day.</p>
+          <div class="viz meter"><div class="score">4.8</div><div class="bars"><div>5<span><i style="--w:82%"></i></span></div><div>4<span><i style="--w:12%"></i></span></div><div>3<span><i style="--w:4%"></i></span></div><div>2<span><i style="--w:1%"></i></span></div><div>1<span><i style="--w:1%"></i></span></div></div></div>
+        </article>
+        <article class="m4 m4-loy">
+          <span class="m4-plan">Every plan</span>
+          <h3>Loyalty card and coupons</h3>
+          <p>A digital stamp card with rewards on the visits you choose, plus festival and birthday coupon codes. Customers keep coming back to fill it.</p>
+          <div class="viz stamps" aria-hidden="true"><i class="on">✓</i><i class="on">✓</i><i class="on">✓</i><i class="on">✓</i><i class="gift">🎁</i><i></i><i></i><i></i><i></i><i>🍽️</i></div>
+        </article>
+        <article class="m4 m4-att">
+          <span class="m4-plan">Growth and Pro</span>
+          <h3>Staff attendance and salary</h3>
+          <p>Staff check in with a PIN on the shop phone. Late marks, half days, leave and overtime go straight into each month's salary slip.</p>
+          <div class="viz punch"><span class="clock">09:58</span><span>Priya checked in<br><small style="color:var(--wa);font-weight:700">On time</small></span></div>
+        </article>
+        <article class="m4 m4-menu">
+          <span class="m4-plan">Pro</span>
+          <h3>QR menu and table orders</h3>
+          <p>Guests scan the table QR, see your menu with photos and order. The kitchen sees every order live, table by table.</p>
+          <div class="viz mini-menu"><div>Masala dosa <em>Table 4</em></div><div>Filter coffee ×2 <em>Table 7</em></div></div>
+        </article>
       </div>
-      <p class="gst" style="margin-top:18px">Simple growth report included: revenue from logged visits, repeat-customer rate, reviews earned and coupon sales on one screen.</p>
+      <div class="also">
+        <div><b>👥 Customer list</b><span>Every visit saves name, number, birthday and spend. Your list, not a delivery app's.</span></div>
+        <div><b>⏰ Automatic WhatsApp reminders</b><span>Optional birthday, reward and offer-ending reminders. Charged per message.</span></div>
+        <div><b>🔎 Google profile tools</b><span>Keywords, posts and review replies that help you show up in local search.</span></div>
+        <div><b>📣 Bulk WhatsApp (Pro)</b><span>One offer to hundreds of customers, with your own approved message templates.</span></div>
+      </div>
     </div>
   </section>
 
@@ -509,7 +549,7 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
       <div class="sec-head"><h2>Before you buy</h2></div>
       <div class="faq">
         <details><summary>Do I need a Google Business Profile already?</summary><p>No. We can create and verify it for you with the Google Business Profile setup service, which you can add at checkout.</p></details>
-        <details><summary>How do WhatsApp messages get sent?</summary><p>Messages go from your own WhatsApp number. The app opens each chat with the message ready, so you tap send. The Pro plan can add the official WhatsApp Business API for one-click bulk sending. Meta charges its own per-message fees for that.</p></details>
+        <details><summary>How do WhatsApp messages and charges work?</summary><p>Messages go out from a verified WhatsApp business number using message templates approved by WhatsApp. Every plan can send single messages and turn on automatic reminders (birthday, loyalty reward, offer ending, win-back) if you want them. They're optional and off until you switch them on. Each message uses prepaid WhatsApp credits, so charges apply per message; failed messages are refunded. Sending one offer to many customers at once (bulk messaging), with your own message templates, is in the Pro plan.</p></details>
         <details><summary>Is my customer data safe?</summary><p>Your customer list is private to your account. We never message your customers ourselves unless you ask us to, and you can export or delete your data at any time.</p></details>
         <details><summary>Can I add just one feature without upgrading?</summary><p>Yes. Every feature that isn't in your plan can be added on its own for a monthly price (shown in the table above), from Plan &amp; services in your dashboard. If your add-ons cost more than the next plan, we'll show you the plan instead.</p></details>
         <details><summary>Can I cancel?</summary><p>Monthly plans can be cancelled before the next billing date. Yearly plans are paid upfront and get two months free.</p></details>
@@ -578,6 +618,7 @@ const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const inr = (n) => "₹" + new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(+n || 0);
 function toast(m) { const t = document.createElement("div"); t.className = "toast"; t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 2800); }
 
+const KEY_RX = /review qr|loyalty card|attendance|qr menu/i, KEY_MODS = ["reviews", "loyalty", "attendance", "menu"];
 let CATS = [], PKGS = [], PRODS = [], MODS = [], SET = {}, billing = "monthly", cat = "", TRIAL = 0;
 const price = (p, b = billing) => (b === "yearly" ? p.yearly_price : p.monthly_price) * (1 - p.discount_percent / 100);
 const full = (p, b = billing) => (b === "yearly" ? p.yearly_price : p.monthly_price);
@@ -614,7 +655,7 @@ function drawPlans() {
     <div><h3>${esc(p.name)}</h3><p class="for">${esc(p.tagline)}</p></div>
     <div class="price"><b class="num">${inr(Math.round(price(p)))}</b><span>/${billing === "monthly" ? "month" : "year"}</span>${+p.discount_percent ? ` <s class="num">${inr(full(p))}</s>` : ""}</div>
     <p class="bill">${+p.discount_percent ? `<span class="sale">${+p.discount_percent}% off${p.discount_label ? " · " + esc(p.discount_label) : ""}</span> ` : ""}${billing === "monthly" ? "Billed monthly" : "Works out to " + inr(Math.round(price(p) / 12)) + "/month"}</p>
-    <ul>${p.features.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
+    <ul>${p.features.map((f) => `<li${KEY_RX.test(f) ? ' class="key"' : ""}>${esc(f)}</li>`).join("")}</ul>
     <button class="btn ${p.is_popular ? "primary" : "line"}" data-buy="${p.id}">${TRIAL ? `Start ${TRIAL}-day free trial` : `Get ${esc(p.name)}`}</button></div>`).join("");
   document.querySelectorAll("[data-bill]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.bill === billing));
   drawCompare();
@@ -623,7 +664,7 @@ function drawCompare() {
   if (!MODS.length || !PKGS.length) return;
   const yr = billing === "yearly", unit = yr ? "/yr" : "/mo";
   $("#compare").innerHTML = `<thead><tr><th scope="col">Feature</th>${PKGS.map((p) => `<th scope="col" class="${p.is_popular ? "pop" : ""}">${esc(p.name)}<small class="num">${inr(Math.round(price(p)))}${yr ? "/year" : "/month"}</small></th>`).join("")}</tr></thead>
-    <tbody>${MODS.map((m) => `<tr><td><b>${esc(m.icon)} ${esc(m.name)}</b><span>${esc(m.blurb)}</span></td>${PKGS.map((p) => {
+    <tbody>${[...MODS].sort((x, y) => (KEY_MODS.includes(y.key) - KEY_MODS.includes(x.key)) || x.sort - y.sort).map((m) => `<tr class="${KEY_MODS.includes(m.key) ? "key" : ""}"><td><b>${esc(m.icon)} ${esc(m.name)}</b><span>${esc(m.blurb)}</span></td>${PKGS.map((p) => {
       const inc = m.core || (p.modules || []).includes(m.key);
       return `<td class="${p.is_popular ? "popc" : ""}">${inc ? '<span class="yes" aria-label="Included">✓</span>' : m.addon_price != null ? `<span class="add num">+${inr(m.addon_price * (yr ? 10 : 1))}${unit}</span>` : '<span aria-label="Not available">–</span>'}</td>`; }).join("")}</tr>`).join("")}
     <tr><td><b>📍 Locations</b></td>${PKGS.map((p) => `<td class="${p.is_popular ? "popc" : ""}"><b class="num">${p.max_locations}</b></td>`).join("")}</tr></tbody>`;

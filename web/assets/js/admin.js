@@ -326,7 +326,7 @@ after.keywords = () => { const f = $("#ckw-form"); if (!f) return;
 /* ---------------- WhatsApp ---------------- */
 VIEWS.whatsapp = async () => {
   const [packs, tpls, wallets, settings] = await Promise.all([
-    q(sb.from("wa_credit_packs").select("*").order("sort")), q(sb.from("wa_templates").select("*").order("created_at")),
+    q(sb.from("wa_credit_packs").select("*").order("sort")), q(sb.from("wa_templates").select("*, businesses(name)").order("created_at", { ascending: false })),
     q(sb.from("wa_wallets").select("balance, businesses(name, wa_enabled)").order("balance", { ascending: false }).limit(50)),
     q(sb.from("settings").select("*").eq("key", "whatsapp").maybeSingle()),
   ]);
@@ -339,9 +339,17 @@ VIEWS.whatsapp = async () => {
     <div class="card"><div class="card-head"><h2>Credit balances</h2></div>
       <div class="list">${wallets.map((w) => `<div class="item"><div class="grow"><b>${esc(w.businesses?.name || "")}</b></div>${w.businesses?.wa_enabled ? '<span class="pill good">On</span>' : '<span class="pill">Off</span>'}<b class="num">${nfmt(w.balance)}</b></div>`).join("") || `<div class="empty">No balances yet.</div>`}</div></div>
   </div>
-  <div class="card" style="margin-top:16px"><div class="card-head"><h2>Message templates</h2><button class="btn sm" data-a="tpl-new">${ico("plus")} New template</button></div>
+  ${(() => { const req = tpls.filter((t) => t.business_id); const st = { pending: ["warn", "New"], submitted: ["info", "With Meta"], approved: ["good", "Approved"], rejected: ["bad", "Rejected"] };
+    return `<div class="card" style="margin-top:16px"><div class="card-head"><h2>Templates from businesses (Pro)</h2><span class="pill ${req.some((t) => t.status === "pending") ? "warn" : "good"} num">${req.filter((t) => t.status === "pending").length} new</span></div>
+    <p class="small muted" style="margin-top:-6px">Check the wording, then send it to Meta (needs WA_TOKEN and WA_WABA_ID secrets), or create it in WhatsApp Manager with the same name and mark it approved here.</p>
+    ${req.length ? `<div class="table-wrap"><table><thead><tr><th>Business</th><th>Template</th><th>Message</th><th>Status</th><th></th></tr></thead><tbody>${req.map((t) => `<tr><td>${esc(t.businesses?.name || "")}</td>
+      <td><div class="who"><b>${esc(t.title)}</b><span>${esc(t.name)} · ${esc(t.language)} · ${esc(t.category)}</span></div></td><td class="small" style="max-width:340px">${esc(t.body_preview)}${t.params.length ? `<br><span class="muted">Blanks: ${t.params.map(esc).join(", ")}</span>` : ""}${t.reject_reason ? `<br><span style="color:var(--bad)">${esc(t.reject_reason)}</span>` : ""}</td>
+      <td><span class="pill ${st[t.status][0]}">${st[t.status][1]}</span></td>
+      <td><div class="row" style="flex-wrap:wrap;gap:6px">${t.status !== "approved" ? `<button class="btn sm" data-a="wt-meta" data-id="${t.id}">Send to Meta</button>` : ""}${t.status === "submitted" ? `<button class="btn sm ghost" data-a="wt-status" data-id="${t.id}">Check status</button>` : ""}
+        ${t.status !== "approved" ? `<button class="btn sm primary" data-a="wt-ok" data-id="${t.id}">Mark approved</button>` : ""}${t.status !== "rejected" ? `<button class="btn sm ghost danger" data-a="wt-no" data-id="${t.id}">Reject</button>` : ""}</div></td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">No requests yet.</div>`}</div>`; })()}
+  <div class="card" style="margin-top:16px"><div class="card-head"><h2>Shared message templates</h2><button class="btn sm" data-a="tpl-new">${ico("plus")} New template</button></div>
     <div class="table-wrap"><table><thead><tr><th>Template</th><th>Message</th><th>Meta category</th><th>Credits</th><th></th></tr></thead><tbody>
-    ${tpls.map((t) => `<tr><td><div class="who"><b>${esc(t.title)}</b><span>${esc(t.name)} · ${esc(t.language)}</span></div></td><td class="small" style="max-width:380px">${esc(t.body_preview)}</td><td>${esc(t.category)}</td><td class="num">${t.credits_per_message}</td><td><button class="btn sm ghost" data-a="tpl-edit" data-id="${t.id}">Edit</button></td></tr>`).join("")}
+    ${tpls.filter((t) => !t.business_id).map((t) => `<tr><td><div class="who"><b>${esc(t.title)}</b><span>${esc(t.name)} · ${esc(t.language)}</span></div></td><td class="small" style="max-width:380px">${esc(t.body_preview)}</td><td>${esc(t.category)}</td><td class="num">${t.credits_per_message}</td><td><button class="btn sm ghost" data-a="tpl-edit" data-id="${t.id}">Edit</button></td></tr>`).join("")}
     </tbody></table></div></div>`;
 };
 function packForm(p = { active: true, sort: 100 }) {
@@ -442,6 +450,13 @@ document.addEventListener("click", async (e) => {
       case "pack-new": packForm(); break;
       case "pack-edit": packForm(D.packs.find((p) => p.id === id)); break;
       case "tpl-new": tplForm(); break;
+      case "wt-ok": await q(sb.from("wa_templates").update({ status: "approved", active: true, reject_reason: null }).eq("id", id)); toast("Approved. The business can use it now."); render(); break;
+      case "wt-no": { const why = prompt("Reason shown to the business (e.g. 'Too promotional for a utility template')"); if (why === null) break;
+        await q(sb.from("wa_templates").update({ status: "rejected", active: false, reject_reason: why || "Not approved" }).eq("id", id)); toast("Rejected"); render(); break; }
+      case "wt-meta": case "wt-status": {
+        const { data, error } = await sb.functions.invoke("wa-templates", { body: { action: a === "wt-meta" ? "submit" : "status", template_id: id } });
+        if (error) { let m = error.message; try { m = (await error.context.json()).error || m; } catch {} toast(m, "error"); break; }
+        toast("Meta status: " + (data.status || "sent")); render(); break; }
       case "tpl-edit": tplForm(D.tpls.find((t) => t.id === id)); break;
       case "team-add": formModal({ title: "Add team member", fields: [{ key: "email", label: "Their account email", type: "email", required: true, full: true }, { key: "role", label: "Role", type: "select", options: [["team", "Team"], ["super_admin", "Super admin"]] }],
           onSave: async (v) => { await q(sb.rpc("set_user_role", { p_email: v.email, p_role: v.role })); toast("Team updated"); render(); } }); break;
