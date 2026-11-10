@@ -57,7 +57,7 @@ tests/
 
 ## Live project
 
-- **Website:** https://growth.branditudeglobal.com/ (store; the old kunalahuja392.github.io/branditude-growth-plan address redirects here) · `/login.html` (sign in) · `/app.html` (portals). Every push to `main` that touches `web/` redeploys automatically (`.github/workflows/pages.yml`).
+- **Website:** https://scale.branditudeglobal.com/ (store; the old kunalahuja392.github.io/branditude-growth-plan address redirects here) · `/login.html` (sign in) · `/app.html` (portals). Every push to `main` that touches `web/` redeploys automatically (`.github/workflows/pages.yml`).
 - Supabase Auth Site URL and redirect allow-list point at this address.
 
 - Supabase project: **branditude-growth-plan** (`dumninwceiqvevndpupc`, Mumbai). Schema, catalogue and the `whatsapp-send` function are deployed. `web/assets/js/config.js` already points at it.

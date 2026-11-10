@@ -48,7 +48,7 @@ window.bgpInstall = {
   const shareIc = `<span class="shr" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0a84ff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13M7 8l5-5 5 5"/><path d="M5 12v8h14v-8"/></svg></span>`;
   function steps() {
     if (iosSafari) return `<ol><li>Tap ${shareIc} <b>Share</b> at the bottom of Safari.</li><li>Scroll down and tap <b>Add to Home Screen</b>.</li><li>Tap <b>Add</b>. Branditude appears on your home screen.</li></ol>`;
-    if (ios) return `<ol><li>Open <b>growth.branditudeglobal.com</b> in <b>Safari</b>.</li><li>Tap ${shareIc} <b>Share</b>, then <b>Add to Home Screen</b>.</li></ol>`;
+    if (ios) return `<ol><li>Open <b>scale.branditudeglobal.com</b> in <b>Safari</b>.</li><li>Tap ${shareIc} <b>Share</b>, then <b>Add to Home Screen</b>.</li></ol>`;
     if (android) return `<ol><li>Tap the <b>⋮</b> menu at the top right.</li><li>Tap <b>Install app</b> or <b>Add to Home screen</b>.</li></ol>`;
     if (mac && /Safari/.test(ua) && !/Chrome|Edg/.test(ua)) return `<ol><li>In the menu bar choose <b>File</b>.</li><li>Click <b>Add to Dock</b>.</li></ol>`;
     return "";
