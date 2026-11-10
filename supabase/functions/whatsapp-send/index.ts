@@ -52,6 +52,9 @@ Deno.serve(async (req: Request) => {
   // 2. Caller must be a member of an active business with WhatsApp switched on
   const { data: member } = await admin.from("business_members").select("role").eq("business_id", business_id).eq("user_id", userId).maybeSingle();
   if (!member) return json({ error: "Not allowed" }, 403);
+  // Team permissions: one customer = customers or WhatsApp area; many customers = WhatsApp area
+  const perm = async (area: string) => (await admin.rpc("member_has_perm", { b: business_id, u: userId, area })).data === true;
+  if (!(await perm("whatsapp")) && (customerIds.length > 1 || !(await perm("customers")))) return json({ error: "Your login isn't allowed to send WhatsApp messages. Ask the owner." }, 403);
   const { data: biz } = await admin.from("businesses").select("id,name,status,wa_enabled,wa_phone_number_id").eq("id", business_id).single();
   if (!biz || biz.status !== "active") return json({ error: "Your account isn't active yet." }, 403);
   // One customer at a time: every plan (charged per message). Many customers at once: Pro (bulk messaging).

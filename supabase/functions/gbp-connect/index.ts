@@ -23,6 +23,8 @@ Deno.serve(async (req: Request) => {
   if (!bid) return json({ error: "Invalid request" }, 400);
   const { data: m } = await admin.from("business_members").select("role").eq("business_id", bid).eq("user_id", u.user.id).maybeSingle();
   if (!m) return json({ error: "Not allowed" }, 403);
+  const { data: okPerm } = await admin.rpc("member_has_perm", { b: bid, u: u.user.id, area: "reviews" });
+  if (!okPerm) return json({ error: "Your login isn't allowed to manage Google reviews. Ask the owner." }, 403);
   const { data: open } = await admin.rpc("biz_open", { b: bid });
   if (!open) return json({ error: "Your plan isn't active." }, 403);
   const { data: modOn } = await admin.rpc("has_module", { b: bid, m: "google_replies" });

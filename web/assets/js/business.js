@@ -5,6 +5,9 @@ import { $, $$, esc, inr, inr2, nfmt, fmtDate, fmtShort, fmtDT, ago, daysSince, 
 import { registerStaff } from "./staff.js";
 import { registerMenu, newOrderCount } from "./menu-admin.js";
 import { rzpOn, payOnline } from "./razorpay.js";
+import { registerTeam, AREA_OF } from "./team.js";
+import { registerAccounts } from "./accounts.js";
+import { scanCard } from "./card-scan.js";
 
 let C, D = {}, BID;
 const gstOn = () => +(D.settings?.gst?.rate ?? 0) > 0;
@@ -15,27 +18,30 @@ const canWrite = () => D.biz?.status === "active" || trialOpen() || (["trial", "
 const waOn = () => !!D.biz?.wa_enabled;
 
 // Which module each page belongs to. Pages without an entry are in every plan.
-const ROUTE_MOD = { offers: "loyalty", loyalty: "loyalty", templates: "bulk_whatsapp", alerts: "campaigns", seo: "seo", replies: "google_replies", orders: "menu", menu: "menu", staff: "attendance", salary: "attendance" };
+const ROUTE_MOD = { offers: "loyalty", loyalty: "loyalty", templates: "bulk_whatsapp", alerts: "campaigns", seo: "seo", replies: "google_replies", orders: "menu", menu: "menu", staff: "attendance", salary: "attendance", accounts: "accounting" };
+// What this login may do: owner and admin everything, staff only the areas the owner ticked. The database checks the same.
+const can = (area) => ["owner", "admin"].includes(D.me?.role) || (D.me?.perms || []).includes(area);
+const allowed = (r) => r === "signout" || can(AREA_OF[r] || "customers");
 const lockBadge = (r, badge) => (ROUTE_MOD[r] && !hasMod(ROUTE_MOD[r]) ? "🔒" : badge);
 const item = (r, label, icon, badge = "") => [r, label, icon, lockBadge(r, badge)];
 const ROUTES = () => [
   { label: "", items: [item("dashboard", "Dashboard", "dash"), item("customers", "Customers", "users"), item("reviews", "Google reviews", "star"), item("feedback", "Feedback", "smile", openComplaints() || ""), item("seo", "Keywords & SEO", "spark"), item("replies", "Google replies", "star", hasMod("google_replies") ? gbpPending() || "" : ""),
     item("offers", "Offers & coupons", "tag"), item("loyalty", "Loyalty card", "card"), item("whatsapp", "WhatsApp & reminders", "wa"), item("templates", "Message templates", "send"), item("alerts", "Alerts", "bell", hasMod("campaigns") ? alerts().length || "" : "")] },
-  { label: "Run the shop", items: [...(fitsBiz("menu") ? [item("orders", "Orders", "receipt", hasMod("menu") ? D.newOrders || "" : ""), item("menu", "QR menu", "food")] : []), item("staff", "Staff & attendance", "clock"), item("salary", "Salary", "rupee")] },
-  { label: "Account", items: [["plan", "Plan & services", "box"], ["profile", "Business profile", "store"], ["signout", "Sign out", "out"]] },
-];
+  { label: "Run the shop", items: [...(fitsBiz("menu") ? [item("orders", "Orders", "receipt", hasMod("menu") ? D.newOrders || "" : ""), item("menu", "QR menu", "food")] : []), item("staff", "Staff & attendance", "clock"), item("salary", "Salary", "rupee"), item("accounts", "Accounts & GST", "chart")] },
+  { label: "Account", items: [["plan", "Plan & services", "box"], ["profile", "Business profile", "store"], ["team", "Team & logins", "shield"], ["signout", "Sign out", "out"]] },
+].map((g) => ({ ...g, items: g.items.filter((i) => allowed(i[0])) })).filter((g) => g.items.length);
 // On when: core module, in the plan, bought as an add-on, or on the free trial (everything unlocked). The database checks the same rule.
 const hasMod = (m) => D.biz?.status === "trial" || !!(D.mods || []).find((x) => x.key === m && x.core) || (D.biz?.packages?.modules || []).includes(m) || (D.biz?.addon_modules || []).includes(m);
 const modInfo = (k) => (D.mods || []).find((x) => x.key === k);
 // Hide features that don't fit this kind of business (e.g. table ordering for a salon). Set per module in modules.categories.
 const fitsBiz = (k) => { const m = modInfo(k), slug = D.biz?.categories?.slug; return !m?.categories || !slug || m.categories.includes(slug); };
-const route = () => { const h = location.hash.slice(1).split("?")[0]; return ROUTES().flatMap((g) => g.items).some((r) => r[0] === h) ? h : "dashboard"; };
+const route = () => { const h = location.hash.slice(1).split("?")[0], all = ROUTES().flatMap((g) => g.items).map((r) => r[0]); return all.includes(h) ? h : all.includes("dashboard") ? "dashboard" : all[0]; };
 
 export async function mount(ctx) {
   C = ctx;
-  const m = await q(sb.from("business_members").select("business_id").eq("user_id", C.user.id).limit(1));
+  const m = await q(sb.from("business_members").select("business_id,role,perms").eq("user_id", C.user.id).order("created_at").limit(1));
   if (!m.length) { $("#main").innerHTML = `<div class="auth-wrap"><div class="auth"><h2>No business yet</h2><p>Choose a plan to set up your business.</p><a class="btn primary" href="index.html#pricing">See plans</a></div></div>`; return; }
-  BID = m[0].business_id;
+  BID = m[0].business_id; D.me = { role: m[0].role, perms: m[0].perms || [] };
   window.addEventListener("hashchange", () => { if (location.hash === "#signout") return C.signOut(); render(); });
   await loadAll(); await gbpLoad().catch(() => {}); render();
   if (hasMod("menu")) {
@@ -75,6 +81,22 @@ async function reload(...keys) {
     wallet: async () => (D.wallet = (await q(sb.from("wa_wallets").select("balance").eq("business_id", BID).maybeSingle()))?.balance ?? 0),
   };
   await Promise.all(keys.map((k) => map[k]()));
+}
+
+/* ---------- digital loyalty card link ---------- */
+const cardUrl = (c) => new URL("c.html?t=" + c.card_token, location.href).href;
+const cardMsg = (c) => `Hi ${(c.name || "there").split(" ")[0]}, here's your ${D.prog?.name || "loyalty card"} from ${D.biz.name}: ${cardUrl(c)}\nSave it on your phone and show the QR at the counter on every visit to collect stamps and rewards.`;
+const waLink = (c) => `https://wa.me/${String(c.phone || "").replace(/\D/g, "")}?text=${encodeURIComponent(cardMsg(c))}`;
+const mailLink = (c) => `mailto:${encodeURIComponent(c.email || "")}?subject=${encodeURIComponent(`Your ${D.prog?.name || "loyalty card"} from ${D.biz.name}`)}&body=${encodeURIComponent(cardMsg(c))}`;
+const sendCardBtns = (c) => `<a class="btn sm wa" href="${esc(waLink(c))}" target="_blank" rel="noopener">${ico("wa")} WhatsApp card link</a><a class="btn sm" href="${esc(mailLink(c))}">✉️ Email${c.email ? "" : " (add address)"}</a><button class="btn sm ghost" data-a="card-copy" data-id="${c.id}">${ico("copy")} Copy link</button>`;
+async function startScan() {
+  const tok = await scanCard();
+  if (!tok) return;
+  try {
+    const c = await q(sb.rpc("card_lookup", { p_business: BID, p_token: tok }));
+    if (!c) { toast("This card isn't from your business", "error"); return; }
+    visitModal({ phone: c.phone, name: c.name, scanned: c });
+  } catch (e) { toast(e.message, "error"); }
 }
 
 /* ---------- derived ---------- */
@@ -120,6 +142,7 @@ function nav() {
 let pendingRender = false;
 function render() {
   nav(); const r = route(), m = $("#main");
+  if (!r) { m.innerHTML = `<div class="card empty" style="margin-top:40px">Your login doesn't have access to anything yet. Ask the owner to give you access under Team &amp; logins.</div>`; return; }
   const lock = ROUTE_MOD[r] && !hasMod(ROUTE_MOD[r]);
   m.innerHTML = banner() + (lock ? lockedView(ROUTE_MOD[r]) : VIEWS[r]()); !lock && after[r] && after[r](); m.scrollTop = 0;
 }
@@ -155,7 +178,7 @@ VIEWS.dashboard = () => {
     return { label: i === 13 ? "Today" : fmtShort(d), value: v.filter((x) => { const t = new Date(x.created_at); return t >= d && t < e; }).reduce((a, x) => a + +x.net, 0) }; });
   const setup = [["Add your Google review link", !!reviewLink(), "#profile"], ["Log your first visit", v.length > 0, "#dashboard"], ["Set up your loyalty card", D.rewards.length > 0, "#loyalty"], ["Create a coupon", D.coupons.length > 0, "#offers"], ["Print your feedback QR code", false, "#feedback"]];
   const al = alerts().slice(0, 5);
-  return head(`Hello, ${esc(D.biz.name)}`, "Log every visit. It builds your customer list, stamps loyalty cards and brings in reviews.", `<button class="btn primary" data-a="visit" ${canWrite() ? "" : "disabled"}>${ico("plus")} Log a visit</button><button class="btn" data-a="kiosk">${ico("smile")} Feedback screen</button>`) + `
+  return head(`Hello, ${esc(D.biz.name)}`, "Log every visit. It builds your customer list, stamps loyalty cards and brings in reviews.", `<button class="btn primary" data-a="visit" ${canWrite() ? "" : "disabled"}>${ico("plus")} Log a visit</button><button class="btn" data-a="scan" ${canWrite() ? "" : "disabled"}>${ico("grid")} Scan card</button><button class="btn" data-a="kiosk">${ico("smile")} Feedback screen</button>`) + `
   <div class="grid g4">${kpi("Revenue logged · 30 days", inr(rev), delta === null ? `${v30.length} visits` : `<span class="pill ${delta >= 0 ? "good" : "bad"}">${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta)}%</span> vs previous 30 days`)}
     ${kpi("Customers", nfmt(c.length), `${repeat}% come back`)}${kpi("Google reviews earned", reviewed, asked ? `${Math.round((reviewed / asked) * 100)}% of people asked` : "Use the feedback screen")}
     ${kpi("Loyalty rewards · 30 days", v30.filter((x) => x.loyalty_reward).length, inr(v30.reduce((a, x) => a + +x.discount, 0)) + " discounts given")}</div>
@@ -180,7 +203,7 @@ function alertRow(a) {
 let custQ = "", custSeg = "all";
 VIEWS.customers = () => {
   const sg = segments();
-  return head("Customers", "Your own customer list. Loyalty stamps and rewards are tracked for each customer.", `<button class="btn" data-a="import" ${canWrite() ? "" : "disabled"}>Import list</button><button class="btn" data-a="export">${ico("copy")} Copy as CSV</button><button class="btn primary" data-a="cust-new" ${canWrite() ? "" : "disabled"}>${ico("plus")} Add customer</button>`) + `
+  return head("Customers", "Your own customer list. Loyalty stamps and rewards are tracked for each customer.", `<button class="btn" data-a="import" ${canWrite() ? "" : "disabled"}>Import list</button><button class="btn" data-a="export">${ico("copy")} Copy as CSV</button><button class="btn" data-a="scan" ${canWrite() ? "" : "disabled"}>${ico("grid")} Scan card</button><button class="btn primary" data-a="cust-new" ${canWrite() ? "" : "disabled"}>${ico("plus")} Add customer</button>`) + `
   <input id="cust-q" type="search" placeholder="Search by name, phone or tag" value="${esc(custQ)}" style="margin-bottom:12px" aria-label="Search customers">
   <div class="chips" style="margin-bottom:16px">${Object.entries(sg).map(([k, [l, list]]) => `<button class="chip" data-a="seg" data-id="${k}" aria-pressed="${custSeg === k}">${l} <span class="num">${list.length}</span></button>`).join("")}${allTags().map((t) => `<button class="chip" data-a="seg" data-id="tag:${esc(t)}" aria-pressed="${custSeg === "tag:" + t}">#${esc(t)}</button>`).join("")}</div>
   <div class="table-wrap"><table><thead><tr><th>Customer</th><th>Visits</th><th>Spent</th><th>Last visit</th><th>Loyalty</th><th>Review</th><th style="text-align:right">Actions</th></tr></thead><tbody id="cust-rows"></tbody></table></div>`;
@@ -300,8 +323,9 @@ after.loyalty = () => {
 function cardModal(c) {
   openModal(`<div class="modal-head"><h2>${esc(c.name)}'s loyalty card</h2><button class="btn ghost" data-close>Close</button></div>
     <div style="display:flex;justify-content:center">${loyaltyCard({ bizName: D.biz.name, prog: D.prog, rewards: D.rewards, customer: c })}</div>
-    <p class="small muted" style="margin-top:12px;text-align:center">Customers can also see this card by signing in to the customer app with ${esc(prettyPhone(c.phone))}.</p>
-    <div class="modal-foot"><button class="btn" data-a="card-full" data-id="${c.id}">Show full screen</button>${waBtn("Send on WhatsApp", `data-a="wa-one" data-id="${c.id}" data-tpl="loyalty_update"`, "")}</div>`);
+    <div class="note" style="margin-top:14px"><b>Their own digital card.</b> Send this link once. It always shows their latest stamps, and staff scan its QR at the counter to add a visit.</div>
+    <div class="row" style="margin-top:10px;flex-wrap:wrap;gap:8px">${sendCardBtns(c)}</div>
+    <div class="modal-foot"><button class="btn" data-a="card-full" data-id="${c.id}">Show full screen</button>${waBtn("Send stamp update", `data-a="wa-one" data-id="${c.id}" data-tpl="loyalty_update"`, "")}</div>`);
 }
 
 /* ---------- WhatsApp ---------- */
@@ -756,8 +780,9 @@ document.addEventListener("click", async (e) => {
 });
 
 /* ---------- Log a visit ---------- */
-function visitModal() {
-  const m = openModal(`<div class="modal-head"><h2>Log a visit</h2><button class="btn ghost" data-close>Close</button></div>
+function visitModal(pre = {}) {
+  const m = openModal(`<div class="modal-head"><h2>${pre.scanned ? "Card scanned" : "Log a visit"}</h2><button class="btn ghost" data-close>Close</button></div>
+    ${pre.scanned ? `<div class="result ok" style="margin-bottom:12px">✓ <b>${esc(pre.scanned.name)}</b> · ${pre.scanned.visits} visits so far. Enter the bill to add this visit.</div>` : ""}
     <form id="vf"><div class="fields">
       <div class="field"><label for="v-phone">Customer's mobile number</label><input id="v-phone" inputmode="tel" required placeholder="98xxxxxxxx"></div>
       <div class="field"><label for="v-name">Name</label><input id="v-name" placeholder="New customer? Enter name"></div>
@@ -784,6 +809,7 @@ function visitModal() {
     } catch (e) { m.querySelector("#v-status").innerHTML = ""; }
   };
   m.querySelectorAll("input").forEach((i) => (i.oninput = () => { clearTimeout(timer); timer = setTimeout(preview, 300); }));
+  if (pre.phone) { m.querySelector("#v-phone").value = pre.phone; if (pre.name) m.querySelector("#v-name").value = pre.name; preview(); m.querySelector("#v-bill").focus(); }
   m.querySelector("#vf").onsubmit = async (e) => {
     e.preventDefault(); const btn = e.submitter || m.querySelector("button.primary"); btn.disabled = true;
     try {
@@ -793,7 +819,7 @@ function visitModal() {
       openModal(`<div class="modal-head"><h2>${r.completed ? "🏆 Card completed!" : "Visit saved"}</h2><button class="btn ghost" data-close>Close</button></div>
         <p><b>${esc(c.name)}</b> pays <b class="num">${inr(r.net)}</b>${+r.discount ? ` after ${inr(r.discount)} off` : ""}${r.reward_label ? ` (${esc(r.reward_label)})` : r.use === "coupon" ? ` (coupon)` : ""}.</p>
         ${r.loyalty_enabled ? `<div style="display:flex;justify-content:center;margin-top:14px">${loyaltyCard({ bizName: D.biz.name, prog: D.prog, rewards: D.rewards, customer: shown })}</div>` : ""}
-        <div class="modal-foot"><button class="btn" data-close>Done</button><button class="btn" data-a="kiosk" data-id="${c.id}">${ico("smile")} Feedback screen</button>${waBtn("Review request", `data-a="wa-one" data-id="${c.id}" data-tpl="review_request"`, "")}</div>`);
+        <div class="modal-foot"><button class="btn" data-close>Done</button><button class="btn" data-a="kiosk" data-id="${c.id}">${ico("smile")} Feedback screen</button>${r.loyalty_enabled && c.visits <= 1 ? `<a class="btn wa" href="${esc(waLink(c))}" target="_blank" rel="noopener">${ico("wa")} Send card link</a>` : ""}${waBtn("Review request", `data-a="wa-one" data-id="${c.id}" data-tpl="review_request"`, "")}</div>`);
       softRender();
     } catch (err) { m.querySelector("#v-err").textContent = err.message; btn.disabled = false; }
   };
@@ -881,6 +907,8 @@ document.addEventListener("click", async (e) => {
   const a = el.dataset.a, id = el.dataset.id, cust = () => D.customers.find((c) => c.id === id);
   try {
     switch (a) {
+      case "scan": startScan(); break;
+      case "card-copy": copy(cardUrl(cust()), "Card link"); break;
       case "visit": visitModal(); break;
       case "kiosk": closeModal(); kiosk(id); break;
       case "seg": custSeg = id; render(); break;
@@ -889,7 +917,7 @@ document.addEventListener("click", async (e) => {
       case "import": importModal(); break;
       case "export": exportCSV(); break;
       case "card": cardModal(cust()); break;
-      case "card-full": closeModal(); $("#kiosk-root").innerHTML = `<div class="kiosk"><button class="btn sm ghost k-exit" data-a="close-full">Close</button><div class="k-inner"><p class="k-biz">${esc(D.biz.name)}</p><h1 class="k-q">Your loyalty card</h1>${loyaltyCard({ bizName: D.biz.name, prog: D.prog, rewards: D.rewards, customer: cust() })}<p class="k-fine">Sign in to the customer app with your phone number to see this card any time.</p></div></div>`; break;
+      case "card-full": closeModal(); $("#kiosk-root").innerHTML = `<div class="kiosk"><button class="btn sm ghost k-exit" data-a="close-full">Close</button><div class="k-inner"><p class="k-biz">${esc(D.biz.name)}</p><h1 class="k-q">Your loyalty card</h1>${loyaltyCard({ bizName: D.biz.name, prog: D.prog, rewards: D.rewards, customer: cust() })}<div id="k-cardqr" style="background:#fff;padding:10px;border-radius:14px;margin:16px auto 0;width:max-content;line-height:0"></div><p class="k-fine">Scan to save this card on your phone.</p></div></div>`; if (window.QRCode) new QRCode($("#k-cardqr"), { text: cardUrl(cust()), width: 150, height: 150, colorDark: "#16203a", colorLight: "#ffffff" }); break;
       case "close-full": $("#kiosk-root").innerHTML = ""; break;
       case "mark-reviewed": await q(sb.from("customers").update({ review_status: "reviewed" }).eq("id", id)); await reload("customers"); toast("Marked as reviewed ⭐"); render(); break;
       case "mark-asked": await q(sb.from("customers").update({ review_status: "requested", review_requested_at: new Date().toISOString() }).eq("id", id)); await reload("customers"); render(); break;
@@ -969,6 +997,8 @@ document.addEventListener("click", async (e) => {
 });
 
 /* ---------- Staff, salary, QR menu, orders (separate modules) ---------- */
-const moduleApi = { VIEWS, after, head, kpi, ctx: () => ({ D, BID, canWrite: canWrite() }), isRoute: (r) => route() === r, setOrderBadge: (n) => { if (D.newOrders !== n) { D.newOrders = n; nav(); } } };
+const moduleApi = { VIEWS, after, head, kpi, can, hasMod, reload, render, ctx: () => ({ D, BID, canWrite: canWrite() }), isRoute: (r) => route() === r, setOrderBadge: (n) => { if (D.newOrders !== n) { D.newOrders = n; nav(); } } };
 registerStaff(moduleApi);
 registerMenu(moduleApi);
+registerTeam(moduleApi);
+registerAccounts(moduleApi);

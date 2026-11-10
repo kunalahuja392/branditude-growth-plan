@@ -27,6 +27,8 @@ sb.auth.onAuthStateChange((event) => {
   try {
     // Finish a business registration that was started before email confirmation
     const pending = (() => { try { return JSON.parse(localStorage.getItem("bgp_pending_registration") || "null"); } catch { return null; } })();
+    // Team invites for this email turn into access (owner/admin/staff of a business)
+    try { await sb.rpc("claim_invites"); } catch {}
     let profile = await q(sb.from("profiles").select("*").eq("id", user.id).single());
     if (pending && profile.role === "customer") {
       try { await q(sb.rpc("register_business", { p: pending })); toast("Your business is registered. Complete payment to activate."); }

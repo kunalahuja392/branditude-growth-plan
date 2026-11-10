@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#10183a">
+<link rel="icon" type="image/png" href="/assets/icons/favicon-64.png">
+<link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png">
+<title>Your loyalty card</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<style>
+body{min-height:100vh;background:var(--paper)}
+.cw{max-width:460px;margin:0 auto;padding:22px 16px calc(28px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:16px}
+.c-head{display:flex;align-items:center;gap:12px}
+.c-ic{width:46px;height:46px;border-radius:14px;background:var(--card);border:1px solid var(--line);display:grid;place-items:center;font-size:24px;flex:none}
+.c-head h1{font-size:20px;line-height:1.2;margin:0}
+.c-head p{margin:2px 0 0;color:var(--ink-3);font-size:14px}
+.c-qr{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:18px;display:flex;gap:16px;align-items:center}
+.c-qr .q{background:#fff;padding:8px;border-radius:12px;flex:none;line-height:0}
+.c-qr .q img,.c-qr .q canvas{width:128px!important;height:128px!important}
+.c-qr b{display:block;font-size:17px;margin-bottom:4px}
+.c-qr p{margin:0;color:var(--ink-2);font-size:14.5px;line-height:1.45}
+.c-sec{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:16px 18px}
+.c-sec h2{font-size:16px;margin:0 0 10px}
+.c-rw{display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--line);font-size:15px}
+.c-rw:first-of-type{border-top:0}
+.c-rw .v{width:66px;flex:none;color:var(--ink-3);font-size:13px}
+.c-rw.done{color:var(--ink-3);text-decoration:line-through}
+.c-off{border:1.5px dashed var(--accent);border-radius:14px;padding:12px 14px;margin-top:8px}
+.c-off b{font-size:16px}.c-off code{font-weight:800;letter-spacing:.06em;background:var(--accent-soft);padding:2px 8px;border-radius:8px}
+.c-acts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.c-acts .btn{justify-content:center}
+.c-foot{text-align:center;color:var(--ink-3);font-size:13px}
+.c-foot a{color:inherit}
+.c-hint{font-size:14px;color:var(--ink-2);line-height:1.5}
+</style>
+</head>
+<body>
+<main class="cw" id="c"><div class="loading" style="padding:80px 0"><span class="spinner"></span></div></main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script type="module">
+// Public digital loyalty card: c.html?t=<card token>. No sign-in. The counter scans the QR to add a visit.
+import { sb } from "./assets/js/sb.js";
+import { $, esc, inr, loyaltyCard, rwLabel, prettyPhone, fmtDate } from "./assets/js/ui.js";
+const t = new URLSearchParams(location.search).get("t") || "";
+const el = $("#c");
+const fail = (m) => (el.innerHTML = `<div class="c-sec" style="text-align:center;margin-top:60px"><h2>Card not found</h2><p class="muted">${esc(m)}</p></div>`);
+(async () => {
+  if (t.length < 16) return fail("This link looks incomplete. Ask the shop to send it again.");
+  const { data: d, error } = await sb.rpc("public_card", { p_token: t });
+  if (error) return fail("We couldn't load your card. Check your internet and try again.");
+  if (!d) return fail("This card link isn't valid any more. Ask the shop to send it again.");
+  const B = d.business, P = d.program || { enabled: false, stamps: 10, name: "Loyalty card", theme: "saffron" }, R = d.rewards || [], C = d.customer;
+  document.title = `${P.name || "Loyalty card"} · ${B.name}`;
+  const st = Math.min(C.stamps || 0, +P.stamps);
+  const deal = (k) => (k.type === "percent" ? `${+k.value}% off${+k.max_discount ? ` (up to ${inr(k.max_discount)})` : ""}` : `${inr(k.value)} off`);
+  el.innerHTML = `
+    <div class="c-head"><div class="c-ic">${esc(B.icon || "🎁")}</div><div><h1>${esc(B.name)}</h1><p>Hi ${esc(C.name)}, here's your card${B.city ? " · " + esc(B.city) : ""}</p></div></div>
+    ${P.enabled ? loyaltyCard({ bizName: B.name, prog: P, rewards: R, customer: { ...C, name: C.name } }) : `<div class="c-sec"><h2>The loyalty card is paused</h2><p class="muted small">Your ${st} stamp${st === 1 ? "" : "s"} are saved.</p></div>`}
+    <div class="c-qr"><div class="q" id="qr" aria-label="Your card QR code"></div><div><b>Show this at the counter</b><p>Staff scan it to add your visit. No need to share your number.</p></div></div>
+    ${R.length ? `<div class="c-sec"><h2>Rewards on this card</h2>${R.map((r) => `<div class="c-rw ${+r.visit_no <= st ? "done" : ""}"><span class="v">Visit ${+r.visit_no}</span><span>${+r.visit_no === +P.stamps ? "🏆" : "🎁"} ${esc(rwLabel(r))}</span></div>`).join("")}</div>` : ""}
+    ${(d.offers || []).length ? `<div class="c-sec"><h2>Offers for you</h2>${d.offers.map((k) => `<div class="c-off"><b>${esc(k.title || deal(k))}</b><div class="small" style="margin-top:6px">Use code <code>${esc(k.code)}</code>${k.title ? " · " + esc(deal(k)) : ""}${+k.min_bill ? ` · on bills above ${inr(k.min_bill)}` : ""}${k.expiry ? ` · till ${fmtDate(k.expiry)}` : ""}</div></div>`).join("")}</div>` : ""}
+    <div class="c-acts">
+      <button class="btn" id="save">📲 Save to phone</button>
+      ${B.phone ? `<a class="btn" href="tel:+${esc(String(B.phone).replace(/\D/g, "").length === 10 ? "91" + B.phone : String(B.phone).replace(/\D/g, ""))}">📞 Call</a>` : `<span></span>`}
+      ${B.google_review_link ? `<a class="btn" style="grid-column:1/-1" href="${esc(B.google_review_link)}" target="_blank" rel="noopener">⭐ Rate us on Google</a>` : ""}
+    </div>
+    <p class="c-hint" id="save-hint" hidden></p>
+    <p class="c-foot">${B.address ? esc(B.address) + "<br>" : ""}Digital loyalty card by <a href="https://scale.branditudeglobal.com" target="_blank" rel="noopener">Branditude</a></p>`;
+  if (window.QRCode) new QRCode($("#qr"), { text: location.origin + location.pathname + "?t=" + t, width: 128, height: 128, colorDark: "#16203a", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
+  // Save: share sheet where available, otherwise add-to-home-screen steps for the device
+  let bip = null; addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); bip = e; });
+  $("#save").onclick = async () => {
+    if (bip) { bip.prompt(); bip = null; return; }
+    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent), h = $("#save-hint"); h.hidden = false;
+    h.innerHTML = ios ? "On iPhone: tap the <b>Share</b> button in Safari, then <b>Add to Home Screen</b>. Your card opens like an app."
+      : "Tap the browser menu <b>⋮</b>, then <b>Add to Home screen</b>. Or bookmark this page. Your card always shows your latest stamps.";
+    if (navigator.share) try { await navigator.share({ title: `${B.name} loyalty card`, url: location.href }); } catch {}
+  };
+})();
+</script>
+</body>
+</html>

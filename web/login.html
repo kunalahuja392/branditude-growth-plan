@@ -39,7 +39,8 @@ const err = (m) => { $("#err").textContent = m || ""; $("#ok").textContent = "";
 const ok = (m) => { $("#ok").textContent = m || ""; $("#err").textContent = ""; };
 if (!configured) err("Setup needed: add your Supabase URL and anon key in assets/js/config.js.");
 
-let tab = new URLSearchParams(location.search).get("as") || "business";
+const QS = new URLSearchParams(location.search);
+let tab = QS.get("as") || "business", joining = QS.has("join");
 const emailForm = (who) => `
   <form id="f-email" class="fields" style="grid-template-columns:1fr">
     <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="email" required></div>
@@ -47,6 +48,16 @@ const emailForm = (who) => `
     <button class="btn primary" type="submit" style="justify-content:center">Sign in</button>
     <div class="row" style="justify-content:space-between"><button type="button" class="btn ghost sm" id="forgot">Forgot password?</button>
     ${who === "business" ? `<a class="btn ghost sm" href="index.html#pricing">New business? Choose a plan</a>` : `<span class="muted small">Team accounts are added by your super admin.</span>`}</div>
+    ${who === "business" ? `<p class="small muted" style="margin:4px 0 0">Added to a business team? <button type="button" class="btn ghost sm" id="to-join" style="padding:2px 6px">Create your login</button></p>` : ""}
+  </form>`;
+// Team members invited by a business create their own login with the invited email
+const joinForm = () => `
+  <p class="muted small">Your employer added your email to their team. Create a password for that email to get in.</p>
+  <form id="f-join" class="fields" style="grid-template-columns:1fr">
+    <div class="field"><label for="j-email">Email you were invited with</label><input id="j-email" type="email" autocomplete="email" required value="${esc(QS.get("email") || "")}"></div>
+    <div class="field"><label for="j-pw">Choose a password (8+ characters)</label><input id="j-pw" type="password" autocomplete="new-password" required minlength="8"></div>
+    <button class="btn primary" type="submit" style="justify-content:center">Create login</button>
+    <button type="button" class="btn ghost sm" id="to-signin">I already have a login</button>
   </form>`;
 const phoneForm = () => `
   <p class="muted small">See your loyalty cards and offers from every business you visit. We'll send a one-time code to your phone.</p>
@@ -57,9 +68,9 @@ const phoneForm = () => `
   </form>`;
 function draw() {
   $$("[data-tab]").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === tab));
-  $("#panel").innerHTML = tab === "customer" ? phoneForm() : emailForm(tab);
+  $("#panel").innerHTML = tab === "customer" ? phoneForm() : tab === "business" && joining ? joinForm() : emailForm(tab);
   err("");
-  if (tab === "customer") bindPhone(); else bindEmail();
+  if (tab === "customer") bindPhone(); else if (tab === "business" && joining) bindJoin(); else bindEmail();
 }
 $$("[data-tab]").forEach((b) => (b.onclick = () => { tab = b.dataset.tab; draw(); }));
 
@@ -70,10 +81,23 @@ function bindEmail() {
     if (error) { err(/Invalid login/i.test(error.message) ? "Wrong email or password." : friendly(error)); btn.disabled = false; return; }
     location.href = "app.html";
   };
+  $("#to-join")?.addEventListener("click", () => { joining = true; draw(); });
   $("#forgot").onclick = async () => {
     const email = $("#email").value.trim(); if (!email) { err("Enter your email first, then tap Forgot password."); return; }
     const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: new URL("app.html", location.href).href });
     error ? err(friendly(error)) : ok("Check your email for a link to set a new password.");
+  };
+}
+function bindJoin() {
+  $("#to-signin").onclick = () => { joining = false; draw(); };
+  $("#f-join").onsubmit = async (e) => {
+    e.preventDefault(); err(""); const btn = e.target.querySelector("button[type=submit]"); btn.disabled = true;
+    const email = $("#j-email").value.trim().toLowerCase();
+    const { data, error } = await sb.auth.signUp({ email, password: $("#j-pw").value, options: { emailRedirectTo: new URL("app.html", location.href).href } });
+    btn.disabled = false;
+    if (error) { err(/already/i.test(error.message) ? "This email already has a login. Sign in instead, or use Forgot password." : friendly(error)); return; }
+    if (data?.session) { location.href = "app.html"; return; }
+    ok("Almost done: open the email we just sent to " + email + " and tap the link. Then sign in here.");
   };
 }
 function bindPhone() {

@@ -1,6 +1,6 @@
 // Branditude Growth service worker: network first for our own files, cached copy when offline.
 // Never touches Supabase, Google or any other origin, and never caches non-GET requests.
-const CACHE = "bgp-v2";
+const CACHE = "bgp-v3";
 const SHELL = ["/", "/index.html", "/app.html", "/login.html", "/assets/css/app.css", "/assets/icons/icon-192.png", "/manifest.webmanifest"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).catch(() => {})); self.skipWaiting(); });
 self.addEventListener("activate", (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });

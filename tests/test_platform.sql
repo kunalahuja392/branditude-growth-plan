@@ -499,4 +499,152 @@ reset role;
 set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000a1');
 do $$ begin assert (select count(*) from wa_templates where business_id is not null) = 0, 'other business cannot see private templates'; end $$;
 reset role;
+
+\echo '--- 17. Loyalty card link: public card by token only, scan lookup needs access'
+set role anon; select pg_temp.as_user(null);
+do $$ declare t text; r jsonb; begin
+  -- anon can't read customers, but the card works with the token
+  assert (select count(*) from customers) = 0, 'anon sees no customers';
+end $$;
+reset role;
+do $$ declare t text; begin select card_token into t from customers where business_id = current_setting('test.glow')::uuid and name = 'Asha Rao'; perform set_config('test.tok', t, false); end $$;
+set role anon; select pg_temp.as_user(null);
+do $$ declare r jsonb; begin
+  r := public_card(current_setting('test.tok'));
+  assert r->'customer'->>'name' = 'Asha', 'first name only: ' || (r->'customer')::text;
+  assert r->'business'->>'name' = 'Glow Salon', 'business shown';
+  assert not (r->'customer' ? 'phone'), 'no phone on public card';
+  assert public_card('nope') is null and public_card(left(current_setting('test.tok'), 10)) is null, 'bad token gives nothing';
+end $$;
+reset role;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000a1');
+do $$ begin assert card_lookup(current_setting('test.glow')::uuid, current_setting('test.tok')) is null, 'other business cannot look up card'; end $$;
+reset role;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000b1');
+do $$ begin assert card_lookup(current_setting('test.glow')::uuid, current_setting('test.tok'))->>'name' = 'Asha Rao', 'owner looks up card'; end $$;
+reset role;
+
+\echo '--- 18. Team: invites, admin/staff roles, per-area access'
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000e1', 'manager@example.test'), ('00000000-0000-0000-0000-0000000000e2', 'cashier@example.test');
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000b1');
+do $$ declare b uuid := current_setting('test.glow'); r jsonb; begin
+  r := team_save(b, 'Manager@Example.test', 'admin', null); assert r->>'status' = 'added', 'existing user added: ' || r::text;
+  r := team_save(b, 'cashier@example.test', 'staff', '{customers,bogus}'); assert r->>'status' = 'added';
+  assert (select perms from business_members where user_id = '00000000-0000-0000-0000-0000000000e2') = '{customers}', 'unknown areas dropped';
+  r := team_save(b, 'newcook@example.test', 'staff', '{menu,attendance}'); assert r->>'status' = 'invited';
+  begin perform team_save(b, 'x@example.test', 'staff', '{}'); assert false; exception when raise_exception then assert sqlerrm like 'Choose at least%'; end;
+  r := team_list(b); assert jsonb_array_length(r->'members') = 3 and jsonb_array_length(r->'invites') = 1, r::text;
+end $$;
+reset role;
+-- the cashier: customers only
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000e2');
+do $$ declare b uuid := current_setting('test.glow'); n int; begin
+  assert my_role() = 'business', 'invited user becomes business role';
+  select count(*) into n from customers where business_id = b; assert n > 0, 'cashier sees customers';
+  perform log_visit(b, '9811111111', 'Walk In', 300, null);
+  select count(*) into n from staff where business_id = b; assert n = 0, 'cashier cannot see staff/salaries';
+  select count(*) into n from payments where business_id = b; assert n = 0, 'cashier cannot see billing';
+  begin perform team_list(b); assert false; exception when raise_exception then null; end;
+  begin perform acc_post(b, '{}'); assert false; exception when raise_exception then assert sqlerrm like 'Accounts are locked%', sqlerrm; end;
+  update businesses set city = 'Hacked' where id = b; assert (select city from businesses where id = b) is distinct from 'Hacked', 'cashier cannot edit profile';
+  begin perform team_save(b, 'evil@example.test', 'admin', null); assert false; exception when raise_exception then null; end;
+end $$;
+reset role;
+-- the admin can do everything except add admins
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000e1');
+do $$ declare b uuid := current_setting('test.glow'); begin
+  assert can_area(b, 'accounts') and can_area(b, 'settings'), 'admin has all areas';
+  begin perform team_save(b, 'second@example.test', 'admin', null); assert false; exception when raise_exception then assert sqlerrm like 'Only the owner%'; end;
+  begin perform team_remove(b, '00000000-0000-0000-0000-0000000000b1'); assert false; exception when raise_exception then assert sqlerrm like '%owner can''t%'; end;
+  perform team_save(b, 'cashier@example.test', 'staff', '{customers,attendance}');
+end $$;
+reset role;
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000e3', 'newcook@example.test');
+insert into profiles (id, role, email) values ('00000000-0000-0000-0000-0000000000e3', 'customer', 'newcook@example.test') on conflict (id) do nothing;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000e3');
+do $$ declare b uuid := current_setting('test.glow'); begin
+  assert claim_invites() = 1, 'invite claimed';
+  assert has_perm(b, 'menu') and has_perm(b, 'attendance') and not has_perm(b, 'customers'), 'perms from invite';
+  begin perform log_visit(b, '9822222222', 'X', 100, null); assert false, 'cook cannot log visits'; exception when others then null; end;
+end $$;
+reset role;
+
+update packages set modules = modules || '{accounting}' where slug = 'pro' and not ('accounting' = any(modules));
+create function pg_temp.sys(b uuid, k text) returns uuid language sql stable as $$ select id from public.acc_heads where business_id = b and system_key = k $$;
+grant execute on function pg_temp.sys(uuid, text) to authenticated;
+\echo '--- 19. Staff advances: instalments, skip a month, recovery in accounts'
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000b1');
+do $$ declare b uuid := current_setting('test.glow'); s uuid; a uuid; m date := date_trunc('month', (now() at time zone 'Asia/Kolkata'))::date; n numeric; r jsonb; begin
+  insert into staff (business_id, name, phone, pay_rate) values (b, 'Ravi', '9833333333', 15000) returning id into s;
+  a := advance_give(b, jsonb_build_object('staff_id', s, 'amount', 5000, 'monthly_cut', 2000, 'start_month', (m - interval '1 month')::date, 'paid_from', 'cash'));
+  assert advance_sync(b, (m - interval '1 month')::date) = 1, 'last month cut added';
+  assert advance_sync(b, (m - interval '1 month')::date) = 0, 'only once per month';
+  perform advance_skip(b, a, m, true);
+  assert advance_sync(b, m) = 0, 'skipped month has no cut';
+  perform advance_skip(b, a, m, false);
+  assert advance_sync(b, m) = 1, 'unskipped month gets cut';
+  select sum(amount) into n from salary_adjustments where advance_id = a; assert n = 4000, 'two cuts of 2000: ' || n;
+  assert advance_sync(b, (m + interval '1 month')::date) = 0, 'no cuts for future months';
+  r := advance_list(b); assert (r->0->>'recovered')::numeric = 4000, r::text;
+  -- accounts: the advance came out of cash into Staff advances
+  r := acc_balances(b, '2000-01-01', current_date + 400);
+  assert (select (x->>'c_dr')::numeric from jsonb_array_elements(r) x where x->>'system_key' = 'staff_adv') = 5000, 'advance in accounts';
+  assert (select (x->>'c_cr')::numeric from jsonb_array_elements(r) x where x->>'system_key' = 'cash') = 5000, 'paid from cash';
+  -- salary paid this month with 2000 recovered: expense = net + recovered
+  insert into salary_slips (business_id, staff_id, month, data, net, paid, paid_on) values (b, s, m, '{}', 13000, true, current_date);
+  assert acc_import_salary(b, m, current_date, pg_temp.sys(b, 'bank')) = 1;
+  r := acc_balances(b, m, current_date);
+  assert (select (x->>'p_dr')::numeric from jsonb_array_elements(r) x where x->>'system_key' = 'salary') = 15000, 'salary expense gross';
+  assert (select (x->>'c_cr')::numeric from jsonb_array_elements(r) x where x->>'system_key' = 'staff_adv') = 2000, 'advance reduced by recovery';
+  begin perform advance_delete(b, a); assert false; exception when raise_exception then assert sqlerrm like 'Part of this advance%'; end;
+  assert acc_import_salary(b, m, current_date, pg_temp.sys(b, 'bank')) = 1 and (select count(*) from acc_vouchers where business_id = b and source = 'salary') = 1, 're-import updates';
+end $$;
+reset role;
+
+\echo '--- 20. Accounts: balanced entries, GST split, P&L and balance sheet tie out'
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000b1');
+do $$ declare b uuid := current_setting('test.glow'); v uuid; r jsonb; cap uuid; inc numeric; exp numeric; ast numeric; lia numeric; eq numeric; begin
+  perform acc_setup(b); perform acc_setup(b);
+  assert (select count(*) from acc_heads where business_id = b and system_key = 'cash') = 1, 'setup is idempotent';
+  perform acc_post(b, jsonb_build_object('entry', 'opening', 'head_id', pg_temp.sys(b, 'bank'), 'amount', 100000, 'date', '2026-04-01'));
+  perform acc_post(b, jsonb_build_object('entry', 'income', 'head_id', pg_temp.sys(b, 'sales'), 'money_id', pg_temp.sys(b, 'bank'), 'amount', 10000, 'gst_rate', 18, 'party', 'Acme', 'gstin', '27abcde1234f1z5'));
+  perform acc_post(b, jsonb_build_object('entry', 'income', 'head_id', pg_temp.sys(b, 'sales'), 'money_id', pg_temp.sys(b, 'debtors'), 'amount', 2000, 'gst_rate', 5, 'igst', true));
+  v := acc_post(b, jsonb_build_object('entry', 'expense', 'head_id', (select id from acc_heads where business_id = b and name = 'Rent'), 'money_id', pg_temp.sys(b, 'cash'), 'amount', 3000));
+  perform acc_post(b, jsonb_build_object('entry', 'expense', 'head_id', pg_temp.sys(b, 'purchases'), 'money_id', pg_temp.sys(b, 'creditors'), 'amount', 4000, 'gst_rate', 5));
+  perform acc_post(b, jsonb_build_object('entry', 'asset', 'head_id', (select id from acc_heads where business_id = b and name = 'Equipment & machinery'), 'money_id', pg_temp.sys(b, 'bank'), 'amount', 20000, 'gst_rate', 18));
+  perform acc_post(b, jsonb_build_object('entry', 'loan_in', 'head_id', (select id from acc_heads where business_id = b and name = 'Loans'), 'money_id', pg_temp.sys(b, 'bank'), 'amount', 50000));
+  perform acc_post(b, jsonb_build_object('entry', 'transfer', 'head_id', pg_temp.sys(b, 'bank'), 'money_id', pg_temp.sys(b, 'debtors'), 'amount', 2100));
+  perform acc_post(b, jsonb_build_object('entry', 'drawings', 'head_id', pg_temp.sys(b, 'drawings'), 'money_id', pg_temp.sys(b, 'cash'), 'amount', 1000));
+  begin perform acc_post(b, jsonb_build_object('entry', 'expense', 'head_id', pg_temp.sys(b, 'sales'), 'money_id', pg_temp.sys(b, 'cash'), 'amount', 10)); assert false; exception when raise_exception then assert sqlerrm like 'Choose an expense%'; end;
+  begin perform acc_post(b, jsonb_build_object('entry', 'expense', 'head_id', pg_temp.sys(b, 'salary'), 'money_id', pg_temp.sys(b, 'salary'), 'amount', 10)); assert false; exception when raise_exception then null; end;
+  -- edit keeps the number
+  perform acc_post(b, jsonb_build_object('id', v, 'entry', 'expense', 'head_id', (select id from acc_heads where business_id = b and name = 'Rent'), 'money_id', pg_temp.sys(b, 'cash'), 'amount', 3500));
+  assert (select total from acc_vouchers where id = v) = 3500, 'edited';
+  -- automatic entries can't be edited as manual
+  begin perform acc_post(b, jsonb_build_object('id', (select id from acc_vouchers where business_id = b and source = 'salary' limit 1), 'entry', 'expense', 'head_id', pg_temp.sys(b, 'salary'), 'money_id', pg_temp.sys(b, 'cash'), 'amount', 1)); assert false;
+  exception when raise_exception then assert sqlerrm like '%automatically%'; end;
+  assert (select sum(dr) - sum(cr) from acc_lines where business_id = b) = 0, 'books balance';
+  assert (select cr from acc_lines l join acc_heads h on h.id = l.head_id where h.system_key = 'gst_out_c' and l.business_id = b) = 900, 'CGST half of 1800';
+  assert (select sum(cr) from acc_lines l join acc_heads h on h.id = l.head_id where h.system_key = 'gst_out_i' and l.business_id = b) = 100, 'IGST full';
+  -- statement totals from balances
+  r := acc_balances(b, '2000-01-01', current_date + 400);
+  select sum((x->>'c_cr')::numeric - (x->>'c_dr')::numeric) filter (where x->>'kind' = 'income'), sum((x->>'c_dr')::numeric - (x->>'c_cr')::numeric) filter (where x->>'kind' = 'expense'),
+         sum((x->>'c_dr')::numeric - (x->>'c_cr')::numeric) filter (where x->>'kind' = 'asset'), sum((x->>'c_cr')::numeric - (x->>'c_dr')::numeric) filter (where x->>'kind' = 'liability'),
+         sum((x->>'c_cr')::numeric - (x->>'c_dr')::numeric) filter (where x->>'kind' = 'equity')
+    into inc, exp, ast, lia, eq from jsonb_array_elements(r) x;
+  assert ast = lia + eq + (inc - exp), format('balance sheet ties: assets %s = liab %s + equity %s + profit %s', ast, lia, eq, inc - exp);
+  -- visits import is idempotent
+  perform acc_import_visits(b, current_date - 30, current_date + 1, pg_temp.sys(b, 'cash'), 5, true);
+  perform acc_import_visits(b, current_date - 30, current_date + 1, pg_temp.sys(b, 'cash'), 5, true);
+  assert (select count(*) from acc_vouchers where business_id = b and source = 'visits') = (select count(distinct (created_at at time zone 'Asia/Kolkata')::date) from visits where business_id = b and created_at > now() - interval '31 days' and net > 0), 'one per day';
+end $$;
+reset role;
+-- the cashier (customers + attendance) can't read the books; the admin can
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000e2');
+do $$ begin assert (select count(*) from acc_vouchers) = 0 and (select count(*) from acc_heads) = 0, 'cashier cannot read accounts';
+  begin perform acc_balances(current_setting('test.glow')::uuid, current_date, current_date); assert false; exception when raise_exception then null; end; end $$;
+reset role;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000e1');
+do $$ begin assert (select count(*) from acc_vouchers) > 5, 'admin reads accounts'; end $$;
+reset role;
 \echo 'ALL TESTS PASSED'

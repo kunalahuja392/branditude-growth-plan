@@ -55,6 +55,8 @@ Deno.serve(async (req: Request) => {
   if (!pay) return json({ error: "Payment not found" }, 404);
   const { data: m } = await admin.from("business_members").select("role").eq("business_id", pay.business_id).eq("user_id", u.user.id).maybeSingle();
   if (!m) return json({ error: "Not allowed" }, 403);
+  const { data: okPerm } = await admin.rpc("member_has_perm", { b: pay.business_id, u: u.user.id, area: "settings" });
+  if (!okPerm) return json({ error: "Only the owner or an admin can make payments." }, 403);
 
   if (body.action === "order") {
     if (pay.status !== "pending") return json({ error: "This payment is already " + pay.status + "." }, 400);
