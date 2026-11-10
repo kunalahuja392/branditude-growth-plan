@@ -839,6 +839,14 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape" && co) clos
     const r = await bgpInstall.prompt(); status.hidden = false;
     status.textContent = r === "accepted" ? "Installed. Open Branditude Growth from your home screen or Start menu." : r === "dismissed" ? "No problem. You can install it any time from here." : "Use the steps below to install."; });
 })();
+// In-page links (#pricing, #faq…) scroll smoothly without adding "#…" to the address bar
+document.addEventListener("click", (e) => {
+  const a = e.target.closest('a[href^="#"]'); if (!a || e.defaultPrevented) return;
+  const id = a.getAttribute("href").slice(1), el = id ? document.getElementById(id) : document.body;
+  if (!el) return;
+  e.preventDefault(); el.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+});
+if (location.hash) history.replaceState(null, "", location.pathname + location.search);
 load();
 </script>
 </body>
