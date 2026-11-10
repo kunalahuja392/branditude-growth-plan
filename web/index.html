@@ -846,7 +846,7 @@ document.addEventListener("click", (e) => {
   if (!el) return;
   e.preventDefault(); el.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
 });
-if (location.hash) history.replaceState(null, "", location.pathname + location.search);
+if (location.hash) { const t = document.getElementById(location.hash.slice(1)); history.replaceState(null, "", location.pathname + location.search); if (t) addEventListener("load", () => setTimeout(() => t.scrollIntoView({ block: "start" }), 300)); }
 load();
 </script>
 </body>
