@@ -21,12 +21,14 @@ const item = (r, label, icon, badge = "") => [r, label, icon, lockBadge(r, badge
 const ROUTES = () => [
   { label: "", items: [item("dashboard", "Dashboard", "dash"), item("customers", "Customers", "users"), item("reviews", "Google reviews", "star"), item("feedback", "Feedback", "smile", openComplaints() || ""), item("seo", "Keywords & SEO", "spark"), item("replies", "Google replies", "star", hasMod("google_replies") ? gbpPending() || "" : ""),
     item("offers", "Offers & coupons", "tag"), item("loyalty", "Loyalty card", "card"), item("whatsapp", "WhatsApp & reminders", "wa"), item("templates", "Message templates", "send"), item("alerts", "Alerts", "bell", hasMod("campaigns") ? alerts().length || "" : "")] },
-  { label: "Run the shop", items: [item("orders", "Orders", "receipt", hasMod("menu") ? D.newOrders || "" : ""), item("menu", "QR menu", "food"), item("staff", "Staff & attendance", "clock"), item("salary", "Salary", "rupee")] },
+  { label: "Run the shop", items: [...(fitsBiz("menu") ? [item("orders", "Orders", "receipt", hasMod("menu") ? D.newOrders || "" : ""), item("menu", "QR menu", "food")] : []), item("staff", "Staff & attendance", "clock"), item("salary", "Salary", "rupee")] },
   { label: "Account", items: [["plan", "Plan & services", "box"], ["profile", "Business profile", "store"], ["signout", "Sign out", "out"]] },
 ];
 // On when: core module, in the plan, bought as an add-on, or on the free trial (everything unlocked). The database checks the same rule.
 const hasMod = (m) => D.biz?.status === "trial" || !!(D.mods || []).find((x) => x.key === m && x.core) || (D.biz?.packages?.modules || []).includes(m) || (D.biz?.addon_modules || []).includes(m);
 const modInfo = (k) => (D.mods || []).find((x) => x.key === k);
+// Hide features that don't fit this kind of business (e.g. table ordering for a salon). Set per module in modules.categories.
+const fitsBiz = (k) => { const m = modInfo(k), slug = D.biz?.categories?.slug; return !m?.categories || !slug || m.categories.includes(slug); };
 const route = () => { const h = location.hash.slice(1).split("?")[0]; return ROUTES().flatMap((g) => g.items).some((r) => r[0] === h) ? h : "dashboard"; };
 
 export async function mount(ctx) {
@@ -45,7 +47,7 @@ export async function mount(ctx) {
 async function loadAll() {
   const since = new Date(Date.now() - 60 * 864e5).toISOString();
   const [biz, customers, coupons, feedback, reminders, visits, prog, rewards, wallet, settings] = await Promise.all([
-    q(sb.from("businesses").select("*, categories(id,name,icon), packages(*)").eq("id", BID).single()),
+    q(sb.from("businesses").select("*, categories(id,name,icon,slug), packages(*)").eq("id", BID).single()),
     q(sb.from("customers").select("*").eq("business_id", BID).order("last_visit", { ascending: false, nullsFirst: false }).limit(5000)),
     q(sb.from("coupons").select("*").eq("business_id", BID).order("created_at", { ascending: false })),
     q(sb.from("feedback").select("*").eq("business_id", BID).order("created_at", { ascending: false }).limit(500)),
@@ -63,7 +65,7 @@ async function loadAll() {
 }
 async function reload(...keys) {
   const map = {
-    biz: async () => (D.biz = await q(sb.from("businesses").select("*, categories(id,name,icon), packages(*)").eq("id", BID).single())),
+    biz: async () => (D.biz = await q(sb.from("businesses").select("*, categories(id,name,icon,slug), packages(*)").eq("id", BID).single())),
     customers: async () => (D.customers = await q(sb.from("customers").select("*").eq("business_id", BID).order("last_visit", { ascending: false, nullsFirst: false }).limit(5000))),
     coupons: async () => (D.coupons = await q(sb.from("coupons").select("*").eq("business_id", BID).order("created_at", { ascending: false }))),
     feedback: async () => (D.feedback = await q(sb.from("feedback").select("*").eq("business_id", BID).order("created_at", { ascending: false }).limit(500))),
@@ -503,13 +505,13 @@ after.plan = async () => {
   D.pays = pays;
 };
 function addonsCard(pend) {
-  const b = D.biz, mods = (D.mods || []).filter((m) => !m.core), yr = b.billing === "yearly";
+  const b = D.biz, mods = (D.mods || []).filter((m) => !m.core && fitsBiz(m.key)), yr = b.billing === "yearly";
   if (!mods.length) return "";
   const inPlan = (k) => (b.packages?.modules || []).includes(k), bought = (k) => (b.addon_modules || []).includes(k);
   const waiting = (k) => pend.some((p) => p.kind === "module" && p.meta?.module === k);
   return `<div class="card" style="margin-top:16px"><div class="card-head"><h2>Features & add-ons</h2>${b.status === "trial" ? '<span class="pill acc">All unlocked on trial</span>' : ""}</div>
     <p class="muted small" style="margin-top:-6px">Add any single feature to your plan. Add-ons renew with your plan.</p>
-    <div class="list">${(D.mods || []).map((m) => `<div class="item"><span style="font-size:20px" aria-hidden="true">${esc(m.icon)}</span><div class="grow"><b>${esc(m.name)}</b><span class="muted small">${esc(m.blurb)}</span></div>
+    <div class="list">${(D.mods || []).filter((m) => fitsBiz(m.key)).map((m) => `<div class="item"><span style="font-size:20px" aria-hidden="true">${esc(m.icon)}</span><div class="grow"><b>${esc(m.name)}</b><span class="muted small">${esc(m.blurb)}</span></div>
       ${m.core || inPlan(m.key) ? '<span class="pill good">In your plan</span>' : bought(m.key) ? '<span class="pill good">Add-on on</span>' : waiting(m.key) ? '<span class="pill warn">Payment waiting</span>'
         : m.addon_price != null ? `<b class="num">${inr(m.addon_price * (yr ? 10 : 1))}${yr ? "/yr" : "/mo"}</b><button class="btn sm" data-a="buy-module" data-id="${m.id}">Add</button>` : ""}</div>`).join("")}</div></div>`;
 }

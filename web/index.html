@@ -417,8 +417,19 @@ input:focus,select:focus{outline:2px solid var(--accent-soft);border-color:var(-
   .hero{padding-bottom:64px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
-.cat-pick{max-width:420px;margin:-10px 0 34px}
-.cat-pick select{font-size:17px;padding:13px 14px}
+.biz-pick{background:var(--card);border:2px solid var(--accent);border-radius:24px;padding:24px;margin:-6px 0 34px;box-shadow:0 18px 40px -24px rgba(240,122,26,.5)}
+.biz-pick h3{font-size:clamp(20px,2.4vw,26px);font-weight:800;letter-spacing:-.02em}
+.biz-pick>p{color:var(--ink-2);margin:4px 0 16px}
+.chips{display:flex;flex-wrap:wrap;gap:10px}
+.chip{display:inline-flex;align-items:center;gap:8px;border:1.5px solid var(--line);background:var(--paper);color:var(--ink);border-radius:14px;padding:12px 16px;font:600 16px var(--body);cursor:pointer;transition:border-color .15s,background .15s,transform .15s}
+.chip:hover{border-color:var(--accent)}
+.chip .e{font-size:20px;line-height:1}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 8px 18px -8px rgba(240,122,26,.8)}
+.chip:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.for-note{font-size:13px;color:var(--ink-3);margin-top:-4px}
+.main4.three .m4-att{grid-column:1/-1}
+@media (max-width:520px){.biz-pick{padding:18px;border-radius:20px}.chips{display:grid;grid-template-columns:1fr 1fr;gap:8px}.chip{padding:12px;font-size:14.5px;justify-content:flex-start;text-align:left;line-height:1.25}}
+
 .price s{font:600 18px var(--body);color:var(--ink-3)}
 .sale{display:inline-block;background:var(--accent-soft);color:var(--accent);font-weight:700;font-size:13px;border-radius:99px;padding:3px 10px}
 .svc-list{display:flex;flex-direction:column;gap:2px;max-height:240px;overflow:auto}
@@ -533,7 +544,12 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
       <div class="sec-head"><h2>Plans that pay for themselves with a few extra visits a month.</h2>
         <div class="toggle" role="group" aria-label="Billing period"><button type="button" data-bill="monthly" aria-pressed="true">Monthly</button><button type="button" data-bill="yearly" aria-pressed="false">Yearly <span class="save">2 months free</span></button></div>
       </div>
-      <div class="field cat-pick"><label for="cat">What kind of business do you run?</label><select id="cat"><option value="">Loading…</option></select></div>
+      <div class="biz-pick" role="group" aria-labelledby="biz-pick-t">
+        <h3 id="biz-pick-t">First, what kind of business do you run?</h3>
+        <p>We'll show only the features that fit your business.</p>
+        <div class="chips" id="cat-chips"><span class="gst">Loading…</span></div>
+        <select id="cat" hidden aria-hidden="true" tabindex="-1"><option value=""></option></select>
+      </div>
       <div class="plans" id="plans"><p class="gst">Loading plans…</p></div>
       <div class="compare-wrap" id="compare-wrap" hidden>
         <h3 class="cmp-title">Compare what's in each plan</h3>
@@ -642,7 +658,9 @@ async function load() {
   const saved = (() => { try { return localStorage.getItem("bgp_cat") || ""; } catch { return ""; } })();
   cat = CATS.some((x) => x.id === saved) ? saved : "";
   $("#cat").innerHTML = `<option value="">Choose your business type</option>` + CATS.map((x) => `<option value="${x.id}" ${x.id === cat ? "selected" : ""}>${esc(x.icon)} ${esc(x.name)}</option>`).join("");
-  $("#cat").onchange = (e) => { cat = e.target.value; try { localStorage.setItem("bgp_cat", cat); } catch {} drawServices(); };
+  $("#cat").onchange = (e) => setCat(e.target.value);
+  $("#cat-chips").innerHTML = CATS.map((x) => `<button type="button" class="chip" data-cat="${x.id}" aria-pressed="${x.id === cat}"><span class="e" aria-hidden="true">${esc(x.icon)}</span>${esc(x.name)}</button>`).join("");
+  applyCat();
   document.querySelectorAll("[data-wa]").forEach((a) => (a.href = waLink(a.dataset.wa)));
   const a = SET.agency || {}, row = (label, val, href) => (val ? `<div><small>${label}</small>${href ? `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(val)}</a>` : `<span>${esc(val)}</span>`}</div>` : "");
   $("#cinfo").innerHTML = row("WhatsApp", a.whatsapp ? "+" + a.whatsapp : "", a.whatsapp ? waLink("Hi Branditude!") : "") + row("Call", a.phone, a.phone ? "tel:" + a.phone : "") + row("Email", a.email, a.email ? "mailto:" + a.email : "") + row("Office", a.address) + row("Hours", a.hours) || `<div><small>Contact</small><span>Details coming soon</span></div>`;
@@ -653,12 +671,24 @@ async function load() {
   const gr = +(SET.gst?.rate ?? 0); $("#gst-note").textContent = gr > 0 ? `Prices are in Indian rupees and exclude ${Math.round(gr * 100)}% GST, which is added at checkout.` : "Prices are in Indian rupees. No GST is charged.";
   drawPlans(); drawServices();
 }
+// Features that only fit some businesses (e.g. table ordering for food places). modules.categories holds the slugs.
+const FEAT_RX = { menu: /qr menu|table order/i };
+const catSlug = () => CATS.find((x) => x.id === cat)?.slug || "";
+const fits = (m) => !m || !m.categories || !catSlug() || m.categories.includes(catSlug());
+const hiddenMods = () => MODS.filter((m) => !fits(m)).map((m) => m.key);
+function setCat(id) { cat = id; try { localStorage.setItem("bgp_cat", cat); } catch {} $("#cat").value = cat; applyCat(); }
+function applyCat() {
+  document.querySelectorAll("[data-cat]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.cat === cat));
+  const menuOff = hiddenMods().includes("menu"), card = document.querySelector(".m4-menu");
+  if (card) { card.hidden = menuOff; card.parentElement.classList.toggle("three", menuOff); }
+  drawPlans(); drawServices();
+}
 function drawPlans() {
   $("#plans").innerHTML = PKGS.map((p) => `<div class="plan${p.is_popular ? " pop" : ""}">${p.is_popular ? '<span class="badge">Most popular</span>' : ""}
     <div><h3>${esc(p.name)}</h3><p class="for">${esc(p.tagline)}</p></div>
     <div class="price"><b class="num">${inr(Math.round(price(p)))}</b><span>/${billing === "monthly" ? "month" : "year"}</span>${+p.discount_percent ? ` <s class="num">${inr(full(p))}</s>` : ""}</div>
     <p class="bill">${+p.discount_percent ? `<span class="sale">${+p.discount_percent}% off${p.discount_label ? " · " + esc(p.discount_label) : ""}</span> ` : ""}${billing === "monthly" ? "Billed monthly" : "Works out to " + inr(Math.round(price(p) / 12)) + "/month"}</p>
-    <ul>${p.features.map((f) => `<li${KEY_RX.test(f) ? ' class="key"' : ""}>${esc(f)}</li>`).join("")}</ul>
+    <ul>${p.features.filter((f) => !hiddenMods().some((k) => FEAT_RX[k]?.test(f))).map((f) => `<li${KEY_RX.test(f) ? ' class="key"' : ""}>${esc(f)}</li>`).join("")}</ul>
     <button class="btn ${p.is_popular ? "primary" : "line"}" data-buy="${p.id}">${TRIAL ? `Start ${TRIAL}-day free trial` : `Get ${esc(p.name)}`}</button></div>`).join("");
   document.querySelectorAll("[data-bill]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.bill === billing));
   drawCompare();
@@ -667,7 +697,7 @@ function drawCompare() {
   if (!MODS.length || !PKGS.length) return;
   const yr = billing === "yearly", unit = yr ? "/yr" : "/mo";
   $("#compare").innerHTML = `<thead><tr><th scope="col">Feature</th>${PKGS.map((p) => `<th scope="col" class="${p.is_popular ? "pop" : ""}">${esc(p.name)}<small class="num">${inr(Math.round(price(p)))}${yr ? "/year" : "/month"}</small></th>`).join("")}</tr></thead>
-    <tbody>${[...MODS].sort((x, y) => (KEY_MODS.includes(y.key) - KEY_MODS.includes(x.key)) || x.sort - y.sort).map((m) => `<tr class="${KEY_MODS.includes(m.key) ? "key" : ""}"><td><b>${esc(m.icon)} ${esc(m.name)}</b><span>${esc(m.blurb)}</span></td>${PKGS.map((p) => {
+    <tbody>${MODS.filter(fits).sort((x, y) => (KEY_MODS.includes(y.key) - KEY_MODS.includes(x.key)) || x.sort - y.sort).map((m) => `<tr class="${KEY_MODS.includes(m.key) ? "key" : ""}"><td><b>${esc(m.icon)} ${esc(m.name)}</b><span>${esc(m.blurb)}</span></td>${PKGS.map((p) => {
       const inc = m.core || (p.modules || []).includes(m.key);
       return `<td class="${p.is_popular ? "popc" : ""}">${inc ? '<span class="yes" aria-label="Included">✓</span>' : m.addon_price != null ? `<span class="add num">+${inr(m.addon_price * (yr ? 10 : 1))}${unit}</span>` : '<span aria-label="Not available">–</span>'}</td>`; }).join("")}</tr>`).join("")}
     <tr><td><b>📍 Locations</b></td>${PKGS.map((p) => `<td class="${p.is_popular ? "popc" : ""}"><b class="num">${p.max_locations}</b></td>`).join("")}</tr></tbody>`;
@@ -680,6 +710,7 @@ function drawServices() {
 }
 document.addEventListener("click", (e) => {
   const b = e.target.closest("[data-bill]"); if (b) { billing = b.dataset.bill; drawPlans(); }
+  const c = e.target.closest("[data-cat]"); if (c) setCat(c.dataset.cat === cat ? "" : c.dataset.cat);
   const buy = e.target.closest("[data-buy]"); if (buy) openCheckout(buy.dataset.buy);
 });
 
