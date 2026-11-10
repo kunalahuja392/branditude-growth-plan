@@ -521,7 +521,7 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
     <div class="wrap">
       <div class="sec-head"><h2>Live in two days. Growing from week one.</h2></div>
       <div class="steps" id="steps">
-        <div class="step"><span class="d">1</span><h3>Pick a plan and pay</h3><p>Choose a plan below, add your business details, and pay by UPI. You'll get an order ID right away.</p></div>
+        <div class="step"><span class="d">1</span><h3>Pick a plan and pay</h3><p>Choose a plan below, add your business details, and pay online by UPI, card or netbanking. Your plan switches on straight away.</p></div>
         <div class="step"><span class="d">2</span><h3>We set you up in 48 hours</h3><p>We connect your Google review link, import your existing customer numbers, create your first offers, and train your staff on WhatsApp.</p></div>
         <div class="step"><span class="d">3</span><h3>Log visits, earn reviews, send offers</h3><p>Log each visit in 10 seconds. The app does the rest: review requests, birthday wishes and win-back messages.</p></div>
       </div>
@@ -556,8 +556,8 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
         <details><summary>Is my customer data safe?</summary><p>Your customer list is private to your account. We never message your customers ourselves unless you ask us to, and you can export or delete your data at any time.</p></details>
         <details><summary>Can I add just one feature without upgrading?</summary><p>Yes. Every feature that isn't in your plan can be added on its own for a monthly price (shown in the table above), from Plan &amp; services in your dashboard. If your add-ons cost more than the next plan, we'll show you the plan instead.</p></details>
         <details><summary>Can I cancel?</summary><p>Monthly plans can be cancelled before the next billing date. Yearly plans are paid upfront and get two months free.</p></details>
-        <details><summary>Is there a free trial?</summary><p id="faq-trial">Yes. Every new business gets 3 days free with everything unlocked. Pay by UPI any time during the trial to keep going. If you don't pay, your account turns read-only and your data stays safe.</p></details>
-        <details><summary>How do I pay?</summary><p>Pay by UPI from any app (GPay, PhonePe, Paytm, BHIM). You'll get an invoice on WhatsApp and email after we confirm the payment.</p></details>
+        <details><summary>Is there a free trial?</summary><p id="faq-trial">Yes. Every new business gets 3 days free with everything unlocked. Pay any time during the trial to keep going. If you don't pay, your account turns read-only and your data stays safe.</p></details>
+        <details><summary>How do I pay?</summary><p>Pay online through Razorpay with UPI (GPay, PhonePe, Paytm, BHIM), debit or credit card, netbanking or wallets. Your plan or add-on switches on as soon as the payment goes through.</p></details>
       </div>
     </div>
   </section>
@@ -648,7 +648,7 @@ async function load() {
   $("#cinfo").innerHTML = row("WhatsApp", a.whatsapp ? "+" + a.whatsapp : "", a.whatsapp ? waLink("Hi Branditude!") : "") + row("Call", a.phone, a.phone ? "tel:" + a.phone : "") + row("Email", a.email, a.email ? "mailto:" + a.email : "") + row("Office", a.address) + row("Hours", a.hours) || `<div><small>Contact</small><span>Details coming soon</span></div>`;
   $("#foot-left").textContent = "© " + new Date().getFullYear() + " " + (a.legal_name || "Branditude") + (a.website ? " · " + a.website : "");
   TRIAL = Math.max(0, parseInt(SET.trial?.days ?? 0, 10) || 0);
-  if (TRIAL) { $("#hero-fine").innerHTML = `<span>${TRIAL}-day free trial</span><span>No long contract</span><span>Cancel any month</span>`; $("#faq-trial").textContent = `Yes. Every new business gets ${TRIAL} day${TRIAL > 1 ? "s" : ""} free with everything unlocked. Pay by UPI any time during the trial to keep going. If you don't pay, your account turns read-only and your data stays safe.`; }
+  if (TRIAL) { $("#hero-fine").innerHTML = `<span>${TRIAL}-day free trial</span><span>No long contract</span><span>Cancel any month</span>`; $("#faq-trial").textContent = `Yes. Every new business gets ${TRIAL} day${TRIAL > 1 ? "s" : ""} free with everything unlocked. Pay any time during the trial to keep going. If you don't pay, your account turns read-only and your data stays safe.`; }
   else { $("#hero-fine").innerHTML = "<span>Live in 48 hours</span><span>No long contract</span><span>Cancel any month</span>"; $("#faq-trial").closest("details").remove(); }
   const gr = +(SET.gst?.rate ?? 0); $("#gst-note").textContent = gr > 0 ? `Prices are in Indian rupees and exclude ${Math.round(gr * 100)}% GST, which is added at checkout.` : "Prices are in Indian rupees. No GST is charged.";
   drawPlans(); drawServices();
@@ -702,7 +702,7 @@ function readStep1() {
   co.cat = v("b-cat"); co.pkg = v("b-plan"); co.billing = v("b-bill") || co.billing; co.promo = v("b-promo");
 }
 function draw() {
-  const steps = ["Your business", "Create your account", co.result?.trial ? "Your free trial has started" : "Pay by UPI", "Done"];
+  const steps = ["Your business", "Create your account", co.result?.trial ? "Your free trial has started" : (rzpOn(SET) ? "Pay online" : "Pay by UPI"), "Done"];
   let body = "", foot = "";
   if (co.step === 1) {
     const prods = PRODS.filter((p) => !p.product_categories.length || p.product_categories.some((x) => x.category_id === co.cat));
@@ -731,14 +731,15 @@ function draw() {
     const p = SET.payment || {}, ref = "BGP-" + co.payment_id.slice(0, 8).toUpperCase();
     const link = p.upi_id ? `upi://pay?pa=${encodeURIComponent(p.upi_id)}&pn=${encodeURIComponent(p.upi_name || "Branditude")}&am=${(+co.result.total).toFixed(2)}&cu=INR&tn=${encodeURIComponent(ref)}` : "";
     const trialNote = co.result.trial ? `<div class="note" style="margin-bottom:18px"><b>Everything is unlocked until ${new Date(co.result.trial_ends + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "long" })}.</b> Pay now or any time before then to keep it running after the trial.</div>` : "";
-    const online = rzpOn(SET) ? `<div style="margin-bottom:18px"><button class="btn primary" data-co="rzp" style="width:100%;justify-content:center">Pay ${inr(co.result.total)} online</button><p style="color:var(--ink-3);font-size:13px;text-align:center;margin-top:6px">UPI, cards, netbanking or wallets. Your plan switches on instantly.</p>${p.upi_id ? `<p style="color:var(--ink-3);font-size:13px;text-align:center;margin-top:14px">or scan and pay by UPI</p>` : ""}</div>` : "";
-    body = trialNote + online + (p.upi_id ? `<div class="pay"><div class="qrbox" id="upi-qr"></div><div><p style="color:var(--ink-2);font-size:15px">Scan with any UPI app, or pay to</p><p class="upi">${esc(p.upi_id)}</p>
+    const showUpi = p.upi_id && !rzpOn(SET);
+    const online = rzpOn(SET) ? `<div style="margin-bottom:18px"><button class="btn primary" data-co="rzp" style="width:100%;justify-content:center">Pay ${inr(co.result.total)} online</button><p style="color:var(--ink-3);font-size:13px;text-align:center;margin-top:6px">UPI, cards, netbanking or wallets. Your plan switches on instantly.</p>${showUpi ? `<p style="color:var(--ink-3);font-size:13px;text-align:center;margin-top:14px">or scan and pay by UPI</p>` : ""}</div>` : "";
+    body = trialNote + online + (showUpi ? `<div class="pay"><div class="qrbox" id="upi-qr"></div><div><p style="color:var(--ink-2);font-size:15px">Scan with any UPI app, or pay to</p><p class="upi">${esc(p.upi_id)}</p>
         <p style="margin-top:10px">Amount <b class="num">${inr(co.result.total)}</b></p><p style="color:var(--ink-3);font-size:14px">Add <b>${ref}</b> in the payment note</p><a class="btn sm primary" href="${esc(link)}" style="margin-top:10px">Open UPI app</a></div></div>
       <div class="field" style="margin-top:20px"><label for="utr">UPI transaction ID (12-digit UTR)</label><input id="utr" inputmode="numeric" placeholder="e.g. 431298765012"></div><p class="err" id="err"></p>`
-      : `<div class="note">Your account is ready. Branditude will share payment details with you shortly.</div>`);
+      : online ? "" : `<div class="note">Your account is ready. Branditude will share payment details with you shortly.</div>`);
     foot = co.result.trial
-      ? `${p.upi_id ? `<button class="btn line sm" data-co="paid">I've paid</button>` : ""}<a class="btn primary" href="app.html">Start using my free trial</a>`
-      : `<a class="btn line sm" href="app.html#plan">Pay later</a>${p.upi_id ? `<button class="btn primary" data-co="paid">I've paid</button>` : `<a class="btn primary" href="app.html">Go to my dashboard</a>`}`;
+      ? `${showUpi ? `<button class="btn line sm" data-co="paid">I've paid</button>` : ""}<a class="btn primary" href="app.html">Start using my free trial</a>`
+      : `<a class="btn line sm" href="app.html#plan">Pay later</a>${showUpi ? `<button class="btn primary" data-co="paid">I've paid</button>` : `<a class="btn primary" href="app.html">Go to my dashboard</a>`}`;
   } else {
     body = `<div class="done-mark"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></div>
       <h3 style="font-size:22px">${co.pendingConfirm ? "Check your email" : co.enquiry ? "Thanks! We'll be in touch" : "You're all set"}</h3>
@@ -749,7 +750,7 @@ function draw() {
   $("#checkout-root").innerHTML = `<div class="back" data-co="backdrop"><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="co-title">
     <div class="sheet-head"><h2 id="co-title">${steps[co.step - 1]}</h2><button class="x" data-co="close" aria-label="Close">×</button></div>
     <div class="prog">${steps.map((s, i) => `<i class="${i < co.step ? "on" : ""}"></i>`).join("")}</div><div class="sheet-body">${body}</div><div class="sheet-foot">${foot}</div></div></div>`;
-  if (co.step === 3 && SET.payment?.upi_id && window.QRCode) new QRCode($("#upi-qr"), { text: `upi://pay?pa=${SET.payment.upi_id}&pn=${encodeURIComponent(SET.payment.upi_name || "Branditude")}&am=${(+co.result.total).toFixed(2)}&cu=INR&tn=BGP-${co.payment_id.slice(0, 8).toUpperCase()}`, width: 170, height: 170, colorDark: "#121a33", colorLight: "#ffffff" });
+  if (co.step === 3 && $("#upi-qr") && window.QRCode) new QRCode($("#upi-qr"), { text: `upi://pay?pa=${SET.payment.upi_id}&pn=${encodeURIComponent(SET.payment.upi_name || "Branditude")}&am=${(+co.result.total).toFixed(2)}&cu=INR&tn=BGP-${co.payment_id.slice(0, 8).toUpperCase()}`, width: 170, height: 170, colorDark: "#121a33", colorLight: "#ffffff" });
   if (co.step === 1 && !co.quote) refreshQuote();
 }
 const err = (m) => { const e = $("#err"); if (e) e.textContent = m; };

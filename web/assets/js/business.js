@@ -515,15 +515,16 @@ function addonsCard(pend) {
 }
 async function payModal(paymentId) {
   const p = D.pays?.find((x) => x.id === paymentId) || (await q(sb.from("payments").select("*").eq("id", paymentId).single()));
-  const upi = D.settings.payment || {}; const ref = "BGP-" + p.id.slice(0, 8).toUpperCase();
+  const online = rzpOn(D.settings);
+  const upi = online ? {} : D.settings.payment || {}; const ref = "BGP-" + p.id.slice(0, 8).toUpperCase();
   const link = upi.upi_id ? `upi://pay?pa=${encodeURIComponent(upi.upi_id)}&pn=${encodeURIComponent(upi.upi_name || "Branditude")}&am=${(+p.total).toFixed(2)}&cu=INR&tn=${encodeURIComponent(ref)}` : "";
   const m = openModal(`<div class="modal-head"><h2>Pay ${inr2(p.total)}</h2><button class="btn ghost" data-close>Close</button></div>
     <p class="muted small">${esc(p.description)}${+p.gst ? ` · ${inr2(p.amount)} + GST ${inr2(p.gst)}` : ""}</p>
     ${rzpOn(D.settings) ? `<div class="rzp-box"><button class="btn primary" id="rzp-go" style="width:100%;justify-content:center">Pay ${inr2(p.total)} online</button><p class="small muted" style="margin-top:6px;text-align:center">UPI, cards, netbanking or wallets. Switches on instantly.</p></div>
-      ${upi.upi_id ? `<p class="small muted" style="text-align:center;margin:14px 0 0">or pay to our UPI ID and enter the reference</p>` : ""}` : ""}
-    ${upi.upi_id ? `<div class="row" style="gap:18px;margin-top:14px;align-items:center"><div class="qr" id="pay-qr"></div><div><p class="small muted">Scan with any UPI app, or pay to</p><p style="font:800 18px var(--display)">${esc(upi.upi_id)}</p><p class="small muted">Add <b>${ref}</b> in the note</p><a class="btn sm primary" href="${esc(link)}" style="margin-top:8px">Open UPI app</a></div></div>` : `<div class="note">Branditude hasn't added a UPI ID yet. Contact them to pay.</div>`}
-    <div class="field" style="margin-top:18px"><label for="utr">UPI transaction ID (12-digit UTR)</label><input id="utr" inputmode="numeric" placeholder="e.g. 431298765012"></div><p class="err" id="utr-err"></p>
-    <div class="modal-foot"><button class="btn" data-close>Later</button><button class="btn primary" id="utr-go">I've paid</button></div>`);
+` : ""}
+    ${upi.upi_id ? `<div class="row" style="gap:18px;margin-top:14px;align-items:center"><div class="qr" id="pay-qr"></div><div><p class="small muted">Scan with any UPI app, or pay to</p><p style="font:800 18px var(--display)">${esc(upi.upi_id)}</p><p class="small muted">Add <b>${ref}</b> in the note</p><a class="btn sm primary" href="${esc(link)}" style="margin-top:8px">Open UPI app</a></div></div>` : online ? "" : `<div class="note">Branditude hasn't added a UPI ID yet. Contact them to pay.</div>`}
+    ${online ? `<div class="modal-foot"><button class="btn" data-close>Later</button></div>` : `<div class="field" style="margin-top:18px"><label for="utr">UPI transaction ID (12-digit UTR)</label><input id="utr" inputmode="numeric" placeholder="e.g. 431298765012"></div><p class="err" id="utr-err"></p>
+    <div class="modal-foot"><button class="btn" data-close>Later</button><button class="btn primary" id="utr-go">I've paid</button></div>`}`);
   if (link && window.QRCode) new QRCode(m.querySelector("#pay-qr"), { text: link, width: 150, height: 150, colorDark: "#16203a", colorLight: "#ffffff" });
   const rz = m.querySelector("#rzp-go");
   if (rz) rz.onclick = async () => {
@@ -533,13 +534,23 @@ async function payModal(paymentId) {
     catch (e) { toast(e.message, "error"); }
     rz.disabled = false; rz.textContent = `Pay ${inr2(p.total)} online`;
   };
-  m.querySelector("#utr-go").onclick = async () => {
+  const ug = m.querySelector("#utr-go");
+  if (ug) ug.onclick = async () => {
     try { await q(sb.rpc("submit_utr", { p_payment: p.id, p_utr: m.querySelector("#utr").value.trim() })); closeModal(); toast("Thanks! We'll confirm your payment shortly."); if (p.kind === "subscription") D.payWaiting = true; render(); }
     catch (e) { m.querySelector("#utr-err").textContent = e.message; }
   };
 }
 async function order(kind, ref, billing) {
-  const r = await q(sb.rpc("create_order", { p_business: BID, p_kind: kind, p_ref: ref, p_billing: billing || "monthly" }));
+  let r;
+  try { r = await q(sb.rpc("create_order", { p_business: BID, p_kind: kind, p_ref: ref, p_billing: billing || "monthly" })); }
+  catch (e) { // an unpaid one is already waiting: open it instead of failing
+    if (kind === "module" && /payment waiting/.test(e.message)) {
+      const key = (D.mods || []).find((m) => m.id === ref)?.key;
+      const pend = await q(sb.from("payments").select("id,meta").eq("business_id", BID).eq("kind", "module").eq("status", "pending"));
+      const hit = pend.find((x) => x.meta?.module === key); if (hit) { D.pays = null; return payModal(hit.id); }
+    }
+    throw e;
+  }
   D.pays = null; await payModal(r.payment_id);
 }
 
@@ -559,7 +570,7 @@ function lockedView(key) {
     <div class="row" style="justify-content:center;margin-top:16px;flex-wrap:wrap;gap:10px">
       ${price != null ? `<button class="btn primary" data-a="buy-module" data-id="${md.id}">Add it for ${inr(price)}${yr ? "/year" : "/month"}${plusGst()}</button>` : ""}
       <span id="lock-plan"></span></div>
-    <p class="small muted" style="margin-top:14px">Your data is safe. Pay by UPI and it switches on as soon as Branditude confirms the payment.</p></div>`;
+    <p class="small muted" style="margin-top:14px">Your data is safe. ${rzpOn(D.settings) ? "Pay online and it switches on straight away." : "Pay by UPI and it switches on as soon as Branditude confirms the payment."}</p></div>`;
 }
 
 /* ---------- Profile ---------- */
