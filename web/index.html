@@ -71,7 +71,8 @@ header.top{position:sticky;top:0;z-index:20;color:var(--band-ink);background:rgb
 header.top.solid{background:rgba(16,24,58,.94)}
 .top .wrap{display:flex;align-items:center;gap:24px;height:66px}
 .logo{display:flex;align-items:center;gap:10px;text-decoration:none}
-.logo-mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--marigold),var(--accent));display:grid;place-items:center;font:900 17px var(--display);color:#fff;box-shadow:0 4px 14px rgba(240,122,26,.45)}
+.logo-mark{width:36px;height:36px;border-radius:10px;background:#fff;display:grid;place-items:center;box-shadow:0 4px 14px rgba(0,0,0,.25)}.logo-mark img{width:28px;height:28px;display:block}
+.foot-logo{display:block;height:92px;width:auto;margin-bottom:10px}
 .logo b{font:700 16px var(--display);letter-spacing:-.02em}
 .top nav{display:flex;gap:4px;margin-left:auto}
 .top nav a{text-decoration:none;color:var(--band-2);font-weight:600;font-size:15px;padding:7px 12px;border-radius:99px;transition:background .2s,color .2s}
@@ -444,7 +445,7 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
 
 <header class="top" id="topbar">
   <div class="wrap">
-    <a class="logo" href="#top" aria-label="Branditude home"><span class="logo-mark">B</span><b>Branditude</b></a>
+    <a class="logo" href="#top" aria-label="Branditude home"><span class="logo-mark"><img src="/assets/img/branditude-mark.svg" alt="" width="26" height="26"></span><b>Branditude</b></a>
     <nav aria-label="Sections" id="site-nav"><a href="#features">What you get</a><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a><a href="#get-app">Get the app</a></nav>
     <div class="actions"><a class="btn sm line" href="login.html" id="signin-btn">Sign in</a><a class="btn sm primary" href="#pricing">Get started</a><button class="menu-btn" id="menu-btn" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="site-nav"><span></span></button></div>
   </div>
@@ -616,7 +617,7 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
     </div>
   </section>
 </main>
-<footer><div class="wrap"><span id="foot-left"></span><span><a href="login.html" style="color:inherit">Sign in</a> · <a href="privacy.html" style="color:inherit">Privacy policy</a> · Branditude Growth Plan</span></div></footer>
+<footer><div class="wrap"><span><img class="foot-logo" src="/assets/img/branditude-logo-light.png" alt="Branditude — Correct attitude for your brand" width="128" height="92"><span id="foot-left"></span></span><span><a href="login.html" style="color:inherit">Sign in</a> · <a href="privacy.html" style="color:inherit">Privacy policy</a> · Branditude Growth Plan</span></div></footer>
 
 <div class="mbar-cta" id="mbar-cta" aria-hidden="true"><a class="btn primary" href="#pricing" tabindex="-1">See plans</a><a class="btn wa" data-wa="Hi Branditude, I'd like to know more about the Growth Plan for my business." href="#" target="_blank" rel="noopener" tabindex="-1">WhatsApp us</a></div>
 <div id="checkout-root"></div>

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="40 30 770 680">
+  <defs>
+    <path id="arrow" d="M55 615 L215 457 L378 600 L612 401 L588 322 L792 262 L730 490 L690 425 L378 690 L215 522 Z"/>
+    <g id="bars">
+      <path d="M220 318 L296 262 L296 498 L220 432 Z"/>
+      <path d="M352 233 L428 168 L428 508 L352 565 Z"/>
+      <path d="M486 132 L562 70 L562 392 L486 456 Z"/>
+    </g>
+    <mask id="cutArc" maskUnits="userSpaceOnUse" x="0" y="0" width="900" height="760">
+      <rect x="0" y="0" width="900" height="760" fill="#fff"/>
+      <use href="#arrow" fill="#000" stroke="#000" stroke-width="26" stroke-linejoin="round"/>
+      <use href="#bars" fill="#000" stroke="#000" stroke-width="26" stroke-linejoin="round"/>
+    </mask>
+    <mask id="cutBars" maskUnits="userSpaceOnUse" x="0" y="0" width="900" height="760">
+      <rect x="0" y="0" width="900" height="760" fill="#fff"/>
+      <use href="#arrow" fill="#000" stroke="#000" stroke-width="26" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+  <path mask="url(#cutArc)" d="M167 485 A282 282 0 1 1 683 270" fill="none" stroke="#E5232B" stroke-width="50"/>
+  <g mask="url(#cutBars)">
+    <path fill="#F5B21B" d="M220 318 L296 262 L296 498 L220 432 Z"/>
+    <path fill="#4FA8E2" d="M352 233 L428 168 L428 508 L352 565 Z"/>
+    <path fill="#7CC242" d="M486 132 L562 70 L562 392 L486 456 Z"/>
+  </g>
+  <use href="#arrow" fill="#2F6BC4"/>
+</svg>

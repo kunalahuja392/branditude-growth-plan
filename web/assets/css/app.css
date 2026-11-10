@@ -41,7 +41,7 @@ a{color:inherit}
 .app{display:grid;grid-template-columns:232px 1fr;height:100%}
 nav.rail{background:var(--card);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:18px 12px;gap:4px;overflow-y:auto}
 .brand{display:flex;gap:10px;align-items:center;padding:4px 8px 18px}
-.brand-mark{width:34px;height:34px;border-radius:9px;background:var(--accent);display:grid;place-items:center;color:var(--accent-ink);font:800 17px var(--display)}
+.brand-mark{width:34px;height:34px;border-radius:9px;background:#fff;display:grid;place-items:center;box-shadow:0 0 0 1px rgba(16,24,58,.08)}.brand-mark img{width:27px;height:27px;display:block}
 .brand b{font:800 15px/1.1 var(--display);display:block}
 .brand small{color:var(--ink-3);font-size:12px}
 .nav-link{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;text-decoration:none;color:var(--ink-2);font-weight:600}

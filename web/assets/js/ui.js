@@ -123,7 +123,7 @@ export const ico = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentC
 
 /* ---------- shell ---------- */
 export function shell({ brandSub, groups, current, footer }) {
-  return `<div class="brand"><div class="brand-mark">B</div><div><b>Branditude</b><small>${esc(brandSub)}</small></div></div>` +
+  return `<div class="brand"><div class="brand-mark"><img src="/assets/img/branditude-mark.svg" alt="" width="26" height="26"></div><div><b>Branditude</b><small>${esc(brandSub)}</small></div></div>` +
     groups.map((g) => (g.label ? `<div class="rail-group">${esc(g.label)}</div>` : "") +
       g.items.map(([k, l, i, badge]) => `<a class="nav-link" href="#${k}" ${k === current ? 'aria-current="page"' : ""}>${ico(i)}<span>${esc(l)}</span>${badge ? `<span class="nav-badge num">${badge}</span>` : ""}</a>`).join("")).join("") +
     `<div class="rail-foot">${footer}</div>`;
