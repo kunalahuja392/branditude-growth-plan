@@ -17,19 +17,21 @@ async function hmacHex(secret: string, msg: string) {
   const sig = await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(msg));
   return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
+// Read a secret by name, ignoring stray spaces in the saved name or value.
+const env = (name: string) => { const all = Deno.env.toObject(); const k = Object.keys(all).find((x) => x.trim() === name); return k ? all[k].trim() : undefined; };
 function same(a: string, b: string) { if (a.length !== b.length) return false; let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i); return d === 0; }
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "Use POST" }, 405);
-  const keyId = Deno.env.get("RAZORPAY_KEY_ID"), keySecret = Deno.env.get("RAZORPAY_KEY_SECRET");
+  const keyId = env("RAZORPAY_KEY_ID"), keySecret = env("RAZORPAY_KEY_SECRET");
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
   const raw = await req.text();
 
   // 1. Webhook from Razorpay
   const whSig = req.headers.get("x-razorpay-signature");
   if (whSig && !req.headers.get("authorization")?.startsWith("Bearer ey")) {
-    const whSecret = Deno.env.get("RAZORPAY_WEBHOOK_SECRET");
+    const whSecret = env("RAZORPAY_WEBHOOK_SECRET");
     if (!whSecret || !same(await hmacHex(whSecret, raw), whSig)) return json({ error: "Bad signature" }, 401);
     const ev = JSON.parse(raw);
     if (!["payment.captured", "order.paid"].includes(ev.event)) return json({ ok: true, ignored: ev.event });
