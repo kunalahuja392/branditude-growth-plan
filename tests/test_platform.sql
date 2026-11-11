@@ -708,4 +708,23 @@ do $$ begin
   assert (select count(*) from meta_recharges)=0, 'businesses cannot see Meta recharges';
 end $$;
 reset role;
+\echo '--- 23. Businesses type their own credit quantities'
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000a1');
+do $$ declare b uuid; r jsonb; rt jsonb := wa_custom_rates(); begin
+  select id into b from businesses;
+  assert (rt->>'utility')::numeric between meta_cost('utility')*1.2 and meta_cost('utility')*1.4001, 'custom utility rate inside band';
+  r := order_wa_credits(b, 50, 20);
+  assert (r->>'amount')::numeric = round(50*(rt->>'marketing')::numeric + 20*(rt->>'utility')::numeric, 2), 'custom amount';
+  perform set_config('test.custom_pay', r->>'payment_id', false);
+  begin perform order_wa_credits(b, 0, 0); assert false; exception when others then assert sqlerrm like 'Enter how many%'; end;
+end $$;
+reset role;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-00000000000b');
+do $$ declare b uuid; m0 int; u0 int; begin
+  select id into b from businesses where name='Spice Route Cafe';
+  select balance, utility_balance into m0, u0 from wa_wallets where business_id=b;
+  perform admin_confirm_payment(current_setting('test.custom_pay')::uuid, true);
+  assert (select balance from wa_wallets where business_id=b)=m0+50 and (select utility_balance from wa_wallets where business_id=b)=u0+20, 'both types credited';
+end $$;
+reset role;
 \echo 'ALL TESTS PASSED'

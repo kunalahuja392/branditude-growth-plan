@@ -338,6 +338,16 @@ const CREDIT = {
 const kindOf = (t) => (t?.category === "utility" ? "utility" : "marketing");
 const balOf = (t) => (kindOf(t) === "utility" ? D.walletU || 0 : D.wallet || 0);
 const balText = () => `<b class="num">${nfmt(D.wallet || 0)}</b> promotional · <b class="num">${nfmt(D.walletU || 0)}</b> utility credits`;
+/* Type your own quantity of each credit type */
+const customBuy = () => { const r = D.waRates; if (!r) return "";
+  const row = (k, id) => `<div class="field"><label for="${id}">${CREDIT[k].name} <span class="muted small num">${inr2(+r[k])} each</span></label><input id="${id}" type="number" min="0" step="1" inputmode="numeric" placeholder="0"><span class="small muted">${esc(CREDIT[k].for)}</span></div>`;
+  return `<div class="card" style="background:var(--surface-2, #f7f7f5);box-shadow:none;margin-top:10px"><h3 style="margin:0 0 4px">Buy exactly what you need</h3><p class="small muted" style="margin:0 0 12px">Type how many of each. Packs below cost less per message.</p>
+    <div class="fields">${row("marketing", "cb-m")}${row("utility", "cb-u")}</div>
+    <div class="row" style="justify-content:space-between;margin-top:12px;gap:10px;flex-wrap:wrap"><span id="cb-total" class="num">Total: <b>${inr2(0)}</b>${plusGst()}</span>
+    <button class="btn primary" data-a="buy-custom" ${D.biz.status === "active" ? "" : "disabled"}>Buy credits</button></div><p id="cb-err" class="small" style="color:var(--bad);margin:6px 0 0"></p></div>`; };
+const customTotal = () => { const r = D.waRates || {}, m = Math.max(0, Math.floor(+($("#cb-m")?.value || 0))), u = Math.max(0, Math.floor(+($("#cb-u")?.value || 0)));
+  return { m, u, total: Math.round((m * +r.marketing + u * +r.utility) * 100) / 100 }; };
+document.addEventListener("input", (e) => { if (e.target.id === "cb-m" || e.target.id === "cb-u") { const t = $("#cb-total"); if (t) t.innerHTML = `Total: <b>${inr2(customTotal().total)}</b>${plusGst()}`; } });
 const packGroups = (packs, compact = false) => ["marketing", "utility"].map((k) => { const list = packs.filter((p) => (p.kind || "marketing") === k); if (!list.length) return "";
   return `<div style="margin-top:${compact ? 10 : 16}px"><h3 style="margin:0 0 2px">${CREDIT[k].name}</h3><p class="small muted" style="margin:0 0 10px">For: ${esc(CREDIT[k].for)}</p>
     ${compact ? `<div class="list">${list.map((p) => `<div class="item"><div class="grow"><b>${esc(p.name)}</b><span class="muted small num">${nfmt(p.credits)} messages · ${inr2(p.price / p.credits)}/message</span></div><b class="num">${inr(p.price)}${plusGst()}</b><button class="btn sm primary" data-a="buy-pack" data-id="${p.id}">Buy</button></div>`).join("")}</div>`
@@ -349,8 +359,9 @@ after.whatsapp = async () => {
     q(sb.from("broadcasts").select("*").eq("business_id", BID).order("created_at", { ascending: false }).limit(20)), q(sb.from("wa_ledger").select("*").eq("business_id", BID).order("created_at", { ascending: false }).limit(15)),
   ]);
   D.tpls = tpls; D.packs = packs;
+  D.waRates = await q(sb.rpc("wa_custom_rates")).catch(() => null);
   const note = D.settings.whatsapp?.price_note || "";
-  const packsHtml = packGroups(packs);
+  const packsHtml = customBuy() + packGroups(packs);
   const el = $("#wa-view"); if (!el) return;
   D.autoRules = await q(sb.from("auto_msgs").select("*").eq("business_id", BID)).catch(() => []);
   D.autoPrev = await q(sb.rpc("auto_msgs_preview", { p_business: BID })).catch(() => ({}));
@@ -967,8 +978,11 @@ document.addEventListener("click", async (e) => {
         await q(sb.from("business_content").insert({ business_id: BID, kind: SEO.kind, title: (SEO.input.topic || SEO.input.reviewer || "").slice(0, 80), body })); await seoLoad(); drawSeo(); toast("Saved to your library"); break; }
       case "seo-del": await q(sb.from("business_content").delete().eq("id", id)); await seoLoad(); drawSeo(); break;
       case "wa-compose": WA.aud = el.dataset.aud || "all"; location.hash = "whatsapp"; break;
-      case "wa-buy": location.hash = "whatsapp"; document.querySelector("#wa-view") && openModal(`<div class="modal-head"><h2>Buy WhatsApp credits</h2><button class="btn ghost" data-close>Close</button></div><p class="small">You have ${balText()}.</p>${packGroups(D.packs || [], true)}`, { wide: true }); break;
+      case "wa-buy": location.hash = "whatsapp"; document.querySelector("#wa-view") && openModal(`<div class="modal-head"><h2>Buy WhatsApp credits</h2><button class="btn ghost" data-close>Close</button></div><p class="small">You have ${balText()}.</p>${customBuy()}${packGroups(D.packs || [], true)}`, { wide: true }); break;
       case "buy-pack": closeModal(); await order("wa_credits", id); break;
+      case "buy-custom": { const { m, u } = customTotal(), err = $("#cb-err");
+        try { const r = await q(sb.rpc("order_wa_credits", { p_business: BID, p_marketing: m, p_utility: u })); closeModal(); D.pays = null; await payModal(r.payment_id); }
+        catch (e2) { if (err) err.textContent = e2.message; else toast(e2.message, "error"); } break; }
       case "buy-product": if (await confirmBox("Buy this service?", "We'll create a payment for it. Branditude's team will contact you to get started once it's paid.", "Continue to payment")) await order("product", id); break;
       case "buy-module": {
         const m = (D.mods || []).find((x) => x.id === id); if (!m) break;

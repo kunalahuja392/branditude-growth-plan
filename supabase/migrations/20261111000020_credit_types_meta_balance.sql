@@ -1,7 +1,8 @@
 -- WhatsApp credits by type + Meta balance tracking
 -- 1) Two balances per business: promotional (Meta "marketing") and utility. Each template's category decides which is used.
 -- 2) Credit packs have a type; their price must give Branditude a 20–40% margin over Meta's rate + GST (rates editable).
--- 3) Super admin records Meta prepaid top-ups and sees spend, remaining balance and the credits businesses still hold.
+-- 3) Businesses can also type any number of credits of each type (priced at the custom margin, inside the 20-40% band).
+-- 4) Super admin records Meta prepaid top-ups and sees spend, remaining balance and the credits businesses still hold.
 
 alter table public.wa_credit_packs add column if not exists kind text not null default 'marketing';
 alter table public.wa_credit_packs drop constraint if exists wa_credit_packs_kind_check;
@@ -13,8 +14,9 @@ alter table public.wa_ledger add column if not exists kind text not null default
 
 -- Meta's India rates (per delivered message, before GST) and the margin rule. Staff-only setting.
 insert into public.settings (key, value, public) values
-  ('meta_rates', '{"marketing": 0.8631, "utility": 0.115, "gst": 18, "min_margin": 20, "max_margin": 40}', false)
+  ('meta_rates', '{"marketing": 0.8631, "utility": 0.115, "gst": 18, "min_margin": 20, "max_margin": 40, "custom_margin": 40}', false)
 on conflict (key) do nothing;
+update public.settings set value = value || '{"custom_margin": 40}' where key = 'meta_rates' and not value ? 'custom_margin';
 
 create or replace function public.meta_cost(p_kind text) returns numeric
 language sql stable security definer set search_path = public as $$
@@ -96,6 +98,42 @@ end $$;
 revoke execute on function public.admin_adjust_credits(uuid, int, text, text) from public, anon;
 grant execute on function public.admin_adjust_credits(uuid, int, text, text) to authenticated;
 
+-- Price per credit when a business types its own quantity (custom margin, kept inside the min/max band)
+create or replace function public.wa_custom_rates() returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare s jsonb := (select value from public.settings where key = 'meta_rates'); lo numeric; hi numeric; cm numeric; k text; c numeric; out jsonb := '{}';
+begin
+  lo := coalesce((s->>'min_margin')::numeric, 20); hi := coalesce((s->>'max_margin')::numeric, 40);
+  cm := least(greatest(coalesce((s->>'custom_margin')::numeric, hi), lo), hi);
+  foreach k in array array['marketing', 'utility'] loop
+    c := public.meta_cost(k);
+    out := out || jsonb_build_object(k, trunc(c * (1 + cm / 100), 4));
+  end loop;
+  return out;
+end $$;
+revoke execute on function public.wa_custom_rates() from public, anon;
+grant execute on function public.wa_custom_rates() to authenticated;
+
+create or replace function public.order_wa_credits(p_business uuid, p_marketing int, p_utility int) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare r jsonb := public.wa_custom_rates(); m int := greatest(coalesce(p_marketing, 0), 0); u int := greatest(coalesce(p_utility, 0), 0);
+        v_amount numeric; v_gst numeric; v_desc text; v_id uuid;
+begin
+  if not public.is_member(p_business) then raise exception 'Not allowed'; end if;
+  if m + u = 0 then raise exception 'Enter how many credits you want'; end if;
+  if m > 200000 or u > 200000 then raise exception 'For more than 2,00,000 credits, please contact Branditude'; end if;
+  v_amount := round(m * (r->>'marketing')::numeric + u * (r->>'utility')::numeric, 2);
+  if v_amount < 1 then raise exception 'The minimum order is Rs 1'; end if;
+  v_desc := 'WhatsApp credits: ' || concat_ws(' + ', case when m > 0 then m || ' promotional' end, case when u > 0 then u || ' utility' end);
+  v_gst := round(v_amount * public.gst_rate(), 2);
+  insert into public.payments (business_id, kind, description, amount, gst, total, meta)
+  values (p_business, 'wa_credits', v_desc, v_amount, v_gst, v_amount + v_gst, jsonb_build_object('marketing', m, 'utility', u, 'credits', m + u, 'custom', true))
+  returning id into v_id;
+  return jsonb_build_object('payment_id', v_id, 'description', v_desc, 'amount', v_amount, 'gst', v_gst, 'total', v_amount + v_gst);
+end $$;
+revoke execute on function public.order_wa_credits(uuid, int, int) from public, anon;
+grant execute on function public.order_wa_credits(uuid, int, int) to authenticated;
+
 -- Pack purchases credit the pack's type
 create or replace function public.apply_payment(p_payment uuid, p_approve boolean, p_by uuid) returns void
 language plpgsql security definer set search_path = public as $$
@@ -122,9 +160,21 @@ begin
     update public.businesses set addon_modules = array(select distinct unnest(addon_modules || array[pay.meta->>'module']))
      where id = pay.business_id;
   elsif pay.kind = 'wa_credits' then
+    insert into public.wa_wallets (business_id, balance) values (pay.business_id, 0) on conflict do nothing;
+    if pay.meta ? 'utility' or pay.meta ? 'marketing' then   -- typed quantities, possibly both types
+      if coalesce((pay.meta->>'marketing')::int, 0) > 0 then
+        update public.wa_wallets set balance = balance + (pay.meta->>'marketing')::int, updated_at = now() where business_id = pay.business_id;
+        insert into public.wa_ledger (business_id, delta, reason, ref, created_by, kind) values (pay.business_id, (pay.meta->>'marketing')::int, 'Promotional credit pack', pay.id::text, p_by, 'marketing');
+      end if;
+      if coalesce((pay.meta->>'utility')::int, 0) > 0 then
+        update public.wa_wallets set utility_balance = utility_balance + (pay.meta->>'utility')::int, updated_at = now() where business_id = pay.business_id;
+        insert into public.wa_ledger (business_id, delta, reason, ref, created_by, kind) values (pay.business_id, (pay.meta->>'utility')::int, 'Utility credit pack', pay.id::text, p_by, 'utility');
+      end if;
+      update public.businesses set wa_enabled = true where id = pay.business_id;
+      return;
+    end if;
     v_cr := (pay.meta->>'credits')::int;
     v_kind := coalesce(pay.meta->>'kind', (select kind from public.wa_credit_packs where id = nullif(pay.meta->>'pack_id', '')::uuid), 'marketing');
-    insert into public.wa_wallets (business_id, balance) values (pay.business_id, 0) on conflict do nothing;
     if v_kind = 'utility' then update public.wa_wallets set utility_balance = utility_balance + v_cr, updated_at = now() where business_id = pay.business_id;
     else update public.wa_wallets set balance = balance + v_cr, updated_at = now() where business_id = pay.business_id; end if;
     insert into public.wa_ledger (business_id, delta, reason, ref, created_by, kind)
@@ -158,6 +208,8 @@ begin
   if not public.is_staff() then raise exception 'Not allowed'; end if;
   return jsonb_build_object(
     'rates', r,
+    'custom', public.wa_custom_rates(),
+    'first_recharge', (select min(paid_on) from public.meta_recharges),
     'cost', jsonb_build_object('marketing', public.meta_cost('marketing'), 'utility', public.meta_cost('utility')),
     'held', (select jsonb_build_object('marketing', coalesce(sum(balance), 0), 'utility', coalesce(sum(utility_balance), 0)) from public.wa_wallets),
     'recharged', (select coalesce(sum(amount), 0) from public.meta_recharges),

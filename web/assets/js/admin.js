@@ -324,22 +324,39 @@ after.keywords = () => { const f = $("#ckw-form"); if (!f) return;
     catch (err) { toast(err.message, "error"); } }; };
 
 /* ---------------- WhatsApp ---------------- */
-const META_BILLING = "https://business.facebook.com/billing_hub/accounts?business_id=1256389646022701&placement=whatsapp_manager";
+const META_BILLING = "https://business.facebook.com/latest/billing_hub/accounts?business_id=1256389646022701";
 function metaCard(S, recharges) {
   if (!S) return "";
   const spent = D.metaSpend?.total, est = S.used.marketing * S.cost.marketing + S.used.utility * S.cost.utility;
-  const used = spent != null ? spent * (1 + (S.rates.gst ?? 18) / 100) : est, left = S.recharged - used, owed = S.held.marketing * S.cost.marketing + S.held.utility * S.cost.utility;
-  const low = left < owed;
+  const metaUsed = spent != null ? spent * (1 + (S.rates.gst ?? 18) / 100) : null;
+  const used = Math.max(metaUsed ?? 0, est), left = S.recharged - used, owed = S.held.marketing * S.cost.marketing + S.held.utility * S.cost.utility;
+  const low = left < owed; D.metaNeed = Math.max(0, Math.ceil((owed - left) / 100) * 100);
   return `<div class="card" style="margin-bottom:16px"><div class="card-head"><h2>Meta account</h2>
-      <div class="row" style="gap:8px"><a class="btn sm primary" href="${META_BILLING}" target="_blank" rel="noopener">Recharge in Meta ↗</a><button class="btn sm" data-a="mr-new">Record a recharge</button><button class="btn sm ghost" data-a="mr-spend">Check Meta spend</button><button class="btn sm ghost" data-a="mr-rates">Meta rates & margin</button></div></div>
+      <div class="row" style="gap:8px"><button class="btn sm primary" data-a="mr-add">Add money</button><button class="btn sm ghost" data-a="mr-spend">Refresh</button><button class="btn sm ghost" data-a="mr-rates">Rates & margin</button></div></div>
     <div class="grid g4">
-      <div class="kpi"><div class="label">Recharged in Meta</div><div class="value num">${inr2(S.recharged)}</div><div class="sub">${recharges.length} top-up${recharges.length === 1 ? "" : "s"}</div></div>
-      <div class="kpi"><div class="label">Used</div><div class="value num">${inr2(used)}</div><div class="sub">${spent != null ? "from Meta incl. GST, since " + fmtDate(D.metaSpend.since) : `estimated: ${nfmt(S.used.marketing)} promotional + ${nfmt(S.used.utility)} utility messages`}</div></div>
-      <div class="kpi"><div class="label">Left in Meta (approx.)</div><div class="value num" style="color:${low ? "var(--bad)" : "inherit"}">${inr2(left)}</div><div class="sub">${low ? "Recharge: less than businesses' unused credits" : "Covers businesses' unused credits"}</div></div>
+      <div class="kpi"><div class="label">Meta balance (approx.)</div><div class="value num" style="color:${low ? "var(--bad)" : "inherit"}">${inr2(left)}</div><div class="sub">${low ? `Add at least ${inr(D.metaNeed)} to cover unused credits` : "Covers businesses' unused credits"}</div></div>
+      <div class="kpi"><div class="label">Added to Meta</div><div class="value num">${inr2(S.recharged)}</div><div class="sub">${recharges.length} top-up${recharges.length === 1 ? "" : "s"}</div></div>
+      <div class="kpi"><div class="label">Used</div><div class="value num">${inr2(used)}</div><div class="sub">${nfmt(S.used.marketing)} promotional + ${nfmt(S.used.utility)} utility sent${metaUsed != null ? ` · Meta billed ${inr2(metaUsed)} incl. GST` : D.metaSpendErr ? " · couldn't read Meta's bill" : ""}</div></div>
       <div class="kpi"><div class="label">Pending credits (sold, not used)</div><div class="value num">${nfmt(S.held.marketing + S.held.utility)}</div><div class="sub">${nfmt(S.held.marketing)} promotional · ${nfmt(S.held.utility)} utility · need ${inr2(owed)} in Meta</div></div>
     </div>
     ${recharges.length ? `<details style="margin-top:12px"><summary class="small">Recharge history</summary><div class="list">${recharges.map((r) => `<div class="item small"><div class="grow">${fmtDate(r.paid_on)}${r.note ? " · " + esc(r.note) : ""}</div><b class="num">${inr2(r.amount)}</b><button class="btn sm ghost danger" data-a="mr-del" data-id="${r.id}" aria-label="Delete">✕</button></div>`).join("")}</div></details>` : ""}
-    <p class="small muted" style="margin-top:10px">Add money in Meta's billing (UPI or card), then record it here so the balance stays right. "Check Meta spend" reads what Meta actually charged.</p></div>`;
+    <p class="small muted" style="margin-top:10px">Meta doesn't share the prepaid balance with apps, so it's worked out here: money added minus what was used (the higher of Meta's bill and messages sent). Meta also emails you when the balance is low.</p></div>`;
+}
+async function loadMetaSpend(since) {
+  D.metaSpendAt = Date.now(); D.metaSpendErr = null;
+  const { data, error } = await sb.functions.invoke("wa-templates", { body: { action: "spend", since: since || "2026-11-01" } });
+  let j = data; if (error) { try { j = await error.context.json(); } catch { j = { error: error.message }; } }
+  if (j?.error) { D.metaSpendErr = j.error; D.metaSpend = null; } else D.metaSpend = j;
+}
+function addMoney() {
+  const amt = D.metaNeed || 500;
+  const m = openModal(`<div class="modal-head"><h2>Add money to Meta</h2><button class="btn ghost" data-close>Close</button></div>
+    <div class="field"><label for="am-amt">Amount ₹</label><input id="am-amt" type="number" min="1" value="${amt}"><span class="small muted">${D.metaNeed ? `Suggested: enough to cover the credits businesses haven't used yet.` : "Any amount. Meta takes UPI."}</span></div>
+    <ol class="small" style="margin:14px 0;padding-left:18px;line-height:1.7"><li>Tap <b>Pay in Meta</b>. Meta's payment window opens; choose <b>Add funds</b>, enter the same amount and pay by UPI.</li><li>Come back here and tap <b>I've paid</b> so the balance updates.</li></ol>
+    <div class="row" style="gap:10px;justify-content:flex-end"><button class="btn" id="am-open">Pay in Meta ↗</button><button class="btn primary" id="am-done">I've paid</button></div>`);
+  m.querySelector("#am-open").onclick = () => { window.open(META_BILLING, "meta_pay", "width=1100,height=800"); };
+  m.querySelector("#am-done").onclick = async () => { const v = +m.querySelector("#am-amt").value; if (!(v > 0)) return toast("Enter the amount you paid", "error");
+    await q(sb.from("meta_recharges").insert({ amount: v, paid_on: todayISO(), note: "Added from admin" })); closeModal(); toast(`${inr2(v)} added to the Meta balance`); render(); };
 }
 function rechargeForm() {
   formModal({ title: "Record a Meta recharge", submitLabel: "Save", values: { paid_on: todayISO() },
@@ -350,9 +367,10 @@ async function ratesForm() {
   const row = await q(sb.from("settings").select("*").eq("key", "meta_rates").maybeSingle()); const r = row?.value || {};
   formModal({ title: "Meta rates & your margin", submitLabel: "Save", values: r,
     fields: [{ key: "marketing", label: "Meta rate: marketing (₹, before GST)", type: "number", required: true, min: 0 }, { key: "utility", label: "Meta rate: utility (₹, before GST)", type: "number", required: true, min: 0 },
-      { key: "gst", label: "GST on Meta bill %", type: "number", required: true, min: 0 }, { key: "min_margin", label: "Minimum margin %", type: "number", required: true, min: 0 }, { key: "max_margin", label: "Maximum margin %", type: "number", required: true, min: 0 }],
+      { key: "gst", label: "GST on Meta bill %", type: "number", required: true, min: 0 }, { key: "min_margin", label: "Minimum margin %", type: "number", required: true, min: 0 }, { key: "max_margin", label: "Maximum margin %", type: "number", required: true, min: 0 },
+      { key: "custom_margin", label: "Margin when a business types its own quantity %", type: "number", required: true, min: 0, help: "Kept between the minimum and maximum" }],
     onSave: async (v) => { if (+v.min_margin > +v.max_margin) throw new Error("Minimum margin can't be above maximum");
-      await q(sb.from("settings").upsert({ key: "meta_rates", value: { marketing: +v.marketing, utility: +v.utility, gst: +v.gst, min_margin: +v.min_margin, max_margin: +v.max_margin }, public: false }));
+      await q(sb.from("settings").upsert({ key: "meta_rates", value: { marketing: +v.marketing, utility: +v.utility, gst: +v.gst, min_margin: +v.min_margin, max_margin: +v.max_margin, custom_margin: Math.min(Math.max(+v.custom_margin, +v.min_margin), +v.max_margin) }, public: false }));
       toast("Saved. Packs outside the new margin can't be saved until you reprice them."); render(); } });
 }
 VIEWS.whatsapp = async () => {
@@ -363,6 +381,7 @@ VIEWS.whatsapp = async () => {
   ]);
   D.packs = packs; D.tpls = tpls;
   const S = await q(sb.rpc("wa_admin_summary")).catch(() => null); D.waSum = S;
+  if (isSuper() && S && (!D.metaSpendAt || Date.now() - D.metaSpendAt > 300000)) await loadMetaSpend(S.first_recharge);
   const recharges = isSuper() ? await q(sb.from("meta_recharges").select("*").order("paid_on", { ascending: false })).catch(() => []) : [];
   const margin = (p) => S?.cost ? Math.round(((p.price / p.credits - S.cost[p.kind || "marketing"]) / S.cost[p.kind || "marketing"]) * 100) : null;
   return head("WhatsApp add-on", "Optional for businesses. They prepay for promotional or utility credits and each message uses one credit of its type. Templates must be approved by Meta.") + (isSuper() ? metaCard(S, recharges) : "") + `
@@ -484,11 +503,10 @@ document.addEventListener("click", async (e) => {
       case "ckw-del": await q(sb.from("category_keywords").delete().eq("id", id)); render(); break;
       case "pack-new": packForm(); break;
       case "mr-new": rechargeForm(); break;
+      case "mr-add": addMoney(); break;
       case "mr-rates": await ratesForm(); break;
       case "mr-del": if (await confirmBox("Delete this recharge entry?", "", "Delete", { danger: true })) { await q(sb.from("meta_recharges").delete().eq("id", id)); render(); } break;
-      case "mr-spend": { el.disabled = true; const { data, error } = await sb.functions.invoke("wa-templates", { body: { action: "spend", since: "2026-11-01" } });
-        let j = data; if (error) { try { j = await error.context.json(); } catch { j = { error: error.message }; } }
-        if (j?.error) toast("Meta: " + j.error, "error"); else { D.metaSpend = j; toast(`Meta charged ${inr2(j.total)} since ${fmtDate(j.since)}`); render(); } break; }
+      case "mr-spend": el.disabled = true; D.metaSpendAt = 0; render(); break;
       case "pack-edit": packForm(D.packs.find((p) => p.id === id)); break;
       case "tpl-new": tplForm(); break;
       case "wt-ok": await q(sb.from("wa_templates").update({ status: "approved", active: true, reject_reason: null }).eq("id", id)); toast("Approved. The business can use it now."); render(); break;
