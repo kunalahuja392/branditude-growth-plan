@@ -15,12 +15,19 @@ async function ai(prompt: string, maxTokens: number, temperature = 0.7): Promise
   try {
     const groq = Deno.env.get("GROQ_API_KEY");
     if (groq) {
-      const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST", headers: { Authorization: `Bearer ${groq}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model: Deno.env.get("GROQ_MODEL") ?? "llama-3.3-70b-versatile", max_tokens: maxTokens, temperature, messages: [{ role: "user", content: prompt }] }),
-      });
-      if (!r.ok) return null;
-      const j = await r.json(); return String(j?.choices?.[0]?.message?.content ?? "").trim() || null;
+      // models open to free Groq accounts; tries the next one if a model is missing or busy
+      const models = [Deno.env.get("GROQ_MODEL"), "openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.1-8b-instant"].filter(Boolean) as string[];
+      for (const model of models) {
+        const oss = model.startsWith("openai/gpt-oss");
+        const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST", headers: { Authorization: `Bearer ${groq}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ model, max_tokens: maxTokens + (oss ? 1500 : 0), temperature, ...(oss ? { reasoning_effort: "low" } : {}), messages: [{ role: "user", content: prompt }] }),
+        });
+        if (!r.ok) { console.error("groq", model, r.status, (await r.text()).slice(0, 200)); if ([404, 429, 503, 400].includes(r.status)) continue; return null; }
+        const j = await r.json(); const t = String(j?.choices?.[0]?.message?.content ?? "").trim();
+        if (t) return t;
+      }
+      return null;
     }
     const key = Deno.env.get("ANTHROPIC_API_KEY"); if (!key) return null;
     const r = await fetch("https://api.anthropic.com/v1/messages", {
@@ -29,7 +36,7 @@ async function ai(prompt: string, maxTokens: number, temperature = 0.7): Promise
     });
     if (!r.ok) return null;
     const j = await r.json(); return (j.content ?? []).map((c: { text?: string }) => c.text ?? "").join("").trim() || null;
-  } catch { return null; }
+  } catch (e) { console.error("ai", String(e)); return null; }
 }
 const PER_IP_DAY = 10, PER_BIZ_DAY = 400;
 const sha = async (s: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)))].map((x) => x.toString(16).padStart(2, "0")).join("");

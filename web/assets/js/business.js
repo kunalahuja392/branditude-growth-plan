@@ -43,7 +43,7 @@ export async function mount(ctx) {
   if (!m.length) { $("#main").innerHTML = `<div class="auth-wrap"><div class="auth"><h2>No business yet</h2><p>Choose a plan to set up your business.</p><a class="btn primary" href="index.html#pricing">See plans</a></div></div>`; return; }
   BID = m[0].business_id; D.me = { role: m[0].role, perms: m[0].perms || [] };
   window.addEventListener("hashchange", () => { if (location.hash === "#signout") return C.signOut(); render(); });
-  await loadAll(); render();
+  await loadAll(); render(); mountAssistant();
   if (hasMod("menu")) {
     const tick = async () => { if (route() === "orders") return; try { const n = await newOrderCount(BID); if (n !== (D.newOrders || 0)) { D.newOrders = n; nav(); } } catch {} };
     tick(); setInterval(tick, 30000);
@@ -249,7 +249,7 @@ VIEWS.feedback = () => {
   <div class="grid g2" style="margin-top:16px">
     <div class="card"><div class="card-head"><h2>Needs a reply</h2><span class="pill ${open.length ? "bad" : "good"}">${open.length}</span></div>
       ${open.length ? `<div class="list">${open.map((f) => `<div class="item" style="align-items:flex-start"><div class="stripe bad"></div><div class="grow"><b>${esc(f.name || "Walk-in customer")} ${stars(f.rating)}</b><span class="muted small">${ago(f.created_at)} · ${esc(f.source)}${f.phone ? " · " + esc(prettyPhone(f.phone)) : ""}</span>${(f.tags || []).length ? `<div class="chips" style="margin:6px 0">${f.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join("")}</div>` : ""}${f.text ? `<p>“${esc(f.text)}”</p>` : ""}
-        <div class="row" style="margin-top:8px">${f.phone ? `<a class="btn sm" href="tel:+${esc(f.phone)}">Call ${esc(prettyPhone(f.phone))}</a>` : ""}<button class="btn sm" data-a="fb-resolve" data-id="${f.id}">Mark resolved</button></div></div></div>`).join("")}</div>` : `<div class="empty">No open complaints.</div>`}</div>
+        <div class="row" style="margin-top:8px">${f.phone ? `<a class="btn sm" href="tel:+${esc(f.phone)}">Call ${esc(prettyPhone(f.phone))}</a>` : ""}<button class="btn sm" data-a="fb-draft" data-id="${f.id}">${ico("spark")} Draft a reply</button><button class="btn sm" data-a="fb-resolve" data-id="${f.id}">Mark resolved</button></div></div></div>`).join("")}</div>` : `<div class="empty">No open complaints.</div>`}</div>
     <div class="card"><div class="card-head"><h2>Your feedback link & QR</h2></div>
       <div class="row" style="align-items:flex-start;gap:18px"><div class="qr" id="qr-fb"></div><div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:10px">
         <p class="small muted">Print this on bills and table tents. Customers rate you on their own phone. 4–5★ go to your Google review page, and 1–3★ come to this inbox.</p>
@@ -264,7 +264,7 @@ after.feedback = () => { const el = $("#qr-fb"); if (el && window.QRCode) new QR
 /* ---------- Offers ---------- */
 VIEWS.offers = () => {
   const v30 = D.visits.filter((x) => x.coupon_code && daysSince(x.created_at) < 30);
-  return head("Offers & coupons", "Codes for festivals, birthdays and win-backs. If a customer also has a loyalty reward that visit, whichever is worth more is used.", `<button class="btn primary" data-a="coupon-new" ${canWrite() ? "" : "disabled"}>${ico("plus")} New coupon</button>`) + `
+  return head("Offers & coupons", "Codes for festivals, birthdays and win-backs. If a customer also has a loyalty reward that visit, whichever is worth more is used.", `<button class="btn" data-a="offer-ai" ${canWrite() ? "" : "disabled"}>${ico("spark")} Ideas with AI</button><button class="btn primary" data-a="coupon-new" ${canWrite() ? "" : "disabled"}>${ico("plus")} New coupon</button>`) + `
   <div class="grid g4" style="margin-bottom:16px">${kpi("Active coupons", D.coupons.filter((k) => ["Active", "Ending soon"].includes(couponStatus(k)[0])).length, `of ${D.coupons.length}`)}${kpi("Sales with a coupon · 30 days", inr(v30.reduce((a, v) => a + +v.net, 0)), `${v30.length} redemptions`)}${kpi("Discount given · 30 days", inr(v30.reduce((a, v) => a + +v.discount, 0)), "")}</div>
   ${D.coupons.length ? `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))">${D.coupons.map((k) => { const [s, cls] = couponStatus(k); return `<div class="coupon">
     <div class="row" style="justify-content:space-between"><span class="code">${esc(k.code)}</span><span class="pill ${cls}">${s}</span></div>
@@ -460,7 +460,7 @@ after.templates = async () => {
           <p class="small muted">Start with <b>{{1}}</b>, which becomes the customer's first name. Use {{2}}, {{3}}… for parts you fill in each time.</p></div>
       </div>
       <div id="nt-params"></div><div class="bubble" id="nt-prev" style="margin-top:12px">Your preview appears here.</div><p class="err" id="nt-err"></p>
-      <div class="row" style="margin-top:12px"><button class="btn primary" data-a="tpl-submit">Send for approval</button></div>
+      <div class="row" style="margin-top:12px"><button class="btn" data-a="tpl-ai" type="button">${ico("spark")} Write with AI</button><button class="btn primary" data-a="tpl-submit">Send for approval</button></div>
       <p class="small muted" style="margin-top:8px">Avoid: all-caps, many emojis, links to other businesses, and asking for payments or passwords. Charges apply per message when you send.</p></div>
     <div class="card"><div class="card-head"><h2>Your templates</h2></div>${mine.length ? `<div class="list">${mine.map((t) => `<div class="item"><div class="grow"><b>${esc(t.title)}</b><span class="muted small">${esc(t.body_preview)}</span>${t.reject_reason ? `<span class="small" style="color:var(--bad)">${esc(t.reject_reason)}</span>` : ""}</div><span class="pill ${st[t.status][0]}">${st[t.status][1]}</span></div>`).join("")}</div>` : `<div class="empty">No templates yet. Approved ones appear in WhatsApp → New broadcast.</div>`}
       <h3 style="margin:18px 0 8px;font-size:16px">Ready-made templates</h3><div class="list">${shared.map((t) => `<div class="item small"><div class="grow"><b>${esc(t.title)}</b><span class="muted">${esc(t.body_preview)}</span></div></div>`).join("")}</div></div>
@@ -698,13 +698,13 @@ function drawSeo() {
       <div class="field" style="margin-top:12px"><label for="seo-in">Paste their Google review</label><textarea id="seo-in" data-in="review" style="min-height:80px">${esc(SEO.input.review || "")}</textarea></div>`,
   }[SEO.kind];
   el.innerHTML = head("Keywords & SEO", "Pick the searches you want to be found for. They go into content <b>you</b> publish on your Google profile: the description, posts, FAQs and replies to reviews. That helps you show up on Google Maps and in AI assistants like ChatGPT and Gemini.") + `
-  <div class="note" style="margin-bottom:16px">Keywords are never put into your customers' reviews. Google doesn't allow businesses to tell customers what to write, and it can remove reviews or restrict your profile if you do.</div>
+  <div class="note" style="margin-bottom:16px">Short keywords (like "cold coffee") also appear as "what did you like?" options for happy customers. They choose, edit and post their own review; please don't ask customers to post the suggestion unchanged.</div>
   <div class="grid g2">
-    <div class="card"><div class="card-head"><h2>Your keywords</h2><span class="pill ${D.kw.length ? "good" : ""} num">${D.kw.length}/15</span></div>
+    <div class="card"><div class="card-head"><h2>Your keywords</h2><span class="pill ${D.kw.length ? "good" : ""} num">${D.kw.length}/30</span></div>
       ${D.kw.length ? `<div class="chips">${D.kw.map((x) => `<span class="chip" aria-pressed="true" style="cursor:default">${esc(x.keyword)} <button class="btn sm ghost" data-a="kw-del" data-id="${x.id}" aria-label="Remove ${esc(x.keyword)}" style="padding:0 4px;color:inherit">✕</button></span>`).join("")}</div>` : `<p class="muted small">No keywords yet. Tap suggestions below or add your own.</p>`}
       <form id="kw-add" class="row" style="margin-top:12px"><input id="kw-new" placeholder="Add your own, e.g. best filter coffee in ${esc(cityOf() || "your city")}" style="flex:1;min-width:200px" aria-label="New keyword" maxlength="80"><button class="btn" ${canWrite() ? "" : "disabled"}>Add</button></form>
       <h3 style="margin:18px 0 8px">Suggested for ${esc(D.biz.categories?.name || "you")}${cityOf() ? " in " + esc(cityOf()) : ""}</h3>
-      ${sugg.length ? `<div class="chips">${sugg.map((x) => `<button class="chip" data-a="kw-add-s" data-kw="${esc(x)}" ${canWrite() && D.kw.length < 15 ? "" : "disabled"}>+ ${esc(x)}</button>`).join("")}</div>` : `<p class="muted small">You've added all the suggestions.</p>`}
+      ${sugg.length ? `<div class="chips">${sugg.map((x) => `<button class="chip" data-a="kw-add-s" data-kw="${esc(x)}" ${canWrite() && D.kw.length < 30 ? "" : "disabled"}>+ ${esc(x)}</button>`).join("")}</div>` : `<p class="muted small">You've added all the suggestions.</p>`}
       <div class="row" style="margin-top:12px"><button class="btn sm" data-a="kw-ai" ${canWrite() ? "" : "disabled"}>${ico("spark")} Suggest more with AI</button>${cityOf() ? "" : `<span class="small muted">Add your city in <a href="#profile">Business profile</a> for better suggestions.</span>`}</div>
     </div>
     <div class="card"><div class="card-head"><h2>Write with your keywords</h2></div>
@@ -726,9 +726,48 @@ function drawSeo() {
 async function addKw(kw, source) {
   kw = String(kw || "").trim().replace(/\s+/g, " ");
   if (kw.length < 2) return toast("Type a keyword first", "error");
-  if (D.kw.length >= 15) return toast("Keep it to 15 keywords. Remove one first.", "error");
+  if (D.kw.length >= 30) return toast("Keep it to 30 keywords. Remove one first.", "error");
   try { await q(sb.from("business_keywords").insert({ business_id: BID, keyword: kw.slice(0, 80), source })); await seoLoad(); drawSeo(); } catch (e) { toast(/exists/.test(e.message) ? "You already have that keyword" : e.message, "error"); }
 }
+/* ---------- Ask AI: questions about your numbers or how to use the software ---------- */
+const AI = { open: false, log: [], busy: false };
+const AI_SUGS = ["How was this week compared to last week?", "Who are my top customers?", "Which customers haven't come back in a while?", "Why aren't my WhatsApp messages sending?", "How do I add a staff member?", "Give me 3 ideas to get more visits"];
+const mdLite = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/^[-•]\s+/gm, "• ");
+function mountAssistant() {
+  if ($("#ai-fab")) return;
+  const fab = Object.assign(document.createElement("button"), { id: "ai-fab", className: "ai-fab", type: "button", innerHTML: `${ico("spark")} Ask AI` });
+  fab.setAttribute("aria-label", "Ask AI about your business or the software");
+  fab.onclick = () => { AI.open = true; drawAssistant(); };
+  document.body.appendChild(fab);
+}
+function drawAssistant() {
+  let p = $("#ai-panel");
+  if (!AI.open) { p?.remove(); $("#ai-fab").hidden = false; $("#ai-fab").focus(); return; }
+  $("#ai-fab").hidden = true;
+  if (!p) { p = document.createElement("section"); p.id = "ai-panel"; p.className = "ai-panel"; p.setAttribute("aria-label", "Ask AI"); document.body.appendChild(p); }
+  p.innerHTML = `<div class="ai-head"><b>${ico("spark")} Ask AI</b><div class="row" style="gap:4px">${AI.log.length ? `<button class="btn sm ghost" id="ai-new">New chat</button>` : ""}<button class="btn sm ghost" id="ai-x" aria-label="Close">✕</button></div></div>
+    <div class="ai-log" id="ai-log" aria-live="polite">${AI.log.length ? "" : `<div class="ai-msg bot">Hi! Ask me about your customers, sales, feedback, WhatsApp or staff, or how to do anything in the app. You can ask in Hindi too.</div><div class="ai-sugs">${AI_SUGS.map((q) => `<button data-q="${esc(q)}">${esc(q)}</button>`).join("")}</div>`}
+      ${AI.log.map((m) => `<div class="ai-msg ${m.role === "user" ? "me" : "bot"}${m.err ? " err" : ""}">${m.role === "user" ? esc(m.content) : mdLite(m.content)}</div>`).join("")}${AI.busy ? `<div class="ai-msg bot"><span class="spinner"></span> Thinking…</div>` : ""}</div>
+    <form class="ai-form" id="ai-form"><textarea id="ai-q" rows="1" maxlength="1000" placeholder="Ask a question…" aria-label="Your question"></textarea><button class="btn primary" ${AI.busy ? "disabled" : ""}>Send</button></form>`;
+  const log = $("#ai-log"); log.scrollTop = log.scrollHeight;
+  $("#ai-x").onclick = () => { AI.open = false; drawAssistant(); };
+  if ($("#ai-new")) $("#ai-new").onclick = () => { AI.log = []; drawAssistant(); };
+  p.querySelectorAll("[data-q]").forEach((b) => (b.onclick = () => askAI(b.dataset.q)));
+  const ta = $("#ai-q"); ta.focus();
+  ta.onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("#ai-form").requestSubmit(); } };
+  $("#ai-form").onsubmit = (e) => { e.preventDefault(); const q = ta.value.trim(); if (q && !AI.busy) askAI(q); };
+  p.onkeydown = (e) => { if (e.key === "Escape") { AI.open = false; drawAssistant(); } };
+}
+async function askAI(q) {
+  AI.log.push({ role: "user", content: q }); AI.busy = true; drawAssistant();
+  try {
+    const { data, error } = await sb.functions.invoke("assistant", { body: { business_id: BID, messages: AI.log.filter((m) => !m.err).map(({ role, content }) => ({ role, content })) } });
+    let j = data; if (error) { try { j = await error.context.json(); } catch { j = { error: "The assistant isn't available right now." }; } }
+    AI.log.push(j?.reply ? { role: "assistant", content: j.reply } : { role: "assistant", content: j?.error || "Something went wrong. Try again.", err: true });
+  } catch { AI.log.push({ role: "assistant", content: "Couldn't reach the assistant. Check your internet and try again.", err: true }); }
+  AI.busy = false; if (AI.open) drawAssistant();
+}
+
 async function aiCall(kind, input) {
   const { data, error } = await sb.functions.invoke("ai-content", { body: { business_id: BID, kind, input } });
   if (error) { let m = error.message, fb = true; try { const j = await error.context.json(); m = j.error || m; fb = !!j.fallback; } catch {} const e = new Error(m); e.fallback = fb; throw e; }
@@ -1011,6 +1050,32 @@ document.addEventListener("click", async (e) => {
       case "wa-buy": location.hash = "whatsapp"; document.querySelector("#wa-view") && openModal(`<div class="modal-head"><h2>Buy WhatsApp credits</h2><button class="btn ghost" data-close>Close</button></div><p class="small">You have ${balText()}.</p>${customBuy()}${packGroups(D.packs || [], true)}`, { wide: true }); break;
       case "buy-pack": closeModal(); await order("wa_credits", id); break;
       case "kw-auto": el.disabled = true; await autoKeywords(false); el.disabled = false; break;
+      case "fb-draft": { const f = D.feedback.find((x) => x.id === id); if (!f) break; el.disabled = true; el.textContent = "Writing…";
+        let text = ""; try { text = (await aiCall("complaint_reply", { name: f.name || "", rating: String(f.rating), tags: (f.tags || []).join(", "), text: f.text || "" })).text; }
+        catch { text = `Hi ${(f.name || "").split(" ")[0] || "there"}, thank you for telling us about your visit to ${D.biz.name}. We're really sorry we let you down${(f.tags || []).length ? ` on ${f.tags.join(", ").toLowerCase()}` : ""}. We're looking into it so it doesn't happen again. We'd love the chance to make it right on your next visit. – ${D.biz.name}`; }
+        el.disabled = false; el.innerHTML = `${ico("spark")} Draft a reply`;
+        const m = openModal(`<div class="modal-head"><h2>Reply to ${esc(f.name || "the customer")}</h2><button class="btn ghost" data-close>Close</button></div>
+          <p class="small muted">Edit it so it sounds like you. Sending from WhatsApp on your phone is free.</p><textarea id="fbd" rows="6" style="width:100%">${esc(text)}</textarea>
+          <div class="modal-foot"><button class="btn" id="fbd-copy">${ico("copy")} Copy</button>${f.phone ? `<a class="btn primary" id="fbd-wa" target="_blank" rel="noopener">${ico("wa")} Open in WhatsApp</a>` : ""}</div>`);
+        const t = m.querySelector("#fbd"), wa = m.querySelector("#fbd-wa"), upd = () => { if (wa) wa.href = `https://wa.me/${f.phone}?text=${encodeURIComponent(t.value)}`; }; upd(); t.oninput = upd;
+        m.querySelector("#fbd-copy").onclick = () => copy(t.value); break; }
+      case "offer-ai": { const goal = await new Promise((res) => { const m = openModal(`<div class="modal-head"><h2>Offer ideas with AI</h2><button class="btn ghost" data-close>Close</button></div>
+          <div class="field"><label for="oa-g">What's the occasion or goal?</label><input id="oa-g" placeholder="e.g. Diwali, slow Mondays, bring back old customers" maxlength="120"></div>
+          <div class="modal-foot"><button class="btn primary" id="oa-go">Suggest offers</button></div>`); m.querySelector("#oa-go").onclick = () => res(m.querySelector("#oa-g").value.trim() || "bring customers back"); });
+        const box = document.querySelector(".modal"); box.querySelector(".modal-foot").innerHTML = `<span class="spinner"></span> Thinking…`;
+        try { const { ideas } = await aiCall("offer_ideas", { goal });
+          if (!ideas?.length) throw new Error("No ideas came back. Try again.");
+          box.innerHTML = `<div class="modal-head"><h2>Pick an offer</h2><button class="btn ghost" data-close>Close</button></div><div class="list">${ideas.map((o, i) => `<div class="item" style="align-items:flex-start"><div class="grow"><b>${esc(o.title || o.code)}</b> <span class="tag">${esc(o.code)}</span><span class="muted small">${o.type === "percent" ? o.value + "% off" : inr(o.value) + " off"}${o.min_bill ? ` on bills over ${inr(o.min_bill)}` : ""} · ${o.days} days${o.why ? ` · ${esc(o.why)}` : ""}</span></div><button class="btn sm primary" data-i="${i}">Use this</button></div>`).join("")}</div>`;
+          box.querySelectorAll("[data-i]").forEach((b) => (b.onclick = () => { const o = ideas[+b.dataset.i]; closeModal(); couponForm({ code: o.code, title: o.title, type: o.type, value: o.value, min_bill: o.min_bill, expiry: new Date(Date.now() + o.days * 864e5).toISOString().slice(0, 10), active: true, show_to_customers: true }); }));
+        } catch (e2) { box.querySelector(".modal-foot").innerHTML = `<p class="err">${esc(e2.fallback ? "AI isn't available right now. Try again later." : e2.message)}</p>`; } break; }
+      case "tpl-ai": { const idea = await new Promise((res) => { const m = openModal(`<div class="modal-head"><h2>Write with AI</h2><button class="btn ghost" data-close>Close</button></div>
+          <div class="field"><label for="ta-i">What should the message be about?</label><input id="ta-i" maxlength="160" placeholder="e.g. Diwali offer, new menu, appointment reminder"></div>
+          <div class="modal-foot"><button class="btn primary" id="ta-go">Write it</button></div>`); const i = m.querySelector("#ta-i");
+          m.querySelector("#ta-go").onclick = () => { const v = i.value.trim(); if (v) { closeModal(); res(v); } }; i.onkeydown = (e) => { if (e.key === "Enter") m.querySelector("#ta-go").click(); }; });
+        el.disabled = true; el.textContent = "Writing…";
+        try { const r = await aiCall("template", { idea, category: $("#nt-cat").value }); $("#nt-body").value = r.text.trim(); $("#nt-body").dispatchEvent(new Event("input")); if (!$("#nt-title").value) $("#nt-title").value = idea.slice(0, 60); toast("Draft ready. Edit it, then send for approval."); }
+        catch (e2) { toast(e2.fallback ? "AI isn't available right now." : e2.message, "error"); }
+        el.disabled = false; el.innerHTML = `${ico("spark")} Write with AI`; break; }
       case "buy-custom": { const { m, u } = customTotal(), err = $("#cb-err");
         try { const r = await q(sb.rpc("order_wa_credits", { p_business: BID, p_marketing: m, p_utility: u })); closeModal(); D.pays = null; await payModal(r.payment_id); }
         catch (e2) { if (err) err.textContent = e2.message; else toast(e2.message, "error"); } break; }

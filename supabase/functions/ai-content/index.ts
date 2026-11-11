@@ -3,7 +3,7 @@
 // Customer review suggestions live in the separate review-suggest function.
 //
 // POST /functions/v1/ai-content   Authorization: Bearer <business user's token>
-// Body: { business_id, kind: "suggest_keywords"|"auto_keywords"|"description"|"post"|"faq"|"reply", input?: {...} }
+// Body: { business_id, kind: "suggest_keywords"|"auto_keywords"|"description"|"post"|"faq"|"reply"|"complaint_reply"|"template"|"offer_ideas", input?: {...} }
 // auto_keywords: builds keywords from the business profile (about, services, city, locality) and SAVES them (every plan;
 //   short "what customers like" words feed the review helper, local search phrases feed the SEO studio).
 // Secret: GROQ_API_KEY (free; optional GROQ_MODEL) or ANTHROPIC_API_KEY (optional AI_MODEL). Without either → 503 and the app uses templates.
@@ -19,12 +19,19 @@ async function ai(prompt: string, maxTokens: number, temperature = 0.7): Promise
   try {
     const groq = Deno.env.get("GROQ_API_KEY");
     if (groq) {
-      const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST", headers: { Authorization: `Bearer ${groq}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model: Deno.env.get("GROQ_MODEL") ?? "llama-3.3-70b-versatile", max_tokens: maxTokens, temperature, messages: [{ role: "user", content: prompt }] }),
-      });
-      if (!r.ok) return null;
-      const j = await r.json(); return String(j?.choices?.[0]?.message?.content ?? "").trim() || null;
+      // models open to free Groq accounts; tries the next one if a model is missing or busy
+      const models = [Deno.env.get("GROQ_MODEL"), "openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.1-8b-instant"].filter(Boolean) as string[];
+      for (const model of models) {
+        const oss = model.startsWith("openai/gpt-oss");
+        const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST", headers: { Authorization: `Bearer ${groq}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ model, max_tokens: maxTokens + (oss ? 1500 : 0), temperature, ...(oss ? { reasoning_effort: "low" } : {}), messages: [{ role: "user", content: prompt }] }),
+        });
+        if (!r.ok) { console.error("groq", model, r.status, (await r.text()).slice(0, 200)); if ([404, 429, 503, 400].includes(r.status)) continue; return null; }
+        const j = await r.json(); const t = String(j?.choices?.[0]?.message?.content ?? "").trim();
+        if (t) return t;
+      }
+      return null;
     }
     const key = Deno.env.get("ANTHROPIC_API_KEY"); if (!key) return null;
     const r = await fetch("https://api.anthropic.com/v1/messages", {
@@ -33,7 +40,7 @@ async function ai(prompt: string, maxTokens: number, temperature = 0.7): Promise
     });
     if (!r.ok) return null;
     const j = await r.json(); return (j.content ?? []).map((c: { text?: string }) => c.text ?? "").join("").trim() || null;
-  } catch { return null; }
+  } catch (e) { console.error("ai", String(e)); return null; }
 }
 const DAILY_LIMIT = 40;
 
@@ -48,6 +55,12 @@ function prompt(kind: string, b: Record<string, string>, kws: string[], input: R
   switch (kind) {
     case "auto_keywords":
       return `${ctx}\n\nCreate keywords for this business from the details above. Reply with ONLY JSON:\n{"liked":[...],"local":[...]}\n- "liked": 10 short things a happy customer could say they liked here: specific products, services and qualities that fit THIS business (e.g. "cold coffee", "hair spa", "friendly staff"). 1–4 words, lower case, NO place names, no "best", no "near me".\n- "local": 10 phrases real people in ${b.locality || b.city || "this area"} type into Google or ask AI assistants to find a business like this. Mix service + locality, service + city, a few "near me", and specific products. 2–6 words, lower case.\nOnly use services that fit the details given; don't invent unusual ones.`;
+    case "complaint_reply":
+      return `${ctx}\nUnhappy customer: ${input.name || "(name not given)"}, ${input.rating || "?"} stars, issues: ${input.tags || "(none)"}\nWhat they wrote: """${(input.text || "(nothing)").slice(0, 1500)}"""\n\nWrite a short WhatsApp message (max 400 characters) from the owner to this customer: thank them for telling us, apologise sincerely for the specific problem, say what we'll do about it in general terms, and invite them back or to call. No discounts or promises unless the owner adds them. No keywords. Warm, simple Indian English (or Hindi/Hinglish if they wrote in it). Reply with only the message.`;
+    case "template":
+      return `${ctx}\nIdea from the owner: ${input.idea || "(none)"}\nType: ${input.category === "utility" ? "update about the customer's account or order (WhatsApp UTILITY: no offers or promotion)" : "offer or promotion (WhatsApp MARKETING)"}\n\nWrite one WhatsApp message template body (max 550 characters) for this business. Start with "Hi {{1}}," ({{1}} = customer's first name). Use {{2}}, {{3}}… for parts the owner fills in each time (like the offer or a date), at most 3 extra. Don't start or end with a variable; end with a short sentence. Mention ${b.name} once. Friendly, simple, at most 2 emojis, no ALL CAPS. Reply with only the message text.`;
+    case "offer_ideas":
+      return `${ctx}\nOccasion or goal from the owner: ${input.goal || "bring customers back"}\n\nSuggest 3 different coupon offers for this business. Reply with ONLY a JSON array of objects: [{"code":"SHORTCODE","title":"name for the owner","type":"percent" or "flat","value":number,"min_bill":number,"days":number of days it should run,"why":"one short sentence"}]. Codes: 4–12 capital letters/digits. Keep discounts realistic for a small Indian business (5–25% or ₹50–₹300).`;
     case "suggest_keywords":
       return `${ctx}\n\nSuggest 12 local search phrases real customers in ${b.city || "this city"} type into Google or ask AI assistants when looking for a business like this. Mix: service + city, "near me", specific products/services, occasions. Lower case, 2–6 words each. Reply with ONLY a JSON array of strings.`;
     case "description":
@@ -74,17 +87,19 @@ Deno.serve(async (req: Request) => {
   let body: { business_id?: string; kind?: string; input?: Record<string, string> };
   try { body = await req.json(); } catch { return json({ error: "Invalid request" }, 400); }
   const { business_id, kind } = body; const input = body.input ?? {};
-  if (!business_id || !["suggest_keywords", "auto_keywords", "description", "post", "faq", "reply"].includes(kind ?? "")) return json({ error: "Invalid request" }, 400);
+  const AREA: Record<string, string> = { auto_keywords: "settings", complaint_reply: "reviews", template: "whatsapp", offer_ideas: "customers" };
+  const SEO_KINDS = ["suggest_keywords", "description", "post", "faq", "reply"];
+  if (!business_id || ![...SEO_KINDS, ...Object.keys(AREA)].includes(kind ?? "")) return json({ error: "Invalid request" }, 400);
 
   const { data: m } = await admin.from("business_members").select("role").eq("business_id", business_id).eq("user_id", u.user.id).maybeSingle();
   if (!m) return json({ error: "Not allowed" }, 403);
-  const { data: okPerm } = await admin.rpc("member_has_perm", { b: business_id, u: u.user.id, area: kind === "auto_keywords" ? "settings" : "reviews" });
-  if (!okPerm) return json({ error: kind === "auto_keywords" ? "Your login can't change the business profile. Ask the owner." : "Your login isn't allowed to use the SEO studio. Ask the owner." }, 403);
+  const { data: okPerm } = await admin.rpc("member_has_perm", { b: business_id, u: u.user.id, area: AREA[kind!] ?? "reviews" });
+  if (!okPerm) return json({ error: "Your login isn't allowed to do this. Ask the owner." }, 403);
   const { data: open } = await admin.rpc("biz_open", { b: business_id });
   if (!open) return json({ error: "Your plan isn't active. Pay for your plan to use AI writing." }, 403);
   const mod = kind === "reply" ? ["seo", "google_replies"] : ["seo"];
   const ok = await Promise.all(mod.map((k) => admin.rpc("has_module", { b: business_id, m: k }).then((r) => !!r.data)));
-  if (kind !== "auto_keywords" && !ok.some(Boolean)) return json({ error: "Keywords & SEO isn't in your plan. Add it from Plan & services.", module: "seo" }, 403);
+  if (SEO_KINDS.includes(kind!) && !ok.some(Boolean)) return json({ error: "Keywords & SEO isn't in your plan. Add it from Plan & services.", module: "seo" }, 403);
 
   const since = new Date(Date.now() - 864e5).toISOString();
   const { count } = await admin.from("ai_usage").select("id", { count: "exact", head: true }).eq("business_id", business_id).gte("created_at", since);
@@ -111,6 +126,14 @@ Deno.serve(async (req: Request) => {
     }
     for (const keyword of add) await admin.from("business_keywords").insert({ business_id, keyword, source: "ai" });   // one by one: a duplicate never blocks the rest
     return json({ added: add.length, liked: (j.liked ?? []).filter(ok2), local: (j.local ?? []).filter(ok2) });
+  }
+  if (kind === "offer_ideas") {
+    try {
+      const arr = JSON.parse(reply.slice(reply.indexOf("["), reply.lastIndexOf("]") + 1));
+      const ideas = (Array.isArray(arr) ? arr : []).slice(0, 3).map((o: any) => ({ code: String(o.code ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12), title: String(o.title ?? "").slice(0, 60),
+        type: o.type === "flat" ? "flat" : "percent", value: Math.max(1, Math.min(o.type === "flat" ? 1000 : 50, Number(o.value) || 10)), min_bill: Math.max(0, Number(o.min_bill) || 0), days: Math.max(1, Math.min(90, Number(o.days) || 14)), why: String(o.why ?? "").slice(0, 160) })).filter((o: any) => o.code.length >= 4);
+      return json({ ideas });
+    } catch { return json({ error: "AI reply unreadable. Try again.", fallback: true }, 502); }
   }
   if (kind === "suggest_keywords") {
     let list: string[] = [];
