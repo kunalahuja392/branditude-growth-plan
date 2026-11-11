@@ -83,11 +83,13 @@ Deno.serve(async (req: Request) => {
     params, recipients: recipients.length, created_by: userId,
   }).select("id").single();
   if (bcErr) return json({ error: "Couldn't start the broadcast." }, 500);
-  const { data: reserved } = await admin.rpc("wa_reserve", { p_business: business_id, p_credits: cost, p_ref: bc.id });
+  const kind = tpl.category === "utility" ? "utility" : "marketing", kindName = kind === "utility" ? "utility" : "promotional";
+  const { data: reserved } = await admin.rpc("wa_reserve", { p_business: business_id, p_credits: cost, p_ref: bc.id, p_kind: kind });
   if (!reserved) {
     await admin.from("broadcasts").delete().eq("id", bc.id);
-    const { data: wallet } = await admin.from("wa_wallets").select("balance").eq("business_id", business_id).maybeSingle();
-    return json({ error: `Not enough credits. This needs ${cost}, you have ${wallet?.balance ?? 0}.`, needed: cost, balance: wallet?.balance ?? 0 }, 402);
+    const { data: wallet } = await admin.from("wa_wallets").select("balance,utility_balance").eq("business_id", business_id).maybeSingle();
+    const have = kind === "utility" ? wallet?.utility_balance ?? 0 : wallet?.balance ?? 0;
+    return json({ error: `Not enough ${kindName} credits. This message needs ${cost}, you have ${have}. Buy ${kindName} credits on the WhatsApp page.`, needed: cost, balance: wallet?.balance ?? 0, utility_balance: wallet?.utility_balance ?? 0, kind }, 402);
   }
 
   // 4. Send, a few at a time
@@ -122,9 +124,9 @@ Deno.serve(async (req: Request) => {
   // 5. Log, refund failures, finish
   for (let i = 0; i < logs.length; i += 500) await admin.from("wa_messages").insert(logs.slice(i, i + 500));
   const refund = failed * tpl.credits_per_message;
-  if (refund > 0) await admin.rpc("wa_refund", { p_business: business_id, p_credits: refund, p_ref: bc.id });
+  if (refund > 0) await admin.rpc("wa_refund", { p_business: business_id, p_credits: refund, p_ref: bc.id, p_kind: kind });
   await admin.from("broadcasts").update({ sent, failed, credits_used: cost - refund }).eq("id", bc.id);
-  const { data: wallet } = await admin.from("wa_wallets").select("balance").eq("business_id", business_id).maybeSingle();
+  const { data: wallet } = await admin.from("wa_wallets").select("balance,utility_balance").eq("business_id", business_id).maybeSingle();
 
-  return json({ broadcast_id: bc.id, sent, failed, credits_used: cost - refund, balance: wallet?.balance ?? 0 });
+  return json({ broadcast_id: bc.id, sent, failed, credits_used: cost - refund, kind, balance: wallet?.balance ?? 0, utility_balance: wallet?.utility_balance ?? 0 });
 });

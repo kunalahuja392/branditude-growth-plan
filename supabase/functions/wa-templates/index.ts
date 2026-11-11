@@ -1,5 +1,5 @@
 // Supabase Edge Function: Branditude team sends a business's WhatsApp template to Meta for approval, and checks its status.
-// POST { action:"submit"|"status"|"test"|"register", template_id, to? }   Authorization: Bearer <super_admin/team token>
+// POST { action:"submit"|"status"|"test"|"register"|"spend"|"profile"|"profile_get", template_id?, to?, since?, about?… }   Authorization: Bearer <super_admin/team token>
 // Secrets: WA_TOKEN, WA_WABA_ID (WhatsApp Business Account id), optional WA_API_VERSION.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
@@ -33,6 +33,46 @@ Deno.serve(async (req: Request) => {
     const j = await r.json();
     if (!r.ok) return json({ error: j?.error?.error_data?.details || j?.error?.message || "Meta refused it", code: j?.error?.code }, 502);
     return json({ ok: true, registered: true, pin_saved_as: key });
+  }
+  // Admin: what Meta actually charged (pricing analytics), by category, since a date
+  if (body.action === "spend") {
+    const from = Math.floor(new Date(String(body.since || "2026-11-01") + "T00:00:00+05:30").getTime() / 1000), to = Math.floor(Date.now() / 1000);
+    const f = `pricing_analytics.start(${from}).end(${to}).granularity(DAILY).dimensions(["PRICING_CATEGORY"])`;
+    const r = await fetch(`https://graph.facebook.com/${v}/${waba}?fields=${encodeURIComponent(f)}`, { headers: { Authorization: `Bearer ${token}` } });
+    const j = await r.json();
+    if (!r.ok) return json({ error: j?.error?.message || "Couldn't read Meta spend", code: j?.error?.code }, 502);
+    const by: Record<string, { cost: number; volume: number }> = {};
+    for (const blk of j?.pricing_analytics?.data ?? []) for (const d of blk.data_points ?? []) {
+      const k = String(d.pricing_category || "OTHER").toLowerCase(); by[k] = by[k] || { cost: 0, volume: 0 };
+      by[k].cost += Number(d.cost || 0); by[k].volume += Number(d.volume || 0);
+    }
+    return json({ ok: true, since: body.since || "2026-11-01", by, total: Object.values(by).reduce((a, x) => a + x.cost, 0) });
+  }
+  // Admin: set the sender's WhatsApp profile (about, description, address, email, websites, category, photo)
+  if (body.action === "profile" || body.action === "profile_get") {
+    const phoneId = Deno.env.get("WA_DEFAULT_PHONE_NUMBER_ID");
+    if (!phoneId) return json({ error: "Add the WA_DEFAULT_PHONE_NUMBER_ID secret first." }, 503);
+    if (body.action === "profile") {
+      const p = body as unknown as Record<string, unknown>;
+      const payload: Record<string, unknown> = { messaging_product: "whatsapp" };
+      for (const k of ["about", "address", "description", "email", "vertical"]) if (typeof p[k] === "string") payload[k] = p[k];
+      if (Array.isArray(p.websites)) payload.websites = (p.websites as string[]).slice(0, 2);
+      if (typeof p.photo_url === "string" && p.photo_url.startsWith("https://")) {
+        const img = await fetch(p.photo_url as string); if (!img.ok) return json({ error: "Couldn't load the photo" }, 400);
+        const bytes = new Uint8Array(await img.arrayBuffer()), type = img.headers.get("content-type")?.split(";")[0] || "image/png";
+        const appId = Deno.env.get("WA_APP_ID") ?? "1585387223625489";
+        const up = await fetch(`https://graph.facebook.com/${v}/${appId}/uploads?file_name=profile.${type.endsWith("png") ? "png" : "jpg"}&file_length=${bytes.length}&file_type=${encodeURIComponent(type)}`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+        const uj = await up.json(); if (!up.ok || !uj.id) return json({ error: uj?.error?.message || "Couldn't start the photo upload" }, 502);
+        const put = await fetch(`https://graph.facebook.com/${v}/${uj.id}`, { method: "POST", headers: { Authorization: `OAuth ${token}`, file_offset: "0" }, body: bytes });
+        const pj = await put.json(); if (!put.ok || !pj.h) return json({ error: pj?.error?.message || "Couldn't upload the photo" }, 502);
+        payload.profile_picture_handle = pj.h;
+      }
+      const r = await fetch(`https://graph.facebook.com/${v}/${phoneId}/whatsapp_business_profile`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const j = await r.json(); if (!r.ok) return json({ error: j?.error?.error_data?.details || j?.error?.message || "Meta refused the profile" }, 502);
+    }
+    const g = await fetch(`https://graph.facebook.com/${v}/${phoneId}/whatsapp_business_profile?fields=about,address,description,email,profile_picture_url,websites,vertical`, { headers: { Authorization: `Bearer ${token}` } });
+    const gj = await g.json(); if (!g.ok) return json({ error: gj?.error?.message || "Couldn't read the profile" }, 502);
+    return json({ ok: true, profile: gj?.data?.[0] ?? gj });
   }
   const { data: t } = await admin.from("wa_templates").select("*").eq("id", body.template_id ?? "").maybeSingle();
   if (!t) return json({ error: "Template not found" }, 404);

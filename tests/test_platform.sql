@@ -144,7 +144,7 @@ set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-00000000
 do $$ declare r jsonb; b uuid; begin
   select id into b from businesses;
   r := create_order(b,'wa_credits',(select id from wa_credit_packs where credits=500),null);
-  assert (r->>'total')::numeric = 599*1.18;
+  assert (r->>'total')::numeric = 699*1.18;
   begin r := create_order(b,'product',(select id from products where name='Property lead ads'),null); assert false; exception when others then assert sqlerrm like 'Service not available%'; end;
   r := create_order(b,'product',(select id from products where name='Review QR standee'),null);
   perform set_config('bgp.wa_payment', (select id::text from payments where kind='wa_credits'), false);
@@ -160,6 +160,9 @@ do $$ declare b uuid; ok boolean; begin
   ok := wa_reserve(b, 100, 'test'); assert not ok, 'cannot overdraw';
   perform wa_refund(b, 10, 'test');
   assert (select balance from wa_wallets where business_id=b)=60;
+  -- utility credits are separate: none bought yet, so a utility send can't take promotional credits
+  ok := wa_reserve(b, 1, 'test', 'utility'); assert not ok, 'no utility credits yet';
+  assert (select balance from wa_wallets where business_id=b)=60, 'promotional untouched';
 end $$;
 reset role;
 set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000a1');
@@ -668,6 +671,41 @@ do $$ declare b uuid := current_setting('test.glow'); begin
   begin perform acc_head_save(b, '{"name":"Snacks","kind":"expense","class":"operating"}'); assert false; exception when raise_exception then assert sqlerrm like 'Only the owner or an admin%', sqlerrm; end;
   begin update acc_heads set name = 'Hacked' where business_id = b and name = 'Rent'; assert false; exception when insufficient_privilege then null; end;
   perform acc_post(b, jsonb_build_object('entry', 'expense', 'head_id', (select id from acc_heads where business_id = b and name = 'Gas cylinders'), 'money_id', pg_temp.sys(b, 'cash'), 'amount', 1100));
+end $$;
+reset role;
+
+\echo '--- 22. Credit types, margin limits, Meta balance'
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
+do $$ declare b uuid; r jsonb; begin
+  select id into b from businesses where name='Spice Route Cafe';
+  perform admin_adjust_credits(b, 200, 'test utility', 'utility');
+  assert (select utility_balance from wa_wallets where business_id=b)=200 and (select balance from wa_wallets where business_id=b)=60, 'utility added separately';
+  -- margins: below 20% and above 40% are rejected
+  begin insert into wa_credit_packs(name,credits,price,kind) values ('Too cheap',1000,1100,'marketing'); assert false; exception when others then assert sqlerrm like '%margin%', sqlerrm; end;
+  begin insert into wa_credit_packs(name,credits,price,kind) values ('Too dear',1000,250,'utility'); assert false; exception when others then assert sqlerrm like '%margin%', sqlerrm; end;
+  insert into wa_credit_packs(name,credits,price,kind) values ('OK utility',1000,170,'utility');
+  for r in select to_jsonb(p) from wa_credit_packs p where active loop
+    assert (r->>'price')::numeric/(r->>'credits')::numeric between meta_cost(r->>'kind')*1.2 - 0.0001 and meta_cost(r->>'kind')*1.4 + 0.0001, 'pack '||(r->>'name')||' within margin';
+  end loop;
+  insert into meta_recharges(amount, paid_on, note) values (1000, current_date, 'test');
+  r := wa_admin_summary();
+  assert (r->'held'->>'utility')::int >= 200, 'summary shows pending utility credits';
+  assert (r->>'recharged')::numeric >= 1000, 'summary sums recharges';
+end $$;
+reset role;
+set role service_role;
+do $$ declare b uuid; ok boolean; begin
+  select id into b from businesses where name='Spice Route Cafe';
+  ok := wa_reserve(b, 5, 'test', 'utility'); assert ok;
+  assert (select utility_balance from wa_wallets where business_id=b)=195 and (select balance from wa_wallets where business_id=b)=60, 'utility send uses utility credits only';
+  perform wa_refund(b, 5, 'test', 'utility');
+  assert (select utility_balance from wa_wallets where business_id=b)=200;
+end $$;
+reset role;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000a1');
+do $$ begin
+  begin perform wa_admin_summary(); assert false; exception when others then null; end;
+  assert (select count(*) from meta_recharges)=0, 'businesses cannot see Meta recharges';
 end $$;
 reset role;
 \echo 'ALL TESTS PASSED'

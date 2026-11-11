@@ -35,8 +35,9 @@ Deno.serve(async (req: Request) => {
     const list = (due ?? []).filter((c: { phone: string }) => /^\d{11,15}$/.test(c.phone));
     if (!list.length) { await note(r, "Nobody due today."); out[key] = 0; continue; }
     const cost = list.length * tpl.credits_per_message, ref = `auto:${r.kind}:${new Date().toISOString().slice(0, 10)}`;
-    const { data: ok } = await admin.rpc("wa_reserve", { p_business: r.business_id, p_credits: cost, p_ref: ref });
-    if (!ok) { await note(r, `Skipped: ${list.length} message(s) due but not enough credits (needs ${cost}).`); out[key] = "no credits"; continue; }
+    const kind = tpl.category === "utility" ? "utility" : "marketing";
+    const { data: ok } = await admin.rpc("wa_reserve", { p_business: r.business_id, p_credits: cost, p_ref: ref, p_kind: kind });
+    if (!ok) { await note(r, `Skipped: ${list.length} message(s) due but not enough ${kind === "utility" ? "utility" : "promotional"} credits (needs ${cost}).`); out[key] = "no credits"; continue; }
     const phoneId = biz.wa_phone_number_id || defaultPhoneId;
     let sent = 0, failed = 0;
     for (const c of list) {
@@ -54,7 +55,7 @@ Deno.serve(async (req: Request) => {
       if (status === "sent") sent++; else failed++;
       await admin.from("auto_msg_log").insert({ business_id: r.business_id, kind: r.kind, customer_id: c.customer_id, ref: c.ref, n: c.n, status, credits: status === "sent" ? tpl.credits_per_message : 0, error: err });
     }
-    if (failed) await admin.rpc("wa_refund", { p_business: r.business_id, p_credits: failed * tpl.credits_per_message, p_ref: ref });
+    if (failed) await admin.rpc("wa_refund", { p_business: r.business_id, p_credits: failed * tpl.credits_per_message, p_ref: ref, p_kind: kind });
     await note(r, `Sent ${sent}${failed ? `, ${failed} failed (refunded)` : ""}.`);
     out[key] = { sent, failed };
   }

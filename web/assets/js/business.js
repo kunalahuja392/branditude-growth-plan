@@ -61,12 +61,12 @@ async function loadAll() {
     q(sb.from("visits").select("*").eq("business_id", BID).gte("created_at", since).order("created_at", { ascending: false })),
     q(sb.from("loyalty_programs").select("*").eq("business_id", BID).maybeSingle()),
     q(sb.from("loyalty_rewards").select("*").eq("business_id", BID).order("visit_no")),
-    q(sb.from("wa_wallets").select("balance").eq("business_id", BID).maybeSingle()),
+    q(sb.from("wa_wallets").select("balance,utility_balance").eq("business_id", BID).maybeSingle()),
     q(sb.from("settings").select("key,value").in("key", ["payment", "whatsapp", "agency", "gst", "razorpay"])),
   ]);
   D.mods = await q(sb.from("modules").select("*").eq("active", true).order("sort")).catch(() => []);
   D.payWaiting = (await q(sb.from("payments").select("id").eq("business_id", BID).eq("kind", "subscription").eq("status", "pending").not("utr", "is", null).limit(1))).length > 0;
-  Object.assign(D, { biz, customers, coupons, feedback, reminders, visits, prog: prog || { enabled: false, name: "Loyalty card", stamps: 10, theme: "saffron" }, rewards, wallet: wallet?.balance ?? 0 });
+  Object.assign(D, { biz, customers, coupons, feedback, reminders, visits, prog: prog || { enabled: false, name: "Loyalty card", stamps: 10, theme: "saffron" }, rewards, wallet: wallet?.balance ?? 0, walletU: wallet?.utility_balance ?? 0 });
   D.settings = Object.fromEntries(settings.map((s) => [s.key, s.value]));
 }
 async function reload(...keys) {
@@ -78,7 +78,7 @@ async function reload(...keys) {
     reminders: async () => (D.reminders = await q(sb.from("reminders").select("*").eq("business_id", BID).order("due"))),
     visits: async () => (D.visits = await q(sb.from("visits").select("*").eq("business_id", BID).gte("created_at", new Date(Date.now() - 60 * 864e5).toISOString()).order("created_at", { ascending: false }))),
     loyalty: async () => { D.prog = await q(sb.from("loyalty_programs").select("*").eq("business_id", BID).maybeSingle()); D.rewards = await q(sb.from("loyalty_rewards").select("*").eq("business_id", BID).order("visit_no")); },
-    wallet: async () => (D.wallet = (await q(sb.from("wa_wallets").select("balance").eq("business_id", BID).maybeSingle()))?.balance ?? 0),
+    wallet: async () => { const w = await q(sb.from("wa_wallets").select("balance,utility_balance").eq("business_id", BID).maybeSingle()); D.wallet = w?.balance ?? 0; D.walletU = w?.utility_balance ?? 0; },
   };
   await Promise.all(keys.map((k) => map[k]()));
 }
@@ -330,6 +330,18 @@ function cardModal(c) {
 
 /* ---------- WhatsApp ---------- */
 let WA = { aud: "all", tpl: null, params: [] };
+// Two kinds of WhatsApp credits, matching Meta's message categories
+const CREDIT = {
+  marketing: { name: "Promotional credits", short: "promotional", for: "Offers and coupons, festival greetings, birthday wishes, \u201cwe miss you\u201d messages and Google review requests." },
+  utility: { name: "Utility credits", short: "utility", for: "Loyalty stamp and reward updates, and service updates like order or appointment confirmations. Much cheaper." },
+};
+const kindOf = (t) => (t?.category === "utility" ? "utility" : "marketing");
+const balOf = (t) => (kindOf(t) === "utility" ? D.walletU || 0 : D.wallet || 0);
+const balText = () => `<b class="num">${nfmt(D.wallet || 0)}</b> promotional · <b class="num">${nfmt(D.walletU || 0)}</b> utility credits`;
+const packGroups = (packs, compact = false) => ["marketing", "utility"].map((k) => { const list = packs.filter((p) => (p.kind || "marketing") === k); if (!list.length) return "";
+  return `<div style="margin-top:${compact ? 10 : 16}px"><h3 style="margin:0 0 2px">${CREDIT[k].name}</h3><p class="small muted" style="margin:0 0 10px">For: ${esc(CREDIT[k].for)}</p>
+    ${compact ? `<div class="list">${list.map((p) => `<div class="item"><div class="grow"><b>${esc(p.name)}</b><span class="muted small num">${nfmt(p.credits)} messages · ${inr2(p.price / p.credits)}/message</span></div><b class="num">${inr(p.price)}${plusGst()}</b><button class="btn sm primary" data-a="buy-pack" data-id="${p.id}">Buy</button></div>`).join("")}</div>`
+      : `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(190px,1fr))">${list.map((p) => `<div class="coupon" style="border-style:solid"><b style="font-size:16px">${esc(p.name)}</b><div class="num"><b style="font-size:22px">${nfmt(p.credits)}</b> messages</div><div class="muted small num">${inr(p.price)}${plusGst()} · ${inr2(p.price / p.credits)}/message</div><button class="btn sm primary" data-a="buy-pack" data-id="${p.id}" ${D.biz.status === "active" ? "" : "disabled"}>Buy</button></div>`).join("")}</div>`}</div>`; }).join("");
 VIEWS.whatsapp = () => `<div id="wa-view"><div class="loading"><span class="spinner"></span></div></div>`;
 after.whatsapp = async () => {
   const [packs, tpls, bcs, ledger] = await Promise.all([
@@ -338,31 +350,31 @@ after.whatsapp = async () => {
   ]);
   D.tpls = tpls; D.packs = packs;
   const note = D.settings.whatsapp?.price_note || "";
-  const packsHtml = `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">${packs.map((p) => `<div class="coupon" style="border-style:solid"><b style="font-size:17px">${esc(p.name)}</b><div class="num"><b style="font-size:22px">${nfmt(p.credits)}</b> messages</div><div class="muted small num">${inr(p.price)}${plusGst()} · ${inr2(p.price / p.credits)}/message</div><button class="btn sm primary" data-a="buy-pack" data-id="${p.id}" ${D.biz.status === "active" ? "" : "disabled"}>Buy</button></div>`).join("")}</div>`;
+  const packsHtml = packGroups(packs);
   const el = $("#wa-view"); if (!el) return;
   D.autoRules = await q(sb.from("auto_msgs").select("*").eq("business_id", BID)).catch(() => []);
   D.autoPrev = await q(sb.rpc("auto_msgs_preview", { p_business: BID })).catch(() => ({}));
   D.autoLog = await q(sb.from("auto_msg_log").select("kind,status,created_at").eq("business_id", BID).order("created_at", { ascending: false }).limit(200)).catch(() => []);
-  const perMsg = packs.length ? [Math.min(...packs.map((p) => p.price / p.credits)), Math.max(...packs.map((p) => p.price / p.credits))] : null;
+  const promo = packs.filter((p) => (p.kind || "marketing") === "marketing"), perMsg = promo.length ? [Math.min(...promo.map((p) => p.price / p.credits)), Math.max(...promo.map((p) => p.price / p.credits))] : null;
   D.perMsg = perMsg;
   if (!waOn()) {
     el.innerHTML = head("WhatsApp & reminders", "Optional. Birthday wishes, loyalty and offer reminders, and messages to single customers from a verified WhatsApp business number.") + `
-    <div class="card"><div class="card-head"><h2>Charges</h2><span class="pill">Off</span></div><p><b>Charges apply per message.</b> Buy a prepaid credit pack; each message uses ${perMsg ? `1 credit (about ${inr2(perMsg[0])}–${inr2(perMsg[1])})` : "credits"}. Failed messages are refunded automatically. ${esc(note)}</p>
+    <div class="card"><div class="card-head"><h2>Charges</h2><span class="pill">Off</span></div><p><b>Charges apply per message.</b> Buy prepaid credits; each message uses 1 credit of its type. <b>Promotional</b> messages (offers, wishes, review requests) use promotional credits; <b>utility</b> messages (loyalty and service updates) use the cheaper utility credits. Failed messages are refunded automatically.</p>
     ${D.biz.status === "active" ? "" : `<p class="note" style="margin-top:10px">Your plan needs to be active before you can buy credits.</p>`}<div style="margin-top:16px">${packsHtml}</div>
     <p class="small muted" style="margin-top:12px">Buying your first pack switches WhatsApp on once the payment is confirmed. You can set up reminders below now; nothing is sent until you have credits.</p></div>
     ${remindersCard()}${bulkUpsell()}`;
     return;
   }
   if (!hasMod("bulk_whatsapp")) {
-    el.innerHTML = head("WhatsApp & reminders", `Balance: <b class="num">${nfmt(D.wallet)} credits</b>. Charges apply per message${perMsg ? ` (about ${inr2(perMsg[0])}–${inr2(perMsg[1])} each)` : ""}.`, `<button class="btn" data-a="wa-buy">${ico("plus")} Buy credits</button>`) + remindersCard() + bulkUpsell() + `
-    <div class="card" style="margin-top:16px"><div class="card-head"><h2>Credit history</h2></div>${ledger.length ? `<div class="list">${ledger.map((x) => `<div class="item small"><div class="grow">${esc(x.reason)} <span class="muted">${fmtDT(x.created_at)}</span></div><b class="num">${x.delta > 0 ? "+" : ""}${x.delta}</b></div>`).join("")}</div>` : `<div class="empty">No credits used yet.</div>`}</div>`;
+    el.innerHTML = head("WhatsApp & reminders", `Balance: ${balText()}. Charges apply per message.`, `<button class="btn" data-a="wa-buy">${ico("plus")} Buy credits</button>`) + remindersCard() + bulkUpsell() + `
+    <div class="card" style="margin-top:16px"><div class="card-head"><h2>Credit history</h2></div>${ledger.length ? `<div class="list">${ledger.map((x) => `<div class="item small"><div class="grow">${esc(x.reason)} <span class="muted">${x.kind === "utility" ? "utility" : "promotional"} · ${fmtDT(x.created_at)}</span></div><b class="num">${x.delta > 0 ? "+" : ""}${x.delta}</b></div>`).join("")}</div>` : `<div class="empty">No credits used yet.</div>`}</div>`;
     return;
   }
   if (!WA.tpl && tpls.length) WA.tpl = tpls[0].id;
   const t = tpls.find((x) => x.id === WA.tpl) || tpls[0], aud = audience(WA.aud).filter((c) => c.phone), cost = aud.length * (t?.credits_per_message || 1);
   const sg = segments();
   const preview = t ? t.body_preview.replace(/\{\{(\d+)\}\}/g, (m, n) => (n === "1" ? (aud[0]?.name || "Priya").split(" ")[0] : WA.params[n - 2] || `[${t.params[n - 2] || "…"}]`)) : "";
-  el.innerHTML = head("WhatsApp & reminders", `Balance: <b class="num">${nfmt(D.wallet)} credits</b>. Charges apply per message. ${esc(note)}`, `<button class="btn" data-a="wa-buy">${ico("plus")} Buy credits</button>`) + remindersCard() + `<div style="height:16px"></div>` + `
+  el.innerHTML = head("WhatsApp & reminders", `Balance: ${balText()}. Charges apply per message.`, `<button class="btn" data-a="wa-buy">${ico("plus")} Buy credits</button>`) + remindersCard() + `<div style="height:16px"></div>` + `
   <div class="grid g2">
     <div class="card"><div class="card-head"><h2>New broadcast</h2></div>
       <div class="fields">
@@ -370,8 +382,8 @@ after.whatsapp = async () => {
         <div class="field"><label for="wa-tpl">Message</label><select id="wa-tpl">${tpls.map((x) => `<option value="${x.id}" ${t?.id === x.id ? "selected" : ""}>${esc(x.title)}</option>`).join("")}</select></div>
       </div>
       ${(t?.params || []).map((p, i) => `<div class="field" style="margin-top:12px"><label for="wa-p${i}">${esc(p)}</label><input id="wa-p${i}" data-wp="${i}" value="${esc(WA.params[i] ?? defaultParam(p))}"></div>`).join("")}
-      <div class="row" style="margin-top:14px;justify-content:space-between"><span class="small">${aud.length} customers × ${t?.credits_per_message || 1} credit = <b class="num">${nfmt(cost)} credits</b>${cost > D.wallet ? ' <span class="pill bad">Not enough credits</span>' : ""}</span>
-        <button class="btn primary" data-a="wa-send" ${aud.length && cost <= D.wallet && t ? "" : "disabled"}>${ico("send")} Send to ${aud.length}</button></div>
+      <div class="row" style="margin-top:14px;justify-content:space-between"><span class="small">${aud.length} customers × ${t?.credits_per_message || 1} ${CREDIT[kindOf(t)].short} credit = <b class="num">${nfmt(cost)} credits</b>${cost > balOf(t) ? ` <span class="pill bad">Not enough ${CREDIT[kindOf(t)].short} credits</span>` : ""}</span>
+        <button class="btn primary" data-a="wa-send" ${aud.length && cost <= balOf(t) && t ? "" : "disabled"}>${ico("send")} Send to ${aud.length}</button></div>
     </div>
     <div class="card"><div class="card-head"><h2>Preview</h2></div><div class="bubble" id="wa-prev">${esc(preview)}</div><p class="small muted" style="margin-top:12px">Messages use templates approved by WhatsApp, so the wording is fixed. You fill in the highlighted parts.</p></div>
   </div>
@@ -397,11 +409,11 @@ function remindersCard() {
   const sentMonth = (k) => (D.autoLog || []).filter((l) => l.kind === k && l.status === "sent" && l.created_at >= new Date(Date.now() - 30 * 864e5).toISOString()).length;
   const pm = D.perMsg ? ` (about ${inr2(D.perMsg[0])}–${inr2(D.perMsg[1])})` : "";
   return `<div class="card" style="margin-top:16px"><div class="card-head"><h2>Automatic reminders</h2><span class="pill">Optional</span></div>
-    <p class="small muted" style="margin-top:-6px">Sent every morning around 10 am to the customers who are due. <b>Charges apply:</b> each message uses 1 WhatsApp credit${pm}. Nothing is sent while a reminder is off or you have no credits.</p>
+    <p class="small muted" style="margin-top:-6px">Sent every morning around 10 am to the customers who are due. <b>Charges apply:</b> each message uses 1 credit of the type shown on the reminder. Nothing is sent while a reminder is off or you have no credits of that type.</p>
     <div class="auto-grid">${Object.keys(AUTO).map((k) => { const r = rule(k), a = AUTO[k], loyOff = k === "loyalty" && !hasMod("loyalty");
       const ex = a.ex.replace("{biz}", D.biz.name).replace("{card}", D.prog?.name || "Loyalty").replace("{offer}", r.offer || "a special treat");
       return `<div class="auto ${r.enabled ? "on" : ""}" data-auto="${k}">
-        <div class="row" style="justify-content:space-between;align-items:center"><b>${a.t}</b><label class="switch"><input type="checkbox" data-am="enabled" ${r.enabled ? "checked" : ""} ${loyOff ? "disabled" : ""} aria-label="Turn ${a.t} on"><span></span></label></div>
+        <div class="row" style="justify-content:space-between;align-items:center"><b>${a.t} <span class="pill ${k === "loyalty" ? "info" : ""}" style="font-weight:500">${k === "loyalty" ? "utility" : "promotional"}</span></b><label class="switch"><input type="checkbox" data-am="enabled" ${r.enabled ? "checked" : ""} ${loyOff ? "disabled" : ""} aria-label="Turn ${a.t} on"><span></span></label></div>
         <div class="bubble small">${esc(ex)}</div>
         <div class="auto-f"><label>Send <input type="number" min="0" max="365" data-am="days" value="${r.days}" aria-label="Days"> ${a.when}</label>
           ${a.times ? `<label>Up to <input type="number" min="1" max="5" data-am="times" value="${r.times}" aria-label="Times"> time(s), every <input type="number" min="1" max="60" data-am="gap_days" value="${r.gap_days}" aria-label="Gap days"> days</label>` : ""}
@@ -469,7 +481,7 @@ async function waOne(c, tplName) {
     const m = openModal(`<div class="modal-head"><h2>WhatsApp ${esc(c.name.split(" ")[0])}</h2><button class="btn ghost" data-close>Close</button></div>
       <div class="field"><label for="w1-t">Message</label><select id="w1-t">${tpls.map((x) => `<option value="${x.id}" ${x.id === t.id ? "selected" : ""}>${esc(x.title)}</option>`).join("")}</select></div>
       ${t.params.map((p, i) => `<div class="field" style="margin-top:12px"><label for="w1-p${i}">${esc(p)}</label><input id="w1-p${i}" value="${esc(auto(p))}"></div>`).join("")}
-      <div class="bubble" id="w1-prev" style="margin-top:14px"></div><p class="small muted" style="margin-top:8px">Uses ${t.credits_per_message} credit · balance ${nfmt(D.wallet)}</p><p class="err" id="w1-err"></p>
+      <div class="bubble" id="w1-prev" style="margin-top:14px"></div><p class="small muted" style="margin-top:8px">Uses ${t.credits_per_message} ${CREDIT[kindOf(t)].short} credit · you have ${nfmt(balOf(t))}</p><p class="err" id="w1-err"></p>
       <div class="modal-foot"><button class="btn" data-close>Cancel</button><button class="btn wa" id="w1-send">${ico("send")} Send</button></div>`);
     const prev = () => { m.querySelector("#w1-prev").textContent = t.body_preview.replace(/\{\{(\d+)\}\}/g, (x, n) => (n === "1" ? c.name.split(" ")[0] : m.querySelector("#w1-p" + (n - 2))?.value || "…")); };
     m.querySelectorAll("input").forEach((i) => (i.oninput = prev)); prev();
@@ -478,7 +490,7 @@ async function waOne(c, tplName) {
       e.target.disabled = true;
       try { const r = await sendWA([c.id], t.id, t.params.map((_, i) => m.querySelector("#w1-p" + i).value));
         if (!r.sent) throw new Error("WhatsApp couldn't deliver this message. No credits were used.");
-        D.wallet = r.balance; closeModal(); toast("Sent on WhatsApp");
+        D.wallet = r.balance; D.walletU = r.utility_balance ?? D.walletU; closeModal(); toast("Sent on WhatsApp");
         if (t.name === "review_request" && c.review_status === "none") { await q(sb.from("customers").update({ review_status: "requested", review_requested_at: new Date().toISOString() }).eq("id", c.id)); await reload("customers"); softRender(); }
       } catch (err) { m.querySelector("#w1-err").textContent = err.message; e.target.disabled = false; }
     };
@@ -955,7 +967,7 @@ document.addEventListener("click", async (e) => {
         await q(sb.from("business_content").insert({ business_id: BID, kind: SEO.kind, title: (SEO.input.topic || SEO.input.reviewer || "").slice(0, 80), body })); await seoLoad(); drawSeo(); toast("Saved to your library"); break; }
       case "seo-del": await q(sb.from("business_content").delete().eq("id", id)); await seoLoad(); drawSeo(); break;
       case "wa-compose": WA.aud = el.dataset.aud || "all"; location.hash = "whatsapp"; break;
-      case "wa-buy": location.hash = "whatsapp"; document.querySelector("#wa-view") && openModal(`<div class="modal-head"><h2>Buy WhatsApp credits</h2><button class="btn ghost" data-close>Close</button></div><div class="list">${(D.packs || []).map((p) => `<div class="item"><div class="grow"><b>${esc(p.name)}</b><span class="muted small num">${nfmt(p.credits)} messages · ${inr2(p.price / p.credits)}/message</span></div><b class="num">${inr(p.price)}${plusGst()}</b><button class="btn sm primary" data-a="buy-pack" data-id="${p.id}">Buy</button></div>`).join("")}</div>`); break;
+      case "wa-buy": location.hash = "whatsapp"; document.querySelector("#wa-view") && openModal(`<div class="modal-head"><h2>Buy WhatsApp credits</h2><button class="btn ghost" data-close>Close</button></div><p class="small">You have ${balText()}.</p>${packGroups(D.packs || [], true)}`, { wide: true }); break;
       case "buy-pack": closeModal(); await order("wa_credits", id); break;
       case "buy-product": if (await confirmBox("Buy this service?", "We'll create a payment for it. Branditude's team will contact you to get started once it's paid.", "Continue to payment")) await order("product", id); break;
       case "buy-module": {
@@ -987,10 +999,10 @@ document.addEventListener("click", async (e) => {
       case "pay": await payModal(id); break;
       case "wa-send": {
         const t = D.tpls.find((x) => x.id === WA.tpl), aud = audience(WA.aud).filter((c) => c.phone);
-        if (!(await confirmBox(`Send to ${aud.length} customers?`, `This uses ${aud.length * t.credits_per_message} credits. Failed messages are refunded.`, "Send now"))) break;
+        if (!(await confirmBox(`Send to ${aud.length} customers?`, `This uses ${aud.length * t.credits_per_message} ${CREDIT[kindOf(t)].short} credits. Failed messages are refunded.`, "Send now"))) break;
         el.disabled = true; el.innerHTML = `<span class="spinner"></span> Sending…`;
         const r = await sendWA(aud.map((c) => c.id), t.id, WA.params.slice(0, t.params.length), t.title);
-        D.wallet = r.balance; toast(`Sent ${r.sent}${r.failed ? `, ${r.failed} failed (refunded)` : ""}`); WA.params = []; after.whatsapp(); break;
+        D.wallet = r.balance; D.walletU = r.utility_balance ?? D.walletU; toast(`Sent ${r.sent}${r.failed ? `, ${r.failed} failed (refunded)` : ""}`); WA.params = []; after.whatsapp(); break;
       }
     }
   } catch (err) { toast(err.message, "error"); }

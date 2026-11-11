@@ -113,7 +113,7 @@ async function openLead(id) {
 /* ---------------- Businesses ---------------- */
 VIEWS.businesses = async () => {
   await cats(); await pkgs();
-  D.biz = await q(sb.from("businesses").select("*, categories(name), packages(name), wa_wallets(balance)").order("created_at", { ascending: false }));
+  D.biz = await q(sb.from("businesses").select("*, categories(name), packages(name), wa_wallets(balance,utility_balance)").order("created_at", { ascending: false }));
   return head("Businesses", "All client accounts. Open one to see its report, change its plan, or switch WhatsApp on.") + `
   <div class="row" style="margin-bottom:12px"><input id="bf-q" type="search" placeholder="Search name, city or phone" style="flex:2;min-width:200px" aria-label="Search businesses">
     <select id="bf-cat" style="flex:1;min-width:150px" aria-label="Category"><option value="">All categories</option>${D.cats.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select>
@@ -127,7 +127,7 @@ after.businesses = () => {
     $("#biz-rows").innerHTML = rows.length ? rows.map((b) => `<tr class="sel-row" data-a="biz-open" data-id="${b.id}"><td><div class="who"><b>${esc(b.name)}</b><span>${esc(b.city || "")}${b.phone ? " · " + esc(prettyPhone(b.phone)) : ""}</span></div></td>
       <td>${esc(b.categories?.name || "—")}</td><td>${esc(b.packages?.name || "—")} <span class="muted small">${esc(b.billing)}</span></td><td>${statusPill(b.status)}</td>
       <td>${b.subscription_ends ? fmtDate(b.subscription_ends) + (new Date(b.subscription_ends) < new Date() ? ' <span class="pill bad">overdue</span>' : "") : "—"}</td>
-      <td>${b.wa_enabled ? `<span class="pill good">On</span> <span class="num small">${nfmt(b.wa_wallets?.balance ?? 0)} cr</span>` : '<span class="pill">Off</span>'}</td><td>${fmtShort(b.created_at)}</td></tr>`).join("") : `<tr><td colspan="7"><div class="empty">No businesses match.</div></td></tr>`;
+      <td>${b.wa_enabled ? `<span class="pill good">On</span> <span class="num small" title="Promotional · utility credits">${nfmt(b.wa_wallets?.balance ?? 0)} · ${nfmt(b.wa_wallets?.utility_balance ?? 0)} cr</span>` : '<span class="pill">Off</span>'}</td><td>${fmtShort(b.created_at)}</td></tr>`).join("") : `<tr><td colspan="7"><div class="empty">No businesses match.</div></td></tr>`;
   };
   $("#bf-q").oninput = draw; $("#bf-cat").onchange = draw; $("#bf-st").onchange = draw; draw();
 };
@@ -163,8 +163,8 @@ async function openBiz(id) {
     </div>
     <div class="row" style="margin-top:12px"><button class="btn primary" id="bz-save">Save account</button></div>
     <h3 style="margin:18px 0 8px">WhatsApp credits · balance ${nfmt(rep.wa_balance ?? 0)}</h3>
-    <div class="row"><input id="bz-cr" type="number" placeholder="+500 or -100" style="max-width:160px" aria-label="Credits to add or remove"><input id="bz-crr" placeholder="Reason" style="flex:1;min-width:160px" aria-label="Reason"><button class="btn" id="bz-crb">Adjust</button></div>
-    ${ledger.length ? `<div class="list" style="margin-top:8px">${ledger.map((x) => `<div class="item small"><div class="grow">${esc(x.reason)} <span class="muted">${fmtDT(x.created_at)}</span></div><b class="num" style="color:${x.delta > 0 ? "var(--good)" : "var(--ink-2)"}">${x.delta > 0 ? "+" : ""}${x.delta}</b></div>`).join("")}</div>` : ""}
+    <div class="row"><select id="bz-crk" style="max-width:160px" aria-label="Credit type"><option value="marketing">Promotional</option><option value="utility">Utility</option></select><input id="bz-cr" type="number" placeholder="+500 or -100" style="max-width:160px" aria-label="Credits to add or remove"><input id="bz-crr" placeholder="Reason" style="flex:1;min-width:160px" aria-label="Reason"><button class="btn" id="bz-crb">Adjust</button></div>
+    ${ledger.length ? `<div class="list" style="margin-top:8px">${ledger.map((x) => `<div class="item small"><div class="grow">${esc(x.reason)} <span class="muted">${x.kind === "utility" ? "utility" : "promotional"} · ${fmtDT(x.created_at)}</span></div><b class="num" style="color:${x.delta > 0 ? "var(--good)" : "var(--ink-2)"}">${x.delta > 0 ? "+" : ""}${x.delta}</b></div>`).join("")}</div>` : ""}
     <h3 style="margin:18px 0 8px">Payments</h3>
     ${pays.length ? `<div class="list">${pays.map((p) => `<div class="item small"><div class="grow"><b>${esc(p.description)}</b><span class="muted">${fmtDT(p.created_at)}${p.utr ? " · UTR " + esc(p.utr) : ""}</span></div><span class="num">${inr2(p.total)}</span>${statusPill(p.status)}</div>`).join("")}</div>` : `<div class="empty">No payments.</div>`}`, { wide: true });
   m.querySelector("#bz-save").onclick = async () => {
@@ -174,7 +174,7 @@ async function openBiz(id) {
   };
   m.querySelector("#bz-crb").onclick = async () => {
     const d = parseInt($("#bz-cr").value, 10); if (!d) return toast("Enter a number of credits", "error");
-    try { const bal = await q(sb.rpc("admin_adjust_credits", { p_business: id, p_delta: d, p_reason: $("#bz-crr").value })); toast(`Balance is now ${bal}`); closeModal(); render(); } catch (e) { toast(e.message, "error"); }
+    try { const bal = await q(sb.rpc("admin_adjust_credits", { p_business: id, p_delta: d, p_reason: $("#bz-crr").value, p_kind: $("#bz-crk").value })); toast(`Balance is now ${bal}`); closeModal(); render(); } catch (e) { toast(e.message, "error"); }
   };
 }
 
@@ -324,20 +324,55 @@ after.keywords = () => { const f = $("#ckw-form"); if (!f) return;
     catch (err) { toast(err.message, "error"); } }; };
 
 /* ---------------- WhatsApp ---------------- */
+const META_BILLING = "https://business.facebook.com/billing_hub/accounts?business_id=1256389646022701&placement=whatsapp_manager";
+function metaCard(S, recharges) {
+  if (!S) return "";
+  const spent = D.metaSpend?.total, est = S.used.marketing * S.cost.marketing + S.used.utility * S.cost.utility;
+  const used = spent != null ? spent * (1 + (S.rates.gst ?? 18) / 100) : est, left = S.recharged - used, owed = S.held.marketing * S.cost.marketing + S.held.utility * S.cost.utility;
+  const low = left < owed;
+  return `<div class="card" style="margin-bottom:16px"><div class="card-head"><h2>Meta account</h2>
+      <div class="row" style="gap:8px"><a class="btn sm primary" href="${META_BILLING}" target="_blank" rel="noopener">Recharge in Meta ↗</a><button class="btn sm" data-a="mr-new">Record a recharge</button><button class="btn sm ghost" data-a="mr-spend">Check Meta spend</button><button class="btn sm ghost" data-a="mr-rates">Meta rates & margin</button></div></div>
+    <div class="grid g4">
+      <div class="kpi"><div class="label">Recharged in Meta</div><div class="value num">${inr2(S.recharged)}</div><div class="sub">${recharges.length} top-up${recharges.length === 1 ? "" : "s"}</div></div>
+      <div class="kpi"><div class="label">Used</div><div class="value num">${inr2(used)}</div><div class="sub">${spent != null ? "from Meta incl. GST, since " + fmtDate(D.metaSpend.since) : `estimated: ${nfmt(S.used.marketing)} promotional + ${nfmt(S.used.utility)} utility messages`}</div></div>
+      <div class="kpi"><div class="label">Left in Meta (approx.)</div><div class="value num" style="color:${low ? "var(--bad)" : "inherit"}">${inr2(left)}</div><div class="sub">${low ? "Recharge: less than businesses' unused credits" : "Covers businesses' unused credits"}</div></div>
+      <div class="kpi"><div class="label">Pending credits (sold, not used)</div><div class="value num">${nfmt(S.held.marketing + S.held.utility)}</div><div class="sub">${nfmt(S.held.marketing)} promotional · ${nfmt(S.held.utility)} utility · need ${inr2(owed)} in Meta</div></div>
+    </div>
+    ${recharges.length ? `<details style="margin-top:12px"><summary class="small">Recharge history</summary><div class="list">${recharges.map((r) => `<div class="item small"><div class="grow">${fmtDate(r.paid_on)}${r.note ? " · " + esc(r.note) : ""}</div><b class="num">${inr2(r.amount)}</b><button class="btn sm ghost danger" data-a="mr-del" data-id="${r.id}" aria-label="Delete">✕</button></div>`).join("")}</div></details>` : ""}
+    <p class="small muted" style="margin-top:10px">Add money in Meta's billing (UPI or card), then record it here so the balance stays right. "Check Meta spend" reads what Meta actually charged.</p></div>`;
+}
+function rechargeForm() {
+  formModal({ title: "Record a Meta recharge", submitLabel: "Save", values: { paid_on: todayISO() },
+    fields: [{ key: "amount", label: "Amount added in Meta ₹", type: "number", required: true, min: 1 }, { key: "paid_on", label: "Date", type: "date", required: true }, { key: "note", label: "Note", full: true, placeholder: "UPI, card…" }],
+    onSave: async (v) => { if (!(v.amount > 0)) throw new Error("Enter the amount"); await q(sb.from("meta_recharges").insert({ amount: v.amount, paid_on: v.paid_on, note: v.note || "" })); toast("Recharge recorded"); render(); } });
+}
+async function ratesForm() {
+  const row = await q(sb.from("settings").select("*").eq("key", "meta_rates").maybeSingle()); const r = row?.value || {};
+  formModal({ title: "Meta rates & your margin", submitLabel: "Save", values: r,
+    fields: [{ key: "marketing", label: "Meta rate: marketing (₹, before GST)", type: "number", required: true, min: 0 }, { key: "utility", label: "Meta rate: utility (₹, before GST)", type: "number", required: true, min: 0 },
+      { key: "gst", label: "GST on Meta bill %", type: "number", required: true, min: 0 }, { key: "min_margin", label: "Minimum margin %", type: "number", required: true, min: 0 }, { key: "max_margin", label: "Maximum margin %", type: "number", required: true, min: 0 }],
+    onSave: async (v) => { if (+v.min_margin > +v.max_margin) throw new Error("Minimum margin can't be above maximum");
+      await q(sb.from("settings").upsert({ key: "meta_rates", value: { marketing: +v.marketing, utility: +v.utility, gst: +v.gst, min_margin: +v.min_margin, max_margin: +v.max_margin }, public: false }));
+      toast("Saved. Packs outside the new margin can't be saved until you reprice them."); render(); } });
+}
 VIEWS.whatsapp = async () => {
   const [packs, tpls, wallets, settings] = await Promise.all([
     q(sb.from("wa_credit_packs").select("*").order("sort")), q(sb.from("wa_templates").select("*, businesses(name)").order("created_at", { ascending: false })),
-    q(sb.from("wa_wallets").select("balance, businesses(name, wa_enabled)").order("balance", { ascending: false }).limit(50)),
+    q(sb.from("wa_wallets").select("balance, utility_balance, businesses(name, wa_enabled)").order("balance", { ascending: false }).limit(50)),
     q(sb.from("settings").select("*").eq("key", "whatsapp").maybeSingle()),
   ]);
   D.packs = packs; D.tpls = tpls;
-  return head("WhatsApp add-on", "Optional for businesses. They prepay for credit packs and each message uses credits. Templates must also be approved in Meta's WhatsApp Manager with the same name.") + `
+  const S = await q(sb.rpc("wa_admin_summary")).catch(() => null); D.waSum = S;
+  const recharges = isSuper() ? await q(sb.from("meta_recharges").select("*").order("paid_on", { ascending: false })).catch(() => []) : [];
+  const margin = (p) => S?.cost ? Math.round(((p.price / p.credits - S.cost[p.kind || "marketing"]) / S.cost[p.kind || "marketing"]) * 100) : null;
+  return head("WhatsApp add-on", "Optional for businesses. They prepay for promotional or utility credits and each message uses one credit of its type. Templates must be approved by Meta.") + (isSuper() ? metaCard(S, recharges) : "") + `
   <div class="grid g2">
     <div class="card"><div class="card-head"><h2>Credit packs</h2><button class="btn sm" data-a="pack-new">${ico("plus")} New pack</button></div>
-      <div class="list">${packs.map((p) => `<div class="item"><div class="grow"><b>${esc(p.name)}</b><span class="muted small num">${nfmt(p.credits)} messages · ${inr2(p.price / p.credits)} per message</span></div><b class="num">${inr(p.price)}</b>${p.active ? "" : '<span class="pill">Hidden</span>'}<button class="btn sm ghost" data-a="pack-edit" data-id="${p.id}">Edit</button></div>`).join("") || `<div class="empty">No packs.</div>`}</div>
+      ${S?.cost ? `<p class="small muted" style="margin:-6px 0 8px">Meta cost incl. GST: promotional ${inr2(S.cost.marketing)}, utility ${inr2(S.cost.utility)} per message. Pack prices must give you a ${S.rates.min_margin}–${S.rates.max_margin}% margin.</p>` : ""}
+      <div class="list">${packs.map((p) => `<div class="item"><div class="grow"><b>${esc(p.name)}</b> <span class="pill ${p.kind === "utility" ? "info" : ""}">${p.kind === "utility" ? "Utility" : "Promotional"}</span><span class="muted small num">${nfmt(p.credits)} messages · ${inr2(p.price / p.credits)} per message${margin(p) != null ? ` · <b>${margin(p)}% margin</b>` : ""}</span></div><b class="num">${inr(p.price)}</b>${p.active ? "" : '<span class="pill">Hidden</span>'}<button class="btn sm ghost" data-a="pack-edit" data-id="${p.id}">Edit</button></div>`).join("") || `<div class="empty">No packs.</div>`}</div>
       <p class="small muted" style="margin-top:10px">${esc(settings?.value?.price_note || "")}</p></div>
     <div class="card"><div class="card-head"><h2>Credit balances</h2></div>
-      <div class="list">${wallets.map((w) => `<div class="item"><div class="grow"><b>${esc(w.businesses?.name || "")}</b></div>${w.businesses?.wa_enabled ? '<span class="pill good">On</span>' : '<span class="pill">Off</span>'}<b class="num">${nfmt(w.balance)}</b></div>`).join("") || `<div class="empty">No balances yet.</div>`}</div></div>
+      <div class="list">${wallets.map((w) => `<div class="item"><div class="grow"><b>${esc(w.businesses?.name || "")}</b><span class="muted small num">${nfmt(w.balance)} promotional · ${nfmt(w.utility_balance || 0)} utility</span></div>${w.businesses?.wa_enabled ? '<span class="pill good">On</span>' : '<span class="pill">Off</span>'}</div>`).join("") || `<div class="empty">No balances yet.</div>`}</div></div>
   </div>
   ${(() => { const req = tpls.filter((t) => t.business_id); const st = { pending: ["warn", "New"], submitted: ["info", "With Meta"], approved: ["good", "Approved"], rejected: ["bad", "Rejected"] };
     return `<div class="card" style="margin-top:16px"><div class="card-head"><h2>Templates from businesses (Pro)</h2><span class="pill ${req.some((t) => t.status === "pending") ? "warn" : "good"} num">${req.filter((t) => t.status === "pending").length} new</span></div>
@@ -353,8 +388,8 @@ VIEWS.whatsapp = async () => {
     </tbody></table></div></div>`;
 };
 function packForm(p = { active: true, sort: 100 }) {
-  formModal({ title: p.id ? "Edit credit pack" : "New credit pack", values: p,
-    fields: [{ key: "name", label: "Name", required: true }, { key: "credits", label: "Credits (messages)", type: "number", required: true, min: 1 }, { key: "price", label: "Price ₹ (before GST)", type: "number", required: true, min: 0 }, { key: "sort", label: "Order", type: "number" }, { key: "active", label: "Show to businesses", type: "checkbox", full: true }],
+  formModal({ title: p.id ? "Edit credit pack" : "New credit pack", values: { kind: "marketing", ...p },
+    fields: [{ key: "name", label: "Name", required: true }, { key: "kind", label: "Credit type", type: "select", required: true, options: [["marketing", "Promotional (offers, festival, win-back)"], ["utility", "Utility (loyalty, reminders, updates)"]] }, { key: "credits", label: "Credits (messages)", type: "number", required: true, min: 1 }, { key: "price", label: "Price ₹ (before GST)", type: "number", required: true, min: 0 }, { key: "sort", label: "Order", type: "number" }, { key: "active", label: "Show to businesses", type: "checkbox", full: true }],
     onSave: async (v) => { v.sort = v.sort ?? 100; if (p.id) await q(sb.from("wa_credit_packs").update(v).eq("id", p.id)); else await q(sb.from("wa_credit_packs").insert(v)); toast("Pack saved"); render(); } });
 }
 function tplForm(t = { language: "en", category: "marketing", credits_per_message: 1, active: true, params: [] }) {
@@ -448,6 +483,12 @@ document.addEventListener("click", async (e) => {
       case "kw-cat": KW_CAT = id; render(); break;
       case "ckw-del": await q(sb.from("category_keywords").delete().eq("id", id)); render(); break;
       case "pack-new": packForm(); break;
+      case "mr-new": rechargeForm(); break;
+      case "mr-rates": await ratesForm(); break;
+      case "mr-del": if (await confirmBox("Delete this recharge entry?", "", "Delete", { danger: true })) { await q(sb.from("meta_recharges").delete().eq("id", id)); render(); } break;
+      case "mr-spend": { el.disabled = true; const { data, error } = await sb.functions.invoke("wa-templates", { body: { action: "spend", since: "2026-11-01" } });
+        let j = data; if (error) { try { j = await error.context.json(); } catch { j = { error: error.message }; } }
+        if (j?.error) toast("Meta: " + j.error, "error"); else { D.metaSpend = j; toast(`Meta charged ${inr2(j.total)} since ${fmtDate(j.since)}`); render(); } break; }
       case "pack-edit": packForm(D.packs.find((p) => p.id === id)); break;
       case "tpl-new": tplForm(); break;
       case "wt-ok": await q(sb.from("wa_templates").update({ status: "approved", active: true, reject_reason: null }).eq("id", id)); toast("Approved. The business can use it now."); render(); break;
