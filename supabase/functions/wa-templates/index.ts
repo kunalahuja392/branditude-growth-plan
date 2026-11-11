@@ -57,7 +57,7 @@ Deno.serve(async (req: Request) => {
       const payload: Record<string, unknown> = { messaging_product: "whatsapp" };
       for (const k of ["about", "address", "description", "email", "vertical"]) if (typeof p[k] === "string") payload[k] = p[k];
       if (Array.isArray(p.websites)) payload.websites = (p.websites as string[]).slice(0, 2);
-      if (typeof p.photo_url === "string" && p.photo_url.startsWith("https://")) {
+      if (typeof p.photo_url === "string" && (p.photo_url as string).startsWith("https://scale.branditudeglobal.com/")) {
         const img = await fetch(p.photo_url as string); if (!img.ok) return json({ error: "Couldn't load the photo" }, 400);
         const bytes = new Uint8Array(await img.arrayBuffer()), type = img.headers.get("content-type")?.split(";")[0] || "image/png";
         const appId = Deno.env.get("WA_APP_ID") ?? "1585387223625489";
