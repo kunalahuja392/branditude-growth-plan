@@ -37,19 +37,26 @@ async function google(method: string, url: string, token: string, body?: unknown
   return j;
 }
 
-function template(b: Biz, reviewer: string, stars: number) {
+// Reply without AI. Happy reviews mention one of the owner's keywords (rotated per review) so replies still help local search;
+// unhappy reviews never carry keywords.
+function template(b: Biz, reviewer: string, stars: number, kws: string[] = [], seed = "") {
   const first = (reviewer || "").split(" ")[0];
-  return stars >= 4
-    ? `Thank you so much${first ? `, ${first}` : ""}! We're really glad you enjoyed your visit to ${b.name}. Hope to see you again soon!`
-    : `Hi${first ? ` ${first}` : ""}, thank you for telling us, and we're sorry your visit wasn't up to the mark. This isn't the experience we want for anyone at ${b.name}. Please call or message us so we can understand what happened and make it right.`;
+  const usable = kws.map((k) => k.trim()).filter((k) => k.length >= 3 && !/near me|best|cheap|top \d|no\.? ?1/i.test(k));
+  const kw = usable.length ? usable[[...seed].reduce((a, c) => a + c.charCodeAt(0), 0) % usable.length] : "";
+  if (stars >= 4) return kw
+    ? `Thank you so much${first ? `, ${first}` : ""}! We're really glad you enjoyed your visit to ${b.name}. Whenever you need ${kw}${b.city && !kw.toLowerCase().includes(b.city.toLowerCase()) ? ` in ${b.city}` : ""}, we'd love to welcome you back!`
+    : `Thank you so much${first ? `, ${first}` : ""}! We're really glad you enjoyed your visit to ${b.name}. Hope to see you again soon!`;
+  return `Hi${first ? ` ${first}` : ""}, thank you for telling us, and we're sorry your visit wasn't up to the mark. This isn't the experience we want for anyone at ${b.name}. Please call or message us so we can understand what happened and make it right.`;
 }
 async function draftReply(admin: SupabaseClient, b: Biz, reviewer: string, stars: number, comment: string) {
+  const { data: kwRows } = await admin.from("business_keywords").select("keyword").eq("business_id", b.id).limit(20);
+  const kws = (kwRows ?? []).map((k) => k.keyword as string);
+  const fallback = () => template(b, reviewer, stars, kws, reviewer + comment);
   const key = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!key) return template(b, reviewer, stars);
+  if (!key) return fallback();
   const { count } = await admin.from("ai_usage").select("id", { count: "exact", head: true }).eq("business_id", b.id).eq("kind", "gbp_reply").gte("created_at", new Date(Date.now() - 864e5).toISOString());
-  if ((count ?? 0) >= AI_DAILY) return template(b, reviewer, stars);
-  const { data: kw } = await admin.from("business_keywords").select("keyword").eq("business_id", b.id).limit(20);
-  const prompt = `Business: ${b.name}\nCategory: ${b.categories?.name || "local business"}\nCity: ${b.city || "India"}\nKeywords the owner chose: ${(kw ?? []).map((k) => k.keyword).join("; ") || "(none)"}
+  if ((count ?? 0) >= AI_DAILY) return fallback();
+  const prompt = `Business: ${b.name}\nCategory: ${b.categories?.name || "local business"}\nCity: ${b.city || "India"}\nKeywords the owner chose: ${kws.join("; ") || "(none)"}
 Customer name: ${reviewer || "(not given)"}\nStars: ${stars}\nTheir review: """${(comment || "(no text, star rating only)").slice(0, 2000)}"""
 
 Write the owner's public reply on Google (max 450 characters). Thank them by first name if given.
@@ -60,10 +67,10 @@ Rules: simple warm Indian English (or the reviewer's language), no invented fact
     method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({ model: Deno.env.get("AI_MODEL") ?? "claude-haiku-5-5", max_tokens: 400, messages: [{ role: "user", content: prompt }] }),
   });
-  if (!r.ok) return template(b, reviewer, stars);
+  if (!r.ok) return fallback();
   const out = await r.json();
   await admin.from("ai_usage").insert({ business_id: b.id, kind: "gbp_reply" });
-  return ((out.content ?? []).map((c: { text?: string }) => c.text ?? "").join("").trim() || template(b, reviewer, stars)).slice(0, 1000);
+  return ((out.content ?? []).map((c: { text?: string }) => c.text ?? "").join("").trim() || fallback()).slice(0, 1000);
 }
 
 async function syncOne(admin: SupabaseClient, bid: string) {
@@ -136,6 +143,7 @@ Deno.serve(async (req: Request) => {
   const { data: m } = await admin.from("business_members").select("role").eq("business_id", bid).eq("user_id", u.user.id).maybeSingle();
   const { data: prof } = await admin.from("profiles").select("role").eq("id", u.user.id).maybeSingle();
   if (!m && !["super_admin", "team"].includes(prof?.role ?? "")) return json({ error: "Not allowed" }, 403);
+  if (m) { const { data: okPerm } = await admin.rpc("member_has_perm", { b: bid, u: u.user.id, area: "reviews" }); if (!okPerm) return json({ error: "Your login isn't allowed to manage Google reviews. Ask the owner." }, 403); }
   const { data: open } = await admin.rpc("biz_open", { b: bid });
   if (!open) return json({ error: "Your plan isn't active." }, 403);
   if (body.action === "disconnect") { await admin.from("gbp_connections").delete().eq("business_id", bid); return json({ ok: true }); }
