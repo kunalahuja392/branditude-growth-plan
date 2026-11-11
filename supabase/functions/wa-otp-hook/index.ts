@@ -25,10 +25,12 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return fail(405, "Use POST");
   const raw = await req.text();
   if (!(await verify(raw, req.headers))) return fail(401, "Invalid signature");
-  let p: { user?: { phone?: string }; sms?: { otp?: string } };
+  // deno-lint-ignore no-explicit-any
+  let p: any;
   try { p = JSON.parse(raw); } catch { return fail(400, "Bad payload"); }
-  const to = String(p.user?.phone ?? "").replace(/\D/g, ""), otp = String(p.sms?.otp ?? "");
-  if (to.length < 11 || !otp) return fail(400, "Missing phone or code");
+  // a phone change sends the code to the NEW number (new_phone / phone_change); sign-in uses phone
+  const u = p.user ?? {}, to = String(u.new_phone || u.phone_change || u.phone || p.sms?.phone || "").replace(/\D/g, ""), otp = String(p.sms?.otp ?? "");
+  if (to.length < 11 || !otp) { console.error("otp payload", JSON.stringify({ userKeys: Object.keys(u), smsKeys: Object.keys(p.sms ?? {}), phoneLen: String(u.phone ?? "").length })); return fail(400, "Missing phone or code"); }
   const token = Deno.env.get("WA_TOKEN"), phoneId = Deno.env.get("WA_DEFAULT_PHONE_NUMBER_ID"), v = Deno.env.get("WA_API_VERSION") ?? "v21.0";
   if (!token || !phoneId) return fail(500, "WhatsApp is not configured");
   const r = await fetch(`https://graph.facebook.com/${v}/${phoneId}/messages`, {
