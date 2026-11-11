@@ -340,6 +340,8 @@ function metaCard(S, recharges) {
       <div class="kpi"><div class="label">Pending credits (sold, not used)</div><div class="value num">${nfmt(S.held.marketing + S.held.utility)}</div><div class="sub">${nfmt(S.held.marketing)} promotional · ${nfmt(S.held.utility)} utility · need ${inr2(owed)} in Meta</div></div>
     </div>
     ${recharges.length ? `<details style="margin-top:12px"><summary class="small">Recharge history</summary><div class="list">${recharges.map((r) => `<div class="item small"><div class="grow">${fmtDate(r.paid_on)}${r.note ? " · " + esc(r.note) : ""}</div><b class="num">${inr2(r.amount)}</b><button class="btn sm ghost danger" data-a="mr-del" data-id="${r.id}" aria-label="Delete">✕</button></div>`).join("")}</div></details>` : ""}
+    <details style="margin-top:8px"${(D.deliv || []).some((d) => d.status === "failed") ? " open" : ""}><summary class="small">Delivery of recent messages (from Meta)</summary>
+      ${(D.deliv || []).length ? `<div class="list">${D.deliv.map((d) => `<div class="item small"><div class="grow"><span class="num">+${esc(d.recipient || "")}</span> <span class="muted">${fmtDT(d.updated_at)}</span>${d.error ? `<br><span style="color:var(--bad)">${esc(d.error)}${d.error_code ? ` (${d.error_code})` : ""}</span>` : ""}</div><span class="pill ${d.status === "failed" ? "bad" : d.status === "sent" ? "" : "good"}">${esc(d.status)}</span></div>`).join("")}</div>` : `<p class="small muted">Nothing yet. Statuses appear here once Meta's webhook is connected.</p>`}</details>
     <p class="small muted" style="margin-top:10px">Meta doesn't share the prepaid balance with apps, so it's worked out here: money added minus what was used (the higher of Meta's bill and messages sent). Meta also emails you when the balance is low.</p></div>`;
 }
 async function loadMetaSpend(since) {
@@ -382,6 +384,7 @@ VIEWS.whatsapp = async () => {
   D.packs = packs; D.tpls = tpls;
   const S = await q(sb.rpc("wa_admin_summary")).catch(() => null); D.waSum = S;
   if (isSuper() && S && (!D.metaSpendAt || Date.now() - D.metaSpendAt > 300000)) await loadMetaSpend(S.first_recharge);
+  D.deliv = isSuper() ? await q(sb.from("wa_delivery").select("*").order("updated_at", { ascending: false }).limit(15)).catch(() => []) : [];
   const recharges = isSuper() ? await q(sb.from("meta_recharges").select("*").order("paid_on", { ascending: false })).catch(() => []) : [];
   const margin = (p) => S?.cost ? Math.round(((p.price / p.credits - S.cost[p.kind || "marketing"]) / S.cost[p.kind || "marketing"]) * 100) : null;
   return head("WhatsApp add-on", "Optional for businesses. They prepay for promotional or utility credits and each message uses one credit of its type. Templates must be approved by Meta.") + (isSuper() ? metaCard(S, recharges) : "") + `

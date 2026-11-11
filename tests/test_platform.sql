@@ -727,4 +727,26 @@ do $$ declare b uuid; m0 int; u0 int; begin
   assert (select balance from wa_wallets where business_id=b)=m0+50 and (select utility_balance from wa_wallets where business_id=b)=u0+20, 'both types credited';
 end $$;
 reset role;
+\echo '--- 24. Instant visit updates name the business'
+set role service_role;
+do $$ declare b uuid; c uuid; m jsonb; r jsonb; begin
+  select id into b from businesses where name='Spice Route Cafe';
+  select id into c from customers where business_id=b order by last_visit desc nulls last limit 1;
+  update loyalty_programs set enabled=true where business_id=b;
+  insert into visits(business_id, customer_id, gross, discount, net) values (b, c, 300, 0, 300);
+  m := visit_message(b, c);
+  assert m->>'kind' = 'visit_update', 'plain visit -> visit_update: '||m::text;
+  assert m->'params'->>0 = 'Spice Route Cafe' and m->'params'->>1 = '₹300', 'business name and bill: '||m::text;
+  assert m->'params'->>4 like 'https://scale.branditudeglobal.com/c.html?t=%', 'card link';
+  insert into visits(business_id, customer_id, gross, discount, net, loyalty_reward, created_at) values (b, c, 500, 50, 450, '10% off', now() + interval '1 second');
+  m := visit_message(b, c);
+  assert m->>'kind' = 'reward_used' and m->'params'->>0 = 'your loyalty reward (10% off)' and m->'params'->>1 = 'Spice Route Cafe' and m->'params'->>2 = '₹50', 'reward used: '||m::text;
+  insert into auto_msgs(business_id, kind, enabled) values (b, 'visit_update', true) on conflict (business_id, kind) do update set enabled = true;
+  assert (select count(*) from wa_templates where name in ('visit_update','reward_used') and category='utility')=2, 'templates added';
+end $$;
+reset role;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000a1');
+do $$ begin begin perform visit_message((select id from businesses), null); assert false; exception when insufficient_privilege then null; end;
+  assert (select count(*) from wa_delivery)=0; end $$;
+reset role;
 \echo 'ALL TESTS PASSED'

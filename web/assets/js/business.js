@@ -411,7 +411,9 @@ after.whatsapp = async () => {
 /* ---------- Automatic reminders (every plan, optional, charged per message) ---------- */
 const AUTO = {
   birthday: { t: "Birthday wish", when: "days before their birthday", d: 3, times: false, offer: "Birthday treat in the message", ex: "Happy birthday Priya! 🎂 Everyone at {biz} wishes you a wonderful year. Enjoy {offer} this week." },
-  loyalty: { t: "Loyalty reward reminder", when: "days after their last visit", d: 7, times: true, ex: "Hi Priya, your {card} has 4 of 10 stamps. Next reward: visit 5: 15% off." },
+  visit_update: { t: "Thank-you after each visit", instant: true, util: true, ex: "Hi Priya, thank you for visiting {biz} today. Bill paid: ₹450. Your loyalty card at this store now has 3 of 10 stamps, and your next reward is 10% off on visit 5. You can see your card any time here: (card link)", help: "Sent straight after you save a visit. Needs the loyalty card." },
+  reward_used: { t: "Reward or coupon used", instant: true, util: true, ex: "Hi Priya, you have used your loyalty reward (10% off) at {biz} today and saved ₹45. Your loyalty card at this store now has 0 of 10 stamps. You can see your card any time here: (card link)", help: "Sent instead of the thank-you when a reward or coupon was used on the visit." },
+  loyalty: { t: "Loyalty reward reminder", util: true, when: "days after their last visit", d: 7, times: true, ex: "Hi Priya, thank you for your visit! Your {biz} loyalty card now has 4 of 10 stamps. Your next reward: visit 5: 15% off." },
   offer_expiry: { t: "Offer ending reminder", when: "days before an offer ends", d: 3, times: true, ex: "Hi Priya! 🎉 {biz} has a treat for you: 20% off with code DIWALI20. Valid till 14 Nov.", help: "Goes to customers who visited in the last 120 days, for offers marked 'show to customers'." },
   win_back: { t: "We miss you", when: "days after their last visit", d: 30, times: true, offer: "Offer in the message", ex: "Hi Priya, it's been a while! We'd love to see you again at {biz}. Here's {offer} on your next visit." },
 };
@@ -421,17 +423,17 @@ function remindersCard() {
   const pm = D.perMsg ? ` (about ${inr2(D.perMsg[0])}–${inr2(D.perMsg[1])})` : "";
   return `<div class="card" style="margin-top:16px"><div class="card-head"><h2>Automatic reminders</h2><span class="pill">Optional</span></div>
     <p class="small muted" style="margin-top:-6px">Sent every morning around 10 am to the customers who are due. <b>Charges apply:</b> each message uses 1 credit of the type shown on the reminder. Nothing is sent while a reminder is off or you have no credits of that type.</p>
-    <div class="auto-grid">${Object.keys(AUTO).map((k) => { const r = rule(k), a = AUTO[k], loyOff = k === "loyalty" && !hasMod("loyalty");
+    <div class="auto-grid">${Object.keys(AUTO).map((k) => { const r = rule(k), a = AUTO[k], loyOff = (k === "loyalty" || a.instant) && !hasMod("loyalty");
       const ex = a.ex.replace("{biz}", D.biz.name).replace("{card}", D.prog?.name || "Loyalty").replace("{offer}", r.offer || "a special treat");
       return `<div class="auto ${r.enabled ? "on" : ""}" data-auto="${k}">
-        <div class="row" style="justify-content:space-between;align-items:center"><b>${a.t} <span class="pill ${k === "loyalty" ? "info" : ""}" style="font-weight:500">${k === "loyalty" ? "utility" : "promotional"}</span></b><label class="switch"><input type="checkbox" data-am="enabled" ${r.enabled ? "checked" : ""} ${loyOff ? "disabled" : ""} aria-label="Turn ${a.t} on"><span></span></label></div>
+        <div class="row" style="justify-content:space-between;align-items:center"><b>${a.t} <span class="pill ${a.util ? "info" : ""}" style="font-weight:500">${a.util ? "utility" : "promotional"}</span></b><label class="switch"><input type="checkbox" data-am="enabled" ${r.enabled ? "checked" : ""} ${loyOff ? "disabled" : ""} aria-label="Turn ${a.t} on"><span></span></label></div>
         <div class="bubble small">${esc(ex)}</div>
-        <div class="auto-f"><label>Send <input type="number" min="0" max="365" data-am="days" value="${r.days}" aria-label="Days"> ${a.when}</label>
+        ${a.instant ? "" : `<div class="auto-f"><label>Send <input type="number" min="0" max="365" data-am="days" value="${r.days}" aria-label="Days"> ${a.when}</label>
           ${a.times ? `<label>Up to <input type="number" min="1" max="5" data-am="times" value="${r.times}" aria-label="Times"> time(s), every <input type="number" min="1" max="60" data-am="gap_days" value="${r.gap_days}" aria-label="Gap days"> days</label>` : ""}
           ${a.offer ? `<label class="full">${a.offer}<input data-am="offer" maxlength="80" value="${esc(r.offer)}" placeholder="e.g. 20% off"></label>` : ""}
-          <label>At most <input type="number" min="1" max="1000" data-am="daily_cap" value="${r.daily_cap}" aria-label="Daily limit"> messages a day</label></div>
+          <label>At most <input type="number" min="1" max="1000" data-am="daily_cap" value="${r.daily_cap}" aria-label="Daily limit"> messages a day</label></div>`}
         ${a.help ? `<p class="small muted">${a.help}</p>` : ""}
-        <p class="small muted">${loyOff ? "Needs the loyalty card." : `Due today: <b class="num">${D.autoPrev?.[k] ?? 0}</b> · sent in 30 days: <b class="num">${sentMonth(k)}</b>${r.last_note ? ` · last run: ${esc(r.last_note)}` : ""}`}</p>
+        <p class="small muted">${loyOff ? "Needs the loyalty card." : `${a.instant ? "" : `Due today: <b class="num">${D.autoPrev?.[k] ?? 0}</b> · `}sent in 30 days: <b class="num">${sentMonth(k)}</b>${r.last_note ? ` · last run: ${esc(r.last_note)}` : ""}`}</p>
         <button class="btn sm" data-a="am-save" data-id="${k}">Save</button></div>`; }).join("")}</div></div>`;
 }
 function bulkUpsell() {
@@ -837,6 +839,8 @@ function visitModal(pre = {}) {
     e.preventDefault(); const btn = e.submitter || m.querySelector("button.primary"); btn.disabled = true;
     try {
       const r = await q(sb.rpc("log_visit", { p_business: BID, p_phone: m.querySelector("#v-phone").value, p_name: m.querySelector("#v-name").value, p_gross: +m.querySelector("#v-bill").value, p_coupon: m.querySelector("#v-code").value.trim() }));
+      if (waOn()) sb.functions.invoke("wa-notify", { body: { business_id: BID, customer_id: r.customer_id } }).then(({ data }) => {
+        if (data?.ok) toast("WhatsApp update sent to the customer"); else if (/credits/.test(data?.skipped || "")) toast("WhatsApp update not sent: no utility credits left", "error"); }).catch(() => {});
       await reload("customers", "visits", "coupons"); const c = D.customers.find((x) => x.id === r.customer_id);
       const shown = r.completed ? { ...c, stamps: D.prog.stamps } : c;
       openModal(`<div class="modal-head"><h2>${r.completed ? "🏆 Card completed!" : "Visit saved"}</h2><button class="btn ghost" data-close>Close</button></div>
@@ -1000,11 +1004,11 @@ document.addEventListener("click", async (e) => {
         if (pl && await confirmBox(`Upgrade to ${pl.name}?`, `${pl.name} is ${inr(pl.monthly_price)}/month and includes ${modInfo(id)?.name || "this"}. Your current plan's paid days carry on until you pay.`, `Continue to payment`)) await order("subscription", pl.id, D.biz.billing || "monthly");
         break; }
       case "am-save": { const box = el.closest("[data-auto]"), v = (k) => box.querySelector(`[data-am="${k}"]`);
-        const row = { business_id: BID, kind: id, enabled: v("enabled").checked, days: +v("days").value || 0, times: v("times") ? Math.min(5, Math.max(1, +v("times").value || 1)) : 1,
-          gap_days: v("gap_days") ? Math.min(60, Math.max(1, +v("gap_days").value || 3)) : 3, offer: v("offer") ? v("offer").value.trim() : "", daily_cap: Math.min(1000, Math.max(1, +v("daily_cap").value || 50)), updated_at: new Date().toISOString() };
-        if (row.enabled && !(await confirmBox("Turn this reminder on?", `Charges apply: each message uses 1 WhatsApp credit${D.perMsg ? ` (about ${inr2(D.perMsg[0])}–${inr2(D.perMsg[1])})` : ""}. Up to ${row.daily_cap} messages a day. You can turn it off any time.`, "Turn on")))
+        const row = { business_id: BID, kind: id, enabled: v("enabled").checked, days: v("days") ? +v("days").value || 0 : 0, times: v("times") ? Math.min(5, Math.max(1, +v("times").value || 1)) : 1,
+          gap_days: v("gap_days") ? Math.min(60, Math.max(1, +v("gap_days").value || 3)) : 3, offer: v("offer") ? v("offer").value.trim() : "", daily_cap: v("daily_cap") ? Math.min(1000, Math.max(1, +v("daily_cap").value || 50)) : 1000, updated_at: new Date().toISOString() };
+        if (row.enabled && !(await confirmBox("Turn this reminder on?", `Charges apply: each message uses 1 ${AUTO[id].util ? "utility" : "promotional"} credit${AUTO[id].util ? (D.waRates ? ` (about ${inr2(+D.waRates.utility)})` : "") : D.perMsg ? ` (about ${inr2(D.perMsg[0])}–${inr2(D.perMsg[1])})` : ""}. ${AUTO[id].instant ? "One message per visit, using a utility credit." : `Up to ${row.daily_cap} messages a day.`} You can turn it off any time.`, "Turn on")))
           break;
-        await q(sb.from("auto_msgs").upsert(row, { onConflict: "business_id,kind" })); toast(row.enabled ? "Reminder on. It runs every morning." : "Reminder saved (off)"); after.whatsapp(); break; }
+        await q(sb.from("auto_msgs").upsert(row, { onConflict: "business_id,kind" })); toast(row.enabled ? (AUTO[id].instant ? "On. Customers get it right after each visit." : "Reminder on. It runs every morning.") : "Reminder saved (off)"); after.whatsapp(); break; }
       case "tpl-submit": { const v = (x) => $("#" + x).value.trim(); const n = $$("[data-ntp]").length;
         try { await q(sb.rpc("submit_wa_template", { p_business: BID, p: { title: v("nt-title"), category: v("nt-cat"), language: v("nt-lang"), body: v("nt-body"),
             params: Array.from({ length: n }, (_, i) => v("nt-p" + i)), sample: Array.from({ length: n }, (_, i) => v("nt-s" + i)) } }));

@@ -16,7 +16,7 @@ Deno.serve(async (req: Request) => {
   const waToken = Deno.env.get("WA_TOKEN"), defaultPhoneId = Deno.env.get("WA_DEFAULT_PHONE_NUMBER_ID"), apiVersion = Deno.env.get("WA_API_VERSION") ?? "v21.0";
   if (!waToken) return json({ skipped: "WhatsApp not configured" });
 
-  const { data: rules } = await admin.from("auto_msgs").select("*").eq("enabled", true);
+  const { data: rules } = await admin.from("auto_msgs").select("*").eq("enabled", true).in("kind", Object.keys(TEMPLATE));
   const { data: tpls } = await admin.from("wa_templates").select("*").is("business_id", null).eq("active", true).eq("status", "approved");
   const out: Record<string, unknown> = {};
   const note = (r: { business_id: string; kind: string }, text: string) =>
@@ -42,7 +42,7 @@ Deno.serve(async (req: Request) => {
     let sent = 0, failed = 0;
     for (const c of list) {
       const first = (c.name || "there").split(" ")[0];
-      let status = "failed", err: string | null = null;
+      let status = "failed", err: string | null = null, wamid: string | null = null;
       try {
         const res = await fetch(`https://graph.facebook.com/${apiVersion}/${phoneId}/messages`, {
           method: "POST", headers: { Authorization: `Bearer ${waToken}`, "Content-Type": "application/json" },
@@ -50,10 +50,10 @@ Deno.serve(async (req: Request) => {
             template: { name: tpl.name, language: { code: tpl.language }, components: [{ type: "body", parameters: [first, ...c.params].map((text: string) => ({ type: "text", text: String(text).slice(0, 500) })) }] } }),
         });
         const j = await res.json();
-        if (res.ok && j?.messages?.[0]?.id) status = "sent"; else err = j?.error?.message ?? `HTTP ${res.status}`;
+        if (res.ok && j?.messages?.[0]?.id) { status = "sent"; wamid = j.messages[0].id; } else err = j?.error?.message ?? `HTTP ${res.status}`;
       } catch (e) { err = String(e); }
       if (status === "sent") sent++; else failed++;
-      await admin.from("auto_msg_log").insert({ business_id: r.business_id, kind: r.kind, customer_id: c.customer_id, ref: c.ref, n: c.n, status, credits: status === "sent" ? tpl.credits_per_message : 0, error: err });
+      await admin.from("auto_msg_log").insert({ business_id: r.business_id, kind: r.kind, customer_id: c.customer_id, ref: c.ref, n: c.n, status, credits: status === "sent" ? tpl.credits_per_message : 0, error: err, wa_message_id: wamid });
     }
     if (failed) await admin.rpc("wa_refund", { p_business: r.business_id, p_credits: failed * tpl.credits_per_message, p_ref: ref, p_kind: kind });
     await note(r, `Sent ${sent}${failed ? `, ${failed} failed (refunded)` : ""}.`);
