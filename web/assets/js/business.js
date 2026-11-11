@@ -631,12 +631,38 @@ VIEWS.profile = () => { const b = D.biz;
     ${[["p-name", "Business name", b.name], ["p-phone", "Business phone", b.phone], ["p-email", "Email", b.email], ["p-city", "City", b.city], ["p-loc", "Locality / area (e.g. Khamla)", b.locality], ["p-cc", "Country code", b.country_code]].map(([id, l, v]) => `<div class="field"><label for="${id}">${l}</label><input id="${id}" value="${esc(v || "")}"></div>`).join("")}
     <div class="field"><label>Category</label><input value="${esc(b.categories?.name || "")}" disabled title="Ask Branditude to change your category"></div></div>
     <div class="field" style="margin-top:14px"><label for="p-addr">Address</label><input id="p-addr" value="${esc(b.address || "")}"></div>
+    <div class="field" style="margin-top:14px"><label for="p-desc">About your business</label><textarea id="p-desc" rows="4" maxlength="1500" placeholder="Paste the description from your Google Business Profile, or write a few lines: what you offer, what you're known for, who comes to you.">${esc(b.description || "")}</textarea></div>
+    <div class="field" style="margin-top:14px"><label for="p-svc">Services & products</label><textarea id="p-svc" rows="2" maxlength="1000" placeholder="e.g. cold coffee, filter coffee, south indian breakfast, birthday parties">${esc(b.services || "")}</textarea><span class="muted small" style="margin-top:4px">Separate with commas. When you save, we create your keywords from these details automatically.</span></div>
     <div class="field" style="margin-top:14px"><label for="p-review">Google review link</label><input id="p-review" value="${esc(b.google_review_link || "")}" placeholder="https://g.page/r/…/review"><span class="muted small" style="margin-top:4px">Google Business Profile → Ask for reviews → copy link</span></div>
     <div class="modal-foot" style="justify-content:flex-start"><button class="btn primary" ${canWrite() ? "" : "disabled"}>Save profile</button></div></form>
+  <div class="card" style="max-width:820px;margin-top:16px"><div class="card-head"><h2>Your keywords</h2><div class="row" style="gap:8px"><button class="btn sm" data-a="kw-auto" ${canWrite() ? "" : "disabled"}>${ico("spark")} Create again</button><a class="btn sm ghost" href="#seo">Edit</a></div></div>
+    <p class="small muted" style="margin-top:-6px">Made from your profile. Short ones appear as "what did you like?" options when happy customers write a Google review; local search phrases are used in your Google posts and descriptions.</p>
+    <div class="chips" id="kw-list" style="margin-top:8px"><span class="muted small">Loading…</span></div></div>
   <div class="card" style="max-width:820px;margin-top:16px"><div class="card-head"><h2>Account</h2></div><dl class="kv"><dt>Signed in as</dt><dd>${esc(C.user.email || C.user.phone || "")}</dd><dt>Feedback page</dt><dd><a href="${esc(feedbackLink())}" target="_blank" rel="noopener">${esc(feedbackLink())}</a></dd></dl></div>`; };
-after.profile = () => { $("#prof").onsubmit = async (e) => { e.preventDefault();
-  try { await q(sb.from("businesses").update({ name: $("#p-name").value.trim(), phone: normPhone($("#p-phone").value, $("#p-cc").value), email: $("#p-email").value.trim(), city: $("#p-city").value.trim(), ...("locality" in D.biz ? { locality: $("#p-loc").value.trim().slice(0, 60) } : {}), country_code: $("#p-cc").value.replace(/\D/g, "") || "91", address: $("#p-addr").value.trim(), google_review_link: $("#p-review").value.trim() }).eq("id", BID));
-    await reload("biz"); toast("Profile saved"); render(); } catch (err) { toast(err.message, "error"); } }; };
+async function drawKwList() { const el = $("#kw-list"); if (!el) return;
+  const kw = await q(sb.from("business_keywords").select("keyword,source").eq("business_id", BID).order("created_at")).catch(() => []);
+  el.innerHTML = kw.length ? kw.map((k) => `<span class="tag">${esc(k.keyword)}</span>`).join("") : `<span class="muted small">No keywords yet. Fill in About and Services, then save.</span>`; return kw; }
+// AI (when switched on) builds keywords from the profile and saves them; otherwise we use the services list and the category's suggestions.
+async function autoKeywords(quiet) {
+  const { data, error } = await sb.functions.invoke("ai-content", { body: { business_id: BID, kind: "auto_keywords" } });
+  let j = data; if (error) { try { j = await error.context.json(); } catch { j = { error: error.message }; } }
+  if (j && !j.error) { if (!quiet || j.added) toast(j.added ? `${j.added} keywords created from your profile` : "Your keywords are up to date"); return drawKwList(); }
+  const have = new Set(((await drawKwList()) || []).map((k) => k.keyword.toLowerCase()));
+  const svc = (D.biz.services || "").split(/[,\n;]+/).map((x) => x.trim().toLowerCase()).filter((x) => x.length >= 2 && x.length <= 40);
+  const cat = D.biz.category_id ? (await q(sb.from("category_keywords").select("keyword").eq("category_id", D.biz.category_id).order("sort")).catch(() => [])).map((x) => fillCity(x.keyword).toLowerCase()) : [];
+  const loc = (D.biz.locality || "").trim().toLowerCase(), extra = loc ? svc.slice(0, 3).map((x) => `${x} in ${loc}`) : [];
+  let n = 0; for (const k of [...svc, ...extra, ...cat]) { if (have.has(k) || have.size >= 30) continue; have.add(k);
+    try { await q(sb.from("business_keywords").insert({ business_id: BID, keyword: k, source: svc.includes(k) ? "own" : "suggested" })); n++; } catch {} }
+  if (!quiet || n) toast(n ? `${n} keywords added from your services${j?.fallback ? " (AI keywords switch on once Branditude enables AI)" : ""}` : (j?.error || "No new keywords")); drawKwList();
+}
+after.profile = () => { drawKwList();
+  $("#prof").onsubmit = async (e) => { e.preventDefault();
+  const before = [D.biz.description, D.biz.services, D.biz.city, D.biz.locality].join("|");
+  const extra = {}; if ("description" in D.biz) { extra.description = $("#p-desc").value.trim(); extra.services = $("#p-svc").value.trim(); }
+  try { await q(sb.from("businesses").update({ ...extra, name: $("#p-name").value.trim(), phone: normPhone($("#p-phone").value, $("#p-cc").value), email: $("#p-email").value.trim(), city: $("#p-city").value.trim(), ...("locality" in D.biz ? { locality: $("#p-loc").value.trim().slice(0, 60) } : {}), country_code: $("#p-cc").value.replace(/\D/g, "") || "91", address: $("#p-addr").value.trim(), google_review_link: $("#p-review").value.trim() }).eq("id", BID));
+    await reload("biz"); toast("Profile saved"); render();
+    if ([D.biz.description, D.biz.services, D.biz.city, D.biz.locality].join("|") !== before && (D.biz.description || D.biz.services)) autoKeywords(true);
+  } catch (err) { toast(err.message, "error"); } }; };
 
 /* ---------- Keywords & SEO ---------- */
 const SEO_KINDS = {
@@ -984,6 +1010,7 @@ document.addEventListener("click", async (e) => {
       case "wa-compose": WA.aud = el.dataset.aud || "all"; location.hash = "whatsapp"; break;
       case "wa-buy": location.hash = "whatsapp"; document.querySelector("#wa-view") && openModal(`<div class="modal-head"><h2>Buy WhatsApp credits</h2><button class="btn ghost" data-close>Close</button></div><p class="small">You have ${balText()}.</p>${customBuy()}${packGroups(D.packs || [], true)}`, { wide: true }); break;
       case "buy-pack": closeModal(); await order("wa_credits", id); break;
+      case "kw-auto": el.disabled = true; await autoKeywords(false); el.disabled = false; break;
       case "buy-custom": { const { m, u } = customTotal(), err = $("#cb-err");
         try { const r = await q(sb.rpc("order_wa_credits", { p_business: BID, p_marketing: m, p_utility: u })); closeModal(); D.pays = null; await payModal(r.payment_id); }
         catch (e2) { if (err) err.textContent = e2.message; else toast(e2.message, "error"); } break; }

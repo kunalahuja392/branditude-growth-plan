@@ -2,6 +2,10 @@
 -- Chips come from the business's own keywords (short, no "near me"/"best"/location phrases) plus plain ones added in the page.
 -- City and locality are used by the suggestions (AI or built-in) so some suggestions mention the area naturally.
 alter table public.businesses add column if not exists locality text not null default '';
+-- Profile details the AI uses to write keywords (and later descriptions/posts): about the business, services & products
+alter table public.businesses add column if not exists description text not null default '';
+alter table public.businesses add column if not exists services text not null default '';
+grant update (locality, description, services) on public.businesses to authenticated;   -- owners edit these in Business profile (row access still checked by RLS)
 
 drop function if exists public.review_chips(text);
 create or replace function public.review_chips(p_slug text) returns jsonb

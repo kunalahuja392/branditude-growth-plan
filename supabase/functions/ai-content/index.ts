@@ -3,7 +3,9 @@
 // It never writes reviews for customers (Google forbids directing review content).
 //
 // POST /functions/v1/ai-content   Authorization: Bearer <business user's token>
-// Body: { business_id, kind: "suggest_keywords"|"description"|"post"|"faq"|"reply", input?: {...} }
+// Body: { business_id, kind: "suggest_keywords"|"auto_keywords"|"description"|"post"|"faq"|"reply", input?: {...} }
+// auto_keywords: builds keywords from the business profile (about, services, city, locality) and SAVES them (every plan;
+//   short "what customers like" words feed the review helper, local search phrases feed the SEO studio).
 // Secret: ANTHROPIC_API_KEY (optional AI_MODEL, default claude-haiku-5-5). Without the key → 503 and the app uses templates.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
@@ -19,8 +21,10 @@ const RULES = `Rules:
 - No hashtags, no emojis unless asked, no markdown.`;
 
 function prompt(kind: string, b: Record<string, string>, kws: string[], input: Record<string, string>) {
-  const ctx = `Business: ${b.name}\nCategory: ${b.category || "local business"}\nCity: ${b.city || "India"}\nKeywords the owner chose: ${kws.join("; ") || "(none)"}`;
+  const ctx = `Business: ${b.name}\nCategory: ${b.category || "local business"}\nCity: ${b.city || "India"}${b.locality ? `\nLocality: ${b.locality}` : ""}${b.description ? `\nAbout (from the owner): ${b.description.slice(0, 1500)}` : ""}${b.services ? `\nServices & products: ${b.services.slice(0, 1000)}` : ""}\nKeywords the owner chose: ${kws.join("; ") || "(none)"}`;
   switch (kind) {
+    case "auto_keywords":
+      return `${ctx}\n\nCreate keywords for this business from the details above. Reply with ONLY JSON:\n{"liked":[...],"local":[...]}\n- "liked": 10 short things a happy customer could say they liked here: specific products, services and qualities that fit THIS business (e.g. "cold coffee", "hair spa", "friendly staff"). 1–4 words, lower case, NO place names, no "best", no "near me".\n- "local": 10 phrases real people in ${b.locality || b.city || "this area"} type into Google or ask AI assistants to find a business like this. Mix service + locality, service + city, a few "near me", and specific products. 2–6 words, lower case.\nOnly use services that fit the details given; don't invent unusual ones.`;
     case "suggest_keywords":
       return `${ctx}\n\nSuggest 12 local search phrases real customers in ${b.city || "this city"} type into Google or ask AI assistants when looking for a business like this. Mix: service + city, "near me", specific products/services, occasions. Lower case, 2–6 words each. Reply with ONLY a JSON array of strings.`;
     case "description":
@@ -48,25 +52,25 @@ Deno.serve(async (req: Request) => {
   let body: { business_id?: string; kind?: string; input?: Record<string, string> };
   try { body = await req.json(); } catch { return json({ error: "Invalid request" }, 400); }
   const { business_id, kind } = body; const input = body.input ?? {};
-  if (!business_id || !["suggest_keywords", "description", "post", "faq", "reply"].includes(kind ?? "")) return json({ error: "Invalid request" }, 400);
+  if (!business_id || !["suggest_keywords", "auto_keywords", "description", "post", "faq", "reply"].includes(kind ?? "")) return json({ error: "Invalid request" }, 400);
 
   const { data: m } = await admin.from("business_members").select("role").eq("business_id", business_id).eq("user_id", u.user.id).maybeSingle();
   if (!m) return json({ error: "Not allowed" }, 403);
-  const { data: okPerm } = await admin.rpc("member_has_perm", { b: business_id, u: u.user.id, area: "reviews" });
+  const { data: okPerm } = await admin.rpc("member_has_perm", { b: business_id, u: u.user.id, area: kind === "auto_keywords" ? "settings" : "reviews" });
   if (!okPerm) return json({ error: "Your login isn't allowed to use the SEO studio. Ask the owner." }, 403);
   const { data: open } = await admin.rpc("biz_open", { b: business_id });
   if (!open) return json({ error: "Your plan isn't active. Pay for your plan to use AI writing." }, 403);
   const mod = kind === "reply" ? ["seo", "google_replies"] : ["seo"];
   const ok = await Promise.all(mod.map((k) => admin.rpc("has_module", { b: business_id, m: k }).then((r) => !!r.data)));
-  if (!ok.some(Boolean)) return json({ error: "Keywords & SEO isn't in your plan. Add it from Plan & services.", module: "seo" }, 403);
+  if (kind !== "auto_keywords" && !ok.some(Boolean)) return json({ error: "Keywords & SEO isn't in your plan. Add it from Plan & services.", module: "seo" }, 403);
 
   const since = new Date(Date.now() - 864e5).toISOString();
   const { count } = await admin.from("ai_usage").select("id", { count: "exact", head: true }).eq("business_id", business_id).gte("created_at", since);
   if ((count ?? 0) >= DAILY_LIMIT) return json({ error: `You've used today's ${DAILY_LIMIT} AI drafts. Try again tomorrow.` }, 429);
 
-  const { data: b } = await admin.from("businesses").select("name, city, categories(name)").eq("id", business_id).single();
+  const { data: b } = await admin.from("businesses").select("name, city, locality, description, services, categories(name)").eq("id", business_id).single();
   const { data: kw } = await admin.from("business_keywords").select("keyword").eq("business_id", business_id).limit(30);
-  const biz = { name: b?.name ?? "", city: b?.city ?? "", category: (b as any)?.categories?.name ?? "" };
+  const biz = { name: b?.name ?? "", city: b?.city ?? "", locality: (b as any)?.locality ?? "", description: (b as any)?.description ?? "", services: (b as any)?.services ?? "", category: (b as any)?.categories?.name ?? "" };
   const text = prompt(kind!, biz, (kw ?? []).map((k) => k.keyword), input);
 
   const r = await fetch("https://api.anthropic.com/v1/messages", {
@@ -79,6 +83,19 @@ Deno.serve(async (req: Request) => {
   const reply = (out.content ?? []).map((c: { text?: string }) => c.text ?? "").join("").trim();
   await admin.from("ai_usage").insert({ business_id, kind });
 
+  if (kind === "auto_keywords") {
+    let j: { liked?: string[]; local?: string[] } = {};
+    try { j = JSON.parse(reply.slice(reply.indexOf("{"), reply.lastIndexOf("}") + 1)); } catch { return json({ error: "AI reply unreadable. Try again.", fallback: true }, 502); }
+    const ok2 = (s: unknown) => typeof s === "string" && s.trim().length >= 2 && s.trim().length <= 60;
+    const have = new Set((kw ?? []).map((k) => k.keyword.toLowerCase())), room = Math.max(0, 30 - have.size), add: string[] = [];
+    for (const raw of [...(j.liked ?? []), ...(j.local ?? [])]) {
+      if (!ok2(raw) || add.length >= room) continue;
+      const s = String(raw).trim().toLowerCase().replace(/\s+/g, " ");
+      if (have.has(s)) continue; have.add(s); add.push(s);
+    }
+    for (const keyword of add) await admin.from("business_keywords").insert({ business_id, keyword, source: "ai" });   // one by one: a duplicate never blocks the rest
+    return json({ added: add.length, liked: (j.liked ?? []).filter(ok2), local: (j.local ?? []).filter(ok2) });
+  }
   if (kind === "suggest_keywords") {
     let list: string[] = [];
     try { list = JSON.parse(reply.slice(reply.indexOf("["), reply.lastIndexOf("]") + 1)); } catch { list = reply.split("\n").map((s) => s.replace(/^[-*\d.\s"]+|[",]+$/g, "").trim()).filter(Boolean); }
