@@ -1,6 +1,6 @@
 // Supabase Edge Function: AI writing for a business's OWN Google content
 // (profile description, Google posts, FAQ, replies to reviews) and keyword suggestions.
-// It never writes reviews for customers (Google forbids directing review content).
+// Customer review suggestions live in the separate review-suggest function.
 //
 // POST /functions/v1/ai-content   Authorization: Bearer <business user's token>
 // Body: { business_id, kind: "suggest_keywords"|"auto_keywords"|"description"|"post"|"faq"|"reply", input?: {...} }
@@ -57,7 +57,7 @@ Deno.serve(async (req: Request) => {
   const { data: m } = await admin.from("business_members").select("role").eq("business_id", business_id).eq("user_id", u.user.id).maybeSingle();
   if (!m) return json({ error: "Not allowed" }, 403);
   const { data: okPerm } = await admin.rpc("member_has_perm", { b: business_id, u: u.user.id, area: kind === "auto_keywords" ? "settings" : "reviews" });
-  if (!okPerm) return json({ error: "Your login isn't allowed to use the SEO studio. Ask the owner." }, 403);
+  if (!okPerm) return json({ error: kind === "auto_keywords" ? "Your login can't change the business profile. Ask the owner." : "Your login isn't allowed to use the SEO studio. Ask the owner." }, 403);
   const { data: open } = await admin.rpc("biz_open", { b: business_id });
   if (!open) return json({ error: "Your plan isn't active. Pay for your plan to use AI writing." }, 403);
   const mod = kind === "reply" ? ["seo", "google_replies"] : ["seo"];
