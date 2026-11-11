@@ -25,7 +25,7 @@ const allowed = (r) => r === "signout" || can(AREA_OF[r] || "customers");
 const lockBadge = (r, badge) => (ROUTE_MOD[r] && !hasMod(ROUTE_MOD[r]) ? "🔒" : badge);
 const item = (r, label, icon, badge = "") => [r, label, icon, lockBadge(r, badge)];
 const ROUTES = () => [
-  { label: "", items: [item("dashboard", "Dashboard", "dash"), item("customers", "Customers", "users"), item("reviews", "Google reviews", "star"), item("feedback", "Feedback", "smile", openComplaints() || ""), item("seo", "Keywords & SEO", "spark"), item("replies", "Google replies", "star", hasMod("google_replies") ? gbpPending() || "" : ""),
+  { label: "", items: [item("dashboard", "Dashboard", "dash"), item("customers", "Customers", "users"), item("feedback", "Reviews & feedback", "star", openComplaints() || ""), item("seo", "Keywords & SEO", "spark"),
     item("offers", "Offers & coupons", "tag"), item("loyalty", "Loyalty card", "card"), item("whatsapp", "WhatsApp & reminders", "wa"), item("templates", "Message templates", "send"), item("alerts", "Alerts", "bell", hasMod("campaigns") ? alerts().length || "" : "")] },
   { label: "Run the shop", items: [...(fitsBiz("menu") ? [item("orders", "Orders", "receipt", hasMod("menu") ? D.newOrders || "" : ""), item("menu", "QR menu", "food")] : []), item("staff", "Staff & attendance", "clock"), item("salary", "Salary", "rupee"), item("accounts", "Accounts & GST", "chart")] },
   { label: "Account", items: [["plan", "Plan & services", "box"], ["profile", "Business profile", "store"], ["team", "Team & logins", "shield"], ["signout", "Sign out", "out"]] },
@@ -43,7 +43,7 @@ export async function mount(ctx) {
   if (!m.length) { $("#main").innerHTML = `<div class="auth-wrap"><div class="auth"><h2>No business yet</h2><p>Choose a plan to set up your business.</p><a class="btn primary" href="index.html#pricing">See plans</a></div></div>`; return; }
   BID = m[0].business_id; D.me = { role: m[0].role, perms: m[0].perms || [] };
   window.addEventListener("hashchange", () => { if (location.hash === "#signout") return C.signOut(); render(); });
-  await loadAll(); await gbpLoad().catch(() => {}); render();
+  await loadAll(); render();
   if (hasMod("menu")) {
     const tick = async () => { if (route() === "orders") return; try { const n = await newOrderCount(BID); if (n !== (D.newOrders || 0)) { D.newOrders = n; nav(); } } catch {} };
     tick(); setInterval(tick, 30000);
@@ -180,7 +180,7 @@ VIEWS.dashboard = () => {
   const al = alerts().slice(0, 5);
   return head(`Hello, ${esc(D.biz.name)}`, "Log every visit. It builds your customer list, stamps loyalty cards and brings in reviews.", `<button class="btn primary" data-a="visit" ${canWrite() ? "" : "disabled"}>${ico("plus")} Log a visit</button><button class="btn" data-a="scan" ${canWrite() ? "" : "disabled"}>${ico("grid")} Scan card</button><button class="btn" data-a="kiosk">${ico("smile")} Feedback screen</button>`) + `
   <div class="grid g4">${kpi("Revenue logged · 30 days", inr(rev), delta === null ? `${v30.length} visits` : `<span class="pill ${delta >= 0 ? "good" : "bad"}">${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta)}%</span> vs previous 30 days`)}
-    ${kpi("Customers", nfmt(c.length), `${repeat}% come back`)}${kpi("Google reviews earned", reviewed, asked ? `${Math.round((reviewed / asked) * 100)}% of people asked` : "Use the feedback screen")}
+    ${kpi("Customers", nfmt(c.length), `${repeat}% come back`)}${(() => { const f30 = (D.feedback || []).filter((f) => daysSince(f.created_at) < 30); return kpi("Average rating · 30 days", f30.length ? (f30.reduce((a, f) => a + f.rating, 0) / f30.length).toFixed(1) + " ★" : "–", f30.length ? `${f30.length} ratings · ${f30.filter((f) => f.rating <= 3).length} need attention` : "Use the feedback screen"); })()}
     ${kpi("Loyalty rewards · 30 days", v30.filter((x) => x.loyalty_reward).length, inr(v30.reduce((a, x) => a + +x.discount, 0)) + " discounts given")}</div>
   <div class="grid g2" style="margin-top:16px">
     <div class="card"><div class="card-head"><h2>Daily revenue, last 14 days</h2></div>${barChart(days)}</div>
@@ -244,7 +244,7 @@ const feedbackLink = () => new URL("f.html?b=" + D.biz.slug, location.href).href
 VIEWS.feedback = () => {
   const fb = D.feedback, f30 = fb.filter((f) => daysSince(f.created_at) < 30), avg = f30.length ? f30.reduce((a, f) => a + f.rating, 0) / f30.length : 0;
   const open = fb.filter((f) => f.status === "open"), stars = (n) => `<span class="stars-txt">${"★".repeat(n)}${"☆".repeat(5 - n)}</span>`;
-  return head("Customer feedback", "Happy customers get a one-tap Google review. Unhappy customers can tell you privately first, so you can fix it the same day.", `<button class="btn primary" data-a="kiosk">${ico("smile")} Open feedback screen</button>`) + `
+  return head("Reviews &amp; feedback", "Every customer rates you on your own feedback screen or link. Unhappy customers reach you privately first, so you can fix it the same day.", `<button class="btn primary" data-a="kiosk">${ico("smile")} Open feedback screen</button>`) + `
   <div class="grid g4">${kpi("Average rating · 30 days", f30.length ? avg.toFixed(1) : "–", `${f30.length} ratings`)}${kpi("Happy customers", f30.filter((f) => f.rating >= 4).length, `${f30.filter((f) => f.opened_google).length} opened Google`)}${kpi("Problems caught privately", f30.filter((f) => f.rating <= 3).length, "rated 3★ or below")}${kpi("Open issues", open.length, open.length ? "reply today" : "all handled")}</div>
   <div class="grid g2" style="margin-top:16px">
     <div class="card"><div class="card-head"><h2>Needs a reply</h2><span class="pill ${open.length ? "bad" : "good"}">${open.length}</span></div>
