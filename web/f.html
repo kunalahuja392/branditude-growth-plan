@@ -18,7 +18,7 @@
 // 1–3★ → private note to the owner first. A small, clearly labelled Google link stays available to everyone
 // (Google's review policy and IS 19000 forbid hiding the review option from unhappy customers).
 import { sb, friendly } from "./assets/js/sb.js";
-import { $, esc } from "./assets/js/ui.js";
+import { $, esc, phoneInput, readPhone } from "./assets/js/ui.js";
 import { mountReviewHelper } from "./assets/js/review-helper.js";
 const qs = new URLSearchParams(location.search), slug = qs.get("b") || "", fromKiosk = qs.get("k") === "1", preRating = +qs.get("r") || 0;
 const FACES = ["", "Very bad", "Bad", "Okay", "Good", "Excellent"], ISSUES = ["Waiting time", "Staff behaviour", "Quality", "Price", "Cleanliness", "Something else"];
@@ -31,7 +31,7 @@ function draw(step) {
   if (step === "happy") { k.innerHTML = `<p class="k-biz">${esc(B.name)}</p><div id="rh" style="display:flex;flex-direction:column;gap:14px;align-items:center;width:100%"></div>`;
     mountReviewHelper($("#rh"), { slug, rating: S.rating, bizName: B.name, link: B.google_review_link, onSkip: () => toGoogle(""), onOpen: (t) => toGoogle(t) }); }
   if (step === "unhappy") k.innerHTML = `<h1 class="k-q">We're sorry we let you down.</h1><p class="k-sub">Please tell the owner what went wrong. It goes straight to them, privately, and they read every message.</p><div class="chips k-chips">${ISSUES.map((t) => `<button class="chip" data-t="${t}" aria-pressed="${S.tags.includes(t)}">${t}</button>`).join("")}</div>
-    <textarea id="txt" placeholder="Tell the owner what happened (optional)" aria-label="What happened">${esc(S.text || "")}</textarea><input id="nm" placeholder="Your name (optional)" value="${esc(S.name || "")}" aria-label="Your name"><input id="ph" inputmode="tel" placeholder="Your number, so the owner can call you back (optional)" value="${esc(S.phone || "")}" aria-label="Your phone number">
+    <textarea id="txt" placeholder="Tell the owner what happened (optional)" aria-label="What happened">${esc(S.text || "")}</textarea><input id="nm" placeholder="Your name (optional)" value="${esc(S.name || "")}" aria-label="Your name">${phoneInput("ph", { cc: B.country_code || "91", value: S.phone || "", placeholder: "Your number, so the owner can call you back (optional)", label: "Your phone number" })}
     <p class="err" id="err"></p><div class="k-actions"><button class="btn primary k-btn" id="send">Send privately to the owner</button></div>${quiet()}`;
   if (step === "thanks") k.innerHTML = `<div class="k-big">🙏</div><h1 class="k-q">${S.rating >= 4 ? "Thank you for visiting!" : "Thank you for telling us."}</h1>${S.rating <= 3 ? `<p class="k-sub">The owner will see this today${S.phone ? " and will call you back" : ""}.</p>${quiet()}` : ""}`;
   k.querySelectorAll("[data-n]").forEach((b) => (b.onclick = async () => {
@@ -44,12 +44,12 @@ function draw(step) {
   k.querySelectorAll("[data-t]").forEach((b) => (b.onclick = () => { keep(); S.tags = S.tags.includes(b.dataset.t) ? S.tags.filter((x) => x !== b.dataset.t) : [...S.tags, b.dataset.t]; draw("unhappy"); }));
   const s = $("#send"); if (s) s.onclick = async () => { keep(); s.disabled = true; try { await submit(false); draw("thanks"); } catch (e) { $("#err").textContent = friendly(e); s.disabled = false; } };
 }
-const keep = () => { S.text = $("#txt")?.value || S.text; S.name = $("#nm")?.value || S.name; S.phone = $("#ph")?.value || S.phone; };
+const keep = () => { S.text = $("#txt")?.value || S.text; S.name = $("#nm")?.value || S.name; S.phone = $("#ph") ? readPhone("ph") : S.phone; };
 let sentHappy = false;
 async function submit(opened) {
   if (fromKiosk) return;   // the counter screen already saved this rating
   if (S.rating >= 4 && sentHappy && !opened) return; if (S.rating >= 4) sentHappy = true;
-  const { error } = await sb.rpc("submit_feedback", { p_slug: slug, p_rating: S.rating, p_tags: S.tags, p_text: S.text || "", p_name: S.name || "", p_phone: S.phone || "", p_opened_google: !!opened });
+  const { error } = await sb.rpc("submit_feedback", { p_slug: slug, p_rating: S.rating, p_tags: S.tags, p_text: S.text || "", p_name: S.name || "", p_phone: S.phone ? "+" + S.phone : "", p_opened_google: !!opened });
   if (error) throw error;
 }
 (async () => {

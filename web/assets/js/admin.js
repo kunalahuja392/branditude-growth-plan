@@ -358,7 +358,7 @@ VIEWS.agents = async () => {
 };
 function agentForm(a = { kind: "agent", commission_pct: 20, active: true }) {
   formModal({ title: a.id ? "Edit " + (a.kind === "business" ? "business referrer" : "agent") : "New sales agent", values: { ...a, period: a.months ? "months" : "lifetime", months: a.months || 12 },
-    fields: [{ key: "name", label: "Name", required: true }, { key: "phone", label: "Mobile" }, { key: "email", label: "Email (they sign in with it to see their earnings)", type: "email", full: true },
+    fields: [{ key: "name", label: "Name", required: true }, { key: "phone", label: "Mobile", type: "phone" }, { key: "email", label: "Email (they sign in with it to see their earnings)", type: "email", full: true },
       { key: "commission_pct", label: "Commission %", type: "number", required: true, min: 0, step: "0.5" }, { key: "period", label: "Commission on renewals", type: "select", options: [["lifetime", "Lifetime (every renewal)"], ["months", "Only for some months"]] },
       { key: "months", label: "Months (if limited)", type: "number", min: 1 }, { key: "payout_details", label: "UPI ID or bank details", full: true }, { key: "active", label: "Active", type: "checkbox", full: true }],
     onSave: async (v) => { const row = { name: v.name.trim(), phone: v.phone || "", email: (v.email || "").trim(), commission_pct: +v.commission_pct, months: v.period === "months" ? Math.max(1, +v.months || 12) : null, payout_details: v.payout_details || "", active: !!v.active };
@@ -554,10 +554,10 @@ document.addEventListener("click", async (e) => {
     switch (a) {
       case "lead-open": openLead(id); break;
       case "lead-new": await cats(); await pkgs(); formModal({ title: "Add a lead", fields: [
-          { key: "business_name", label: "Business name", required: true }, { key: "contact_name", label: "Contact name" }, { key: "phone", label: "Phone", required: true }, { key: "city", label: "City" },
+          { key: "business_name", label: "Business name", required: true }, { key: "contact_name", label: "Contact name" }, { key: "phone", label: "Phone", type: "phone", required: true }, { key: "city", label: "City" },
           { key: "category_id", label: "Category", type: "select", options: [["", "—"], ...D.cats.map((c) => [c.id, c.name])] }, { key: "package_id", label: "Interested in", type: "select", options: [["", "—"], ...D.pkgs.map((p) => [p.id, p.name])] },
           { key: "message", label: "Notes", type: "textarea", full: true }],
-          onSave: async (v) => { await q(sb.rpc("submit_lead", { p: { ...v, source: "manual" } })); toast("Lead added"); render(); } }); break;
+          onSave: async (v) => { await q(sb.rpc("submit_lead", { p: { ...v, phone: v.phone ? "+" + v.phone : "", source: "manual" } })); toast("Lead added"); render(); } }); break;
       case "biz-open": openBiz(id); break;
       case "pay-ok": if (await confirmBox("Confirm this payment?", "Only confirm after you've seen the money in your bank account.", "Confirm payment")) { await q(sb.rpc("admin_confirm_payment", { p_payment: id, p_approve: true })); toast("Payment confirmed"); await loadStats(); render(); } break;
       case "pay-no": if (await confirmBox("Reject this payment?", "The business will see it as rejected and can pay again.", "Reject", { danger: true })) { await q(sb.rpc("admin_confirm_payment", { p_payment: id, p_approve: false })); toast("Payment rejected"); await loadStats(); render(); } break;

@@ -1,6 +1,6 @@
 // Business portal: everything a shop owner manages (customers, loyalty, reviews, offers, WhatsApp, billing)
 import { sb, q } from "./sb.js";
-import { $, $$, esc, inr, inr2, nfmt, fmtDate, fmtShort, fmtDT, ago, daysSince, daysToBirthday, todayISO, normPhone, prettyPhone, toast, copy,
+import { $, $$, esc, inr, inr2, nfmt, fmtDate, fmtShort, fmtDT, ago, daysSince, daysToBirthday, todayISO, normPhone, prettyPhone, phoneInput, readPhone, phoneOk, phoneHint, ccOptions, toast, copy,
   openModal, closeModal, modalOpen, confirmBox, formModal, ico, shell, barChart, statusPill, THEMES, rwLabel, rwShort, rewardAt, nextReward, loyaltyCard } from "./ui.js";
 import { registerStaff } from "./staff.js";
 import { phoneLinkHTML, bindPhoneLink } from "./phone-link.js";
@@ -655,7 +655,9 @@ function lockedView(key) {
 VIEWS.profile = () => { const b = D.biz;
   return head("Business profile", "These details appear in your messages, feedback page and customer app.") + `
   <form id="prof" class="card" style="max-width:820px"><div class="fields">
-    ${[["p-name", "Business name", b.name], ["p-phone", "Business phone", b.phone], ["p-email", "Email", b.email], ["p-city", "City", b.city], ["p-loc", "Locality / area (e.g. Khamla)", b.locality], ["p-cc", "Country code", b.country_code]].map(([id, l, v]) => `<div class="field"><label for="${id}">${l}</label><input id="${id}" value="${esc(v || "")}"></div>`).join("")}
+    <div class="field"><label for="p-phone">Business phone</label>${phoneInput("p-phone", { value: b.phone, cc: b.country_code || "91" })}</div>
+    <div class="field"><label for="p-cc">Country</label><select id="p-cc">${ccOptions(b.country_code || "91")}</select><span class="muted small" style="margin-top:4px">Used when a customer number is typed without a country code</span></div>
+    ${[["p-name", "Business name", b.name], ["p-email", "Email", b.email], ["p-city", "City", b.city], ["p-loc", "Locality / area (e.g. Khamla)", b.locality]].map(([id, l, v]) => `<div class="field"><label for="${id}">${l}</label><input id="${id}" value="${esc(v || "")}"></div>`).join("")}
     <div class="field"><label>Category</label><input value="${esc(b.categories?.name || "")}" disabled title="Ask Branditude to change your category"></div></div>
     <div class="field" style="margin-top:14px"><label for="p-addr">Address</label><input id="p-addr" value="${esc(b.address || "")}"></div>
     <div class="field" style="margin-top:14px"><label for="p-desc">About your business</label><textarea id="p-desc" rows="4" maxlength="1500" placeholder="Paste the description from your Google Business Profile, or write a few lines: what you offer, what you're known for, who comes to you.">${esc(b.description || "")}</textarea></div>
@@ -687,7 +689,7 @@ after.profile = () => { drawKwList(); bindPhoneLink(async () => { const { data }
   $("#prof").onsubmit = async (e) => { e.preventDefault();
   const before = [D.biz.description, D.biz.services, D.biz.city, D.biz.locality].join("|");
   const extra = {}; if ("description" in D.biz) { extra.description = $("#p-desc").value.trim(); extra.services = $("#p-svc").value.trim(); }
-  try { await q(sb.from("businesses").update({ ...extra, name: $("#p-name").value.trim(), phone: normPhone($("#p-phone").value, $("#p-cc").value), email: $("#p-email").value.trim(), city: $("#p-city").value.trim(), ...("locality" in D.biz ? { locality: $("#p-loc").value.trim().slice(0, 60) } : {}), country_code: $("#p-cc").value.replace(/\D/g, "") || "91", address: $("#p-addr").value.trim(), google_review_link: $("#p-review").value.trim() }).eq("id", BID));
+  try { await q(sb.from("businesses").update({ ...extra, name: $("#p-name").value.trim(), phone: readPhone("p-phone"), email: $("#p-email").value.trim(), city: $("#p-city").value.trim(), ...("locality" in D.biz ? { locality: $("#p-loc").value.trim().slice(0, 60) } : {}), country_code: $("#p-cc").value.replace(/\D/g, "") || "91", address: $("#p-addr").value.trim(), google_review_link: $("#p-review").value.trim() }).eq("id", BID));
     await reload("biz"); toast("Profile saved"); render();
     if ([D.biz.description, D.biz.services, D.biz.city, D.biz.locality].join("|") !== before && (D.biz.description || D.biz.services)) autoKeywords(true);
   } catch (err) { toast(err.message, "error"); } }; };
@@ -902,7 +904,7 @@ function visitModal(pre = {}) {
   const m = openModal(`<div class="modal-head"><h2>${pre.scanned ? "Card scanned" : "Log a visit"}</h2><button class="btn ghost" data-close>Close</button></div>
     ${pre.scanned ? `<div class="result ok" style="margin-bottom:12px">✓ <b>${esc(pre.scanned.name)}</b> · ${pre.scanned.visits} visits so far. Enter the bill to add this visit.</div>` : ""}
     <form id="vf"><div class="fields">
-      <div class="field"><label for="v-phone">Customer's mobile number</label><input id="v-phone" inputmode="tel" required placeholder="98xxxxxxxx"></div>
+      <div class="field"><label for="v-phone">Customer's mobile number</label>${phoneInput("v-phone", { cc: D.biz.country_code || "91", value: pre.phone || "", required: true, placeholder: "98xxxxxxxx" })}</div>
       <div class="field"><label for="v-name">Name</label><input id="v-name" placeholder="New customer? Enter name"></div>
       <div class="field"><label for="v-bill">Bill amount ₹</label><input id="v-bill" type="number" min="0" required></div>
       <div class="field"><label for="v-code">Coupon code</label><input id="v-code" style="text-transform:uppercase" placeholder="Optional"></div>
@@ -911,10 +913,10 @@ function visitModal(pre = {}) {
       <div class="modal-foot"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary">Save visit</button></div></form>`);
   let timer, seq = 0;
   const preview = async () => {
-    const ph = m.querySelector("#v-phone").value; if (ph.replace(/\D/g, "").length < 10) { m.querySelector("#v-status").innerHTML = ""; return; }
+    const ph = readPhone("v-phone", m); if (!phoneOk(ph)) { m.querySelector("#v-status").innerHTML = ""; return; }
     const my = ++seq;
     try {
-      const p = await q(sb.rpc("preview_visit", { p_business: BID, p_phone: ph, p_gross: +m.querySelector("#v-bill").value || 0, p_coupon: m.querySelector("#v-code").value.trim() }));
+      const p = await q(sb.rpc("preview_visit", { p_business: BID, p_phone: "+" + ph, p_gross: +m.querySelector("#v-bill").value || 0, p_coupon: m.querySelector("#v-code").value.trim() }));
       if (my !== seq || !modalOpen()) return;
       let h = "";
       if (p.customer) { h += `<div class="note" style="margin-bottom:8px">Returning: <b>${esc(p.customer.name)}</b> · ${p.customer.visits} visits · ${inr(p.customer.spend)}</div>`; m.querySelector("#v-name").placeholder = p.customer.name; }
@@ -927,12 +929,12 @@ function visitModal(pre = {}) {
       m.querySelector("#v-status").innerHTML = h;
     } catch (e) { m.querySelector("#v-status").innerHTML = ""; }
   };
-  m.querySelectorAll("input").forEach((i) => (i.oninput = () => { clearTimeout(timer); timer = setTimeout(preview, 300); }));
-  if (pre.phone) { m.querySelector("#v-phone").value = pre.phone; if (pre.name) m.querySelector("#v-name").value = pre.name; preview(); m.querySelector("#v-bill").focus(); }
+  m.querySelectorAll("input").forEach((i) => (i.oninput = () => { clearTimeout(timer); timer = setTimeout(preview, 300); })); m.querySelector("#v-phone-cc").onchange = preview;
+  if (pre.phone) { if (pre.name) m.querySelector("#v-name").value = pre.name; preview(); m.querySelector("#v-bill").focus(); }
   m.querySelector("#vf").onsubmit = async (e) => {
     e.preventDefault(); const btn = e.submitter || m.querySelector("button.primary"); btn.disabled = true;
     try {
-      const r = await q(sb.rpc("log_visit", { p_business: BID, p_phone: m.querySelector("#v-phone").value, p_name: m.querySelector("#v-name").value, p_gross: +m.querySelector("#v-bill").value, p_coupon: m.querySelector("#v-code").value.trim() }));
+      const r = await q(sb.rpc("log_visit", { p_business: BID, p_phone: "+" + readPhone("v-phone", m), p_name: m.querySelector("#v-name").value, p_gross: +m.querySelector("#v-bill").value, p_coupon: m.querySelector("#v-code").value.trim() }));
       const grp = m.querySelector("#v-grp")?.value; if (grp) { const cur = D.customers.find((x) => x.id === r.customer_id)?.tags || []; if (!cur.includes(grp)) await q(sb.from("customers").update({ tags: [...cur, grp] }).eq("id", r.customer_id)).catch(() => {}); }
       if (waOn()) sb.functions.invoke("wa-notify", { body: { business_id: BID, customer_id: r.customer_id } }).then(({ data }) => {
         if (data?.ok) toast("WhatsApp update sent to the customer"); else if (/credits/.test(data?.skipped || "")) toast("WhatsApp update not sent: no utility credits left", "error"); }).catch(() => {});
@@ -958,14 +960,14 @@ function drawK() {
   let h;
   if (K.step === "rate") h = `<p class="k-biz">${esc(D.biz.name)}</p><h1 class="k-q">${c ? esc(c.name.split(" ")[0]) + ", how" : "How"} was your visit today?</h1><p class="k-sub">Tap a star. It takes 5 seconds.</p><div class="k-stars">${[1, 2, 3, 4, 5].map((n) => `<button class="k-star" data-k="rate" data-n="${n}" aria-label="${n} stars: ${FACES[n]}"><span aria-hidden="true">★</span><b class="num" style="font-size:20px;color:var(--ink)">${n}</b><small>${FACES[n]}</small></button>`).join("")}</div>`;
   else if (K.step === "happy") h = `<div class="k-big" aria-hidden="true">🎉</div><h1 class="k-q">Thank you! We're so glad you enjoyed it.</h1><p class="k-sub">Would you share that on Google? Scan this with your phone: we'll suggest a review you can edit, then copy it into Google.</p>${link ? `<div class="k-qr"><div id="k-qr"></div><span>Scan with your phone camera</span></div>` : ""}<div class="k-actions">${gBtn("primary")}<button class="btn ghost k-btn" data-k="done">Done</button></div>`;
-  else if (K.step === "unhappy") h = `<h1 class="k-q">We're sorry we let you down.</h1><p class="k-sub">Please tell the owner what went wrong. It goes straight to them, privately, and they read every message.</p><div class="chips k-chips">${ISSUES.map((t) => `<button class="chip" data-k="tag" data-t="${t}" aria-pressed="${K.tags.includes(t)}">${t}</button>`).join("")}</div><textarea id="k-text" placeholder="Tell the owner what happened (optional)" aria-label="What happened">${esc(K.text)}</textarea>${c ? "" : `<input id="k-phone" inputmode="tel" placeholder="Your number, so the owner can call you back (optional)" value="${esc(K.phone)}" aria-label="Your phone number">`}<div class="k-actions"><button class="btn primary k-btn" data-k="send">Send privately to the owner</button></div>${link ? `<p class="k-quiet">You can also <a href="${esc(link)}" target="_blank" rel="noopener" data-k="opened">post a public review on Google</a>.</p>` : ""}`;
+  else if (K.step === "unhappy") h = `<h1 class="k-q">We're sorry we let you down.</h1><p class="k-sub">Please tell the owner what went wrong. It goes straight to them, privately, and they read every message.</p><div class="chips k-chips">${ISSUES.map((t) => `<button class="chip" data-k="tag" data-t="${t}" aria-pressed="${K.tags.includes(t)}">${t}</button>`).join("")}</div><textarea id="k-text" placeholder="Tell the owner what happened (optional)" aria-label="What happened">${esc(K.text)}</textarea>${c ? "" : `${phoneInput("k-phone", { cc: D.biz.country_code || "91", value: K.phone, placeholder: "Your number, so the owner can call you back (optional)", label: "Your phone number" })}`}<div class="k-actions"><button class="btn primary k-btn" data-k="send">Send privately to the owner</button></div>${link ? `<p class="k-quiet">You can also <a href="${esc(link)}" target="_blank" rel="noopener" data-k="opened">post a public review on Google</a>.</p>` : ""}`;
   else h = `<div class="k-big" aria-hidden="true">🙏</div><h1 class="k-q">${K.rating >= 4 && !K.text ? "Thank you for visiting! See you again soon." : "Thank you for telling us. The owner will see this today."}</h1>${link && K.rating <= 3 ? `<p class="k-quiet">You can also <a href="${esc(link)}" target="_blank" rel="noopener" data-k="opened">post a public review on Google</a>.</p>` : ""}<div class="k-actions"><button class="btn primary k-btn" data-k="again">Next customer</button></div>`;
   $("#kiosk-root").innerHTML = `<div class="kiosk" role="dialog" aria-modal="true" aria-label="Customer feedback"><button class="btn sm ghost k-exit" data-k="exit">Exit</button><div class="k-inner">${h}</div></div>`;
   if (K.step === "happy" && link && window.QRCode) new QRCode($("#k-qr"), { text: feedbackLink() + "&k=1&r=" + (K.rating || 5), width: 190, height: 190, colorDark: "#16203a", colorLight: "#ffffff" });
   clearTimeout(K.timer); if (K.step === "happy" || K.step === "thanks") K.timer = setTimeout(() => { if (K) { K = freshK(); drawK(); } }, K.step === "happy" ? 120000 : 20000);
 }
 async function saveK(extra = {}) {
-  try { K.fid = await q(sb.rpc("counter_feedback", { p_business: BID, p_customer: K.cid || null, p_rating: K.rating, p_tags: K.tags, p_text: K.text, p_phone: K.phone, p_opened_google: !!extra.opened, p_id: K.fid })); }
+  try { K.fid = await q(sb.rpc("counter_feedback", { p_business: BID, p_customer: K.cid || null, p_rating: K.rating, p_tags: K.tags, p_text: K.text, p_phone: K.phone ? "+" + K.phone : "", p_opened_google: !!extra.opened, p_id: K.fid })); }
   catch (e) { toast(e.message, "error"); }
 }
 document.addEventListener("click", async (e) => {
@@ -974,20 +976,20 @@ document.addEventListener("click", async (e) => {
   if (k === "rate") { K.rating = +el.dataset.n; K.step = K.rating >= 4 ? "happy" : "unhappy"; drawK(); saveK(); }
   if (k === "opened") saveK({ opened: true });
   if (k === "improve") { K.step = "unhappy"; drawK(); }
-  if (k === "tag") { K.text = $("#k-text")?.value || K.text; K.phone = $("#k-phone")?.value || K.phone; K.tags = K.tags.includes(el.dataset.t) ? K.tags.filter((x) => x !== el.dataset.t) : [...K.tags, el.dataset.t]; drawK(); }
-  if (k === "send") { K.text = ($("#k-text")?.value || "").trim(); K.phone = ($("#k-phone")?.value || "").trim(); K.step = "thanks"; drawK(); saveK(); }
+  if (k === "tag") { K.text = $("#k-text")?.value || K.text; K.phone = $("#k-phone") ? readPhone("k-phone") : K.phone; K.tags = K.tags.includes(el.dataset.t) ? K.tags.filter((x) => x !== el.dataset.t) : [...K.tags, el.dataset.t]; drawK(); }
+  if (k === "send") { K.text = ($("#k-text")?.value || "").trim(); K.phone = $("#k-phone") ? readPhone("k-phone") : ""; K.step = "thanks"; drawK(); saveK(); }
   if (k === "done") { K.step = "thanks"; drawK(); }
   if (k === "again") { K = freshK(); drawK(); }
 });
 
 /* ---------- forms ---------- */
 function customerForm(c = { tags: [] }) {
-  formModal({ title: c.id ? "Edit customer" : "Add customer", values: { ...c, groups: (c.tags || []).filter((t) => t !== "New"), phone: c.phone ? prettyPhone(c.phone) : "" },
-    fields: [{ key: "name", label: "Name", required: true }, { key: "phone", label: "Mobile number", required: true }, { key: "birthday", label: "Birthday", type: "date" }, { key: "email", label: "Email", type: "email" },
+  formModal({ title: c.id ? "Edit customer" : "Add customer", values: { ...c, groups: (c.tags || []).filter((t) => t !== "New"), phone: c.phone || "" },
+    fields: [{ key: "name", label: "Name", required: true }, { key: "phone", label: "Mobile number", type: "phone", cc: D.biz.country_code || "91", required: true }, { key: "birthday", label: "Birthday", type: "date" }, { key: "email", label: "Email", type: "email" },
       { key: "groups", label: "Groups (for broadcasts)", type: "multiselect", full: true, options: groupOptions(c.tags || []) }, { key: "newgroup", label: "New group", full: true, placeholder: "e.g. Gym members, Wedding enquiry" }, { key: "notes", label: "Notes", type: "textarea", full: true }],
     extraFoot: c.id ? `<button type="button" class="btn danger" style="margin-right:auto" id="cust-del">Delete</button>` : "",
-    onSave: async (v) => { const row = { name: v.name, phone: normPhone(v.phone, D.biz.country_code), birthday: v.birthday || null, email: v.email || null, tags: [...new Set([...(v.groups || []), ...String(v.newgroup || "").split(",").map((s) => s.trim().slice(0, 40)).filter(Boolean)])], notes: v.notes };
-      if (row.phone.length < 11) throw new Error("Enter a valid mobile number");
+    onSave: async (v) => { const row = { name: v.name, phone: v.phone, birthday: v.birthday || null, email: v.email || null, tags: [...new Set([...(v.groups || []), ...String(v.newgroup || "").split(",").map((s) => s.trim().slice(0, 40)).filter(Boolean)])], notes: v.notes };
+      if (!phoneOk(row.phone)) throw new Error(phoneHint(row.phone));
       if (c.id) await q(sb.from("customers").update(row).eq("id", c.id)); else await q(sb.from("customers").insert({ ...row, business_id: BID }));
       await reload("customers"); toast("Customer saved"); render(); } });
   if (c.id) $("#cust-del").onclick = async () => { if (await confirmBox(`Delete ${c.name}?`, "Their visits stay in your revenue numbers.", "Delete", { danger: true })) { await q(sb.from("customers").delete().eq("id", c.id)); await reload("customers"); render(); } };

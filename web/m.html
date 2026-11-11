@@ -53,7 +53,7 @@
 <script type="module">
 // Public QR menu: m.html?b=<business-slug>&t=<table id>. Customers browse, add to cart and order; prices are re-checked on the server.
 import { sb, friendly } from "./assets/js/sb.js";
-import { $, esc, inr2 } from "./assets/js/ui.js";
+import { $, esc, inr2, phoneInput, readPhone } from "./assets/js/ui.js";
 const P = new URLSearchParams(location.search), slug = P.get("b") || "", tableId = P.get("t") || null;
 const KEY = `bgp_order_${slug}_${tableId || "counter"}`;
 let MENU, cart = {}, filter = { q: "", veg: false }, poll;
@@ -95,7 +95,7 @@ function sheet() {
     ${lines.map(([i, n]) => `<div class="line">${mark(i.food_type)}<div class="grow"><b>${esc(i.name)}</b><div class="small muted">${inr2(i.price)} each</div></div><span class="qty" style="margin:0"><button data-dec="${i.id}">−</button><b>${n}</b><button data-inc="${i.id}">+</button></span><b class="num" style="min-width:70px;text-align:right">${inr2(i.price * n)}</b></div>`).join("")}
     <div class="line"><div class="grow"><b>Total</b></div><b class="num" style="font-size:18px">${inr2(cartTotal())}</b></div>
     <div class="fields" style="margin-top:12px"><div class="field" style="grid-column:1/-1"><label for="note">Cooking instructions (optional)</label><input id="note" placeholder="Less spicy, no onion…"></div>
-      <div class="field"><label for="nm">Your name (optional)</label><input id="nm" autocomplete="name"></div><div class="field"><label for="phn">Phone (optional)</label><input id="phn" inputmode="tel" autocomplete="tel"></div></div>
+      <div class="field"><label for="nm">Your name (optional)</label><input id="nm" autocomplete="name"></div><div class="field"><label for="phn">Phone (optional)</label>${phoneInput("phn", { cc: MENU.country_code || "91", placeholder: "Mobile number", label: "Phone (optional)" })}</div></div>
     <p class="err" id="err" role="alert"></p>
     <button class="btn primary k-btn" id="place" style="width:100%;margin-top:8px">Place order · ${inr2(cartTotal())}</button>
     <p class="small muted" style="text-align:center;margin-top:8px">${MENU.table ? `Order goes to the kitchen for ${esc(MENU.table.label)}.` : "Order goes to the counter."} Pay at the counter as usual.</p></div>`;
@@ -105,7 +105,7 @@ function sheet() {
   $("#close").onclick = closeS;
   $("#place").onclick = async () => {
     const btn = $("#place"); btn.disabled = true; btn.textContent = "Sending to kitchen…";
-    const { data, error } = await sb.rpc("place_order", { p_slug: slug, p_table: MENU.table?.id || null, p_items: lines.map(([i, n]) => ({ id: i.id, qty: n })), p_name: $("#nm").value, p_phone: $("#phn").value, p_note: $("#note").value });
+    const { data, error } = await sb.rpc("place_order", { p_slug: slug, p_table: MENU.table?.id || null, p_items: lines.map(([i, n]) => ({ id: i.id, qty: n })), p_name: $("#nm").value, p_phone: readPhone("phn") ? "+" + readPhone("phn") : "", p_note: $("#note").value });
     if (error) { btn.disabled = false; btn.textContent = `Place order · ${inr2(cartTotal())}`; $("#err").textContent = friendly(error); return; }
     cart = {}; try { localStorage.setItem(KEY, JSON.stringify({ id: data.id, token: data.token, at: Date.now() })); } catch {}
     el.remove(); status(data.id, data.token);

@@ -33,7 +33,7 @@
 </div>
 <script type="module">
 import { sb, configured, friendly } from "./assets/js/sb.js";
-import { $, $$, esc, normPhone } from "./assets/js/ui.js";
+import { $, $$, esc, phoneInput, readPhone, phoneOk, phoneHint } from "./assets/js/ui.js";
 
 const err = (m) => { $("#err").textContent = m || ""; $("#ok").textContent = ""; };
 const ok = (m) => { $("#ok").textContent = m || ""; $("#err").textContent = ""; };
@@ -63,7 +63,7 @@ const joinForm = () => `
 const phoneForm = () => `
   <p class="muted small">${tab === "customer" ? "See your loyalty cards and offers from every business you visit. We'll send a one-time code to your WhatsApp." : "We'll send a one-time code to your WhatsApp. Works once your mobile number is added to your login (Business profile → Mobile login)."}</p>
   <form id="f-phone" class="fields" style="grid-template-columns:1fr">
-    <div class="field"><label for="phone">Mobile number</label><input id="phone" inputmode="tel" autocomplete="tel" placeholder="98xxxxxxxx" required></div>
+    <div class="field"><label for="phone">Mobile number</label>${phoneInput("phone", { required: true, placeholder: "98xxxxxxxx" })}</div>
     <div class="field" id="otp-wrap" hidden><label for="otp">6-digit code</label><input id="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6"></div>
     <button class="btn primary" type="submit" id="phone-btn" style="justify-content:center">Send code</button>
     ${tab === "customer" ? "" : `<button type="button" class="btn ghost sm" id="to-email">Use email and password</button>`}
@@ -109,8 +109,8 @@ function bindPhone() {
   $("#to-email")?.addEventListener("click", () => { otpMode = false; draw(); });
   $("#f-phone").onsubmit = async (e) => {
     e.preventDefault(); err(""); const btn = $("#phone-btn"); btn.disabled = true;
-    const phone = "+" + normPhone($("#phone").value);
-    if (phone.length < 12) { err("Enter a 10-digit mobile number."); btn.disabled = false; return; }
+    const d = readPhone("phone"), phone = "+" + d;
+    if (!phoneOk(d)) { err(phoneHint(d)); btn.disabled = false; return; }
     if (!sent) {
       // business and team logins never create a new account from a phone number
       const { error } = await sb.auth.signInWithOtp({ phone, options: { shouldCreateUser: tab === "customer" } });

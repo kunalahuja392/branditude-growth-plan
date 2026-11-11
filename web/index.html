@@ -373,6 +373,7 @@ footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;
 .field{display:flex;flex-direction:column;gap:5px}
 .field.full{grid-column:1/-1}
 label{font-size:14px;font-weight:600;color:var(--ink-2)}
+.phone-in{display:flex;gap:6px;width:100%}.phone-in select{width:auto;flex:0 0 auto;max-width:132px;padding-right:6px}.phone-in input{flex:1;min-width:0}
 input,select{font:16px var(--body);color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:11px 12px;width:100%}
 input:focus,select:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
 .err{color:#c2402f;font-size:14px;font-weight:600;margin-top:10px}
@@ -665,7 +666,7 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
 <script type="module">
 // Public store: plans, discounts and category services come live from the database (managed in the admin portal).
 import { sb, configured, friendly } from "./assets/js/sb.js";
-import { normPhone } from "./assets/js/ui.js";
+import { phoneInput, readPhone, phoneOk, phoneHint } from "./assets/js/ui.js";
 import { rzpOn, payOnline } from "./assets/js/razorpay.js";
 // Already signed in? Point the sign-in links straight at the dashboard.
 sb.auth.getSession().then(({ data }) => { if (!data?.session) return;
@@ -769,7 +770,7 @@ const summary = () => { const qt = co.quote; if (!qt) return `<p class="gst">Cal
   return `${qt.lines.map((l) => `<div class="srow"><span>${esc(l.label)}</span><span class="num">${inr(l.amount)}</span></div>`).join("")}${+qt.gst ? `<div class="srow"><span>GST</span><span class="num">${inr(qt.gst)}</span></div>` : ""}<div class="srow total"><span>Total</span><span class="num">${inr(qt.total)}</span></div>${qt.promo_message ? `<p class="${qt.promo_ok ? "ok-msg" : "err"}" style="font-size:14px;margin-top:6px">${esc(qt.promo_message)}</p>` : ""}`; };
 function readStep1() {
   const v = (id) => ($("#" + id)?.value || "").trim();
-  co.biz = { name: v("b-name"), contact_name: v("b-owner"), phone: v("b-phone"), email: v("b-email"), city: v("b-city") };
+  co.biz = { name: v("b-name"), contact_name: v("b-owner"), phone: readPhone("b-phone"), email: v("b-email"), city: v("b-city") };
   co.cat = v("b-cat"); co.pkg = v("b-plan"); co.billing = v("b-bill") || co.billing; co.promo = v("b-promo");
 }
 function draw() {
@@ -782,7 +783,7 @@ function draw() {
       <div class="field"><label for="b-name">Business name</label><input id="b-name" value="${esc(co.biz.name || "")}" autocomplete="organization"></div>
       <div class="field"><label for="b-cat">Type of business</label><select id="b-cat"><option value="">Select one</option>${CATS.map((c) => `<option value="${c.id}" ${co.cat === c.id ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></div>
       <div class="field"><label for="b-owner">Your name</label><input id="b-owner" value="${esc(co.biz.contact_name || "")}" autocomplete="name"></div>
-      <div class="field"><label for="b-phone">WhatsApp number</label><input id="b-phone" value="${esc(co.biz.phone || "")}" inputmode="tel" placeholder="98xxxxxxxx"></div>
+      <div class="field"><label for="b-phone">WhatsApp number</label>${phoneInput("b-phone", { value: co.biz.phone || "", placeholder: "98xxxxxxxx", label: "WhatsApp number" })}</div>
       <div class="field"><label for="b-email">Email</label><input id="b-email" type="email" value="${esc(co.biz.email || "")}" autocomplete="email"></div>
       <div class="field"><label for="b-city">City</label><input id="b-city" value="${esc(co.biz.city || "")}"></div>
       <div class="field"><label for="b-plan">Plan</label><select id="b-plan">${PKGS.map((p) => `<option value="${p.id}" ${co.pkg === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></div>
@@ -825,8 +826,8 @@ function draw() {
   if (co.step === 1 && !co.quote) refreshQuote();
 }
 const err = (m) => { const e = $("#err"); if (e) e.textContent = m; };
-const validStep1 = () => { const b = co.biz; return !b.name ? "Enter your business name." : !co.cat ? "Choose your type of business." : !b.contact_name ? "Enter your name." : normPhone(b.phone).length < 12 ? "Enter a valid 10-digit WhatsApp number." : !b.city ? "Enter your city." : ""; };
-const regPayload = () => ({ name: co.biz.name, contact_name: co.biz.contact_name, phone: co.biz.phone, email: co.biz.email, city: co.biz.city, category_id: co.cat, package_id: co.pkg, billing: co.billing, product_ids: co.products, promo_code: co.promo });
+const validStep1 = () => { const b = co.biz; return !b.name ? "Enter your business name." : !co.cat ? "Choose your type of business." : !b.contact_name ? "Enter your name." : !phoneOk(b.phone) ? phoneHint(b.phone).replace("mobile", "WhatsApp") : !b.city ? "Enter your city." : ""; };
+const regPayload = () => ({ name: co.biz.name, contact_name: co.biz.contact_name, phone: co.biz.phone ? "+" + co.biz.phone : "", email: co.biz.email, city: co.biz.city, category_id: co.cat, package_id: co.pkg, billing: co.billing, product_ids: co.products, promo_code: co.promo });
 document.addEventListener("click", async (e) => {
   const el = e.target.closest("[data-co]"); if (!el || !co) return; const a = el.dataset.co;
   if (a === "backdrop" && e.target !== el) return;

@@ -19,10 +19,43 @@ export function daysToBirthday(b) {
   const t = new Date(); t.setHours(0, 0, 0, 0); let n = new Date(t.getFullYear(), m - 1, d); if (n < t) n = new Date(t.getFullYear() + 1, m - 1, d);
   return Math.round((n - t) / DAY);
 }
+// Phone numbers are stored as full international digits without "+" (e.g. 919876543210).
+// A number typed with "+" or "00" is taken as already international; otherwise the country code is added.
 export function normPhone(p, cc = DEFAULT_COUNTRY_CODE) {
-  let d = String(p || "").replace(/\D/g, ""); if (d.startsWith("00")) d = d.slice(2);
-  if (d.length === 11 && d.startsWith("0")) d = d.slice(1); if (d.length === 10) d = String(cc).replace(/\D/g, "") + d; return d;
+  const raw = String(p || "").trim(), d = raw.replace(/\D/g, ""), c = String(cc || "").replace(/\D/g, "") || DEFAULT_COUNTRY_CODE;
+  if (!d) return ""; if (raw.startsWith("+")) return d; if (d.startsWith("00")) return d.slice(2);
+  const n = d.replace(/^0+/, ""); if (!n) return "";
+  return n.startsWith(c) && n.length >= c.length + 9 ? n : c + n;
 }
+export const COUNTRIES = [["91", "India"], ["971", "UAE"], ["1", "USA / Canada"], ["44", "UK"], ["966", "Saudi Arabia"], ["974", "Qatar"], ["968", "Oman"], ["965", "Kuwait"], ["973", "Bahrain"],
+  ["65", "Singapore"], ["60", "Malaysia"], ["61", "Australia"], ["64", "New Zealand"], ["977", "Nepal"], ["880", "Bangladesh"], ["94", "Sri Lanka"], ["960", "Maldives"], ["975", "Bhutan"], ["92", "Pakistan"],
+  ["66", "Thailand"], ["62", "Indonesia"], ["63", "Philippines"], ["84", "Vietnam"], ["852", "Hong Kong"], ["86", "China"], ["81", "Japan"], ["82", "South Korea"], ["49", "Germany"], ["33", "France"], ["31", "Netherlands"],
+  ["39", "Italy"], ["34", "Spain"], ["353", "Ireland"], ["41", "Switzerland"], ["46", "Sweden"], ["7", "Russia"], ["90", "Turkey"], ["20", "Egypt"], ["27", "South Africa"], ["254", "Kenya"], ["234", "Nigeria"],
+  ["255", "Tanzania"], ["256", "Uganda"], ["230", "Mauritius"], ["55", "Brazil"], ["52", "Mexico"]];
+// split stored digits into [country code, national number]
+export function splitPhone(full, cc = DEFAULT_COUNTRY_CODE) {
+  const d = String(full || "").replace(/\D/g, ""); if (!d) return [String(cc || DEFAULT_COUNTRY_CODE), ""];
+  const pref = String(cc || DEFAULT_COUNTRY_CODE).replace(/\D/g, "");
+  if (d.startsWith(pref) && d.length >= pref.length + 9) return [pref, d.slice(pref.length)]; // same rule as normPhone
+  const hit = COUNTRIES.map((x) => x[0]).filter((c) => c !== pref).sort((a, b) => b.length - a.length).find((c) => d.startsWith(c) && d.length >= c.length + 7);
+  return hit ? [hit, d.slice(hit.length)] : [pref, d];
+}
+export function ccOptions(cc = DEFAULT_COUNTRY_CODE) {
+  const c = String(cc || DEFAULT_COUNTRY_CODE).replace(/\D/g, ""), list = COUNTRIES.some((x) => x[0] === c) ? COUNTRIES : [[c, "Other"], ...COUNTRIES];
+  return list.map(([v, n]) => `<option value="${v}" ${v === c ? "selected" : ""}>+${v} ${esc(n)}</option>`).join("");
+}
+// country code picker + number box. Read it back with readPhone(id).
+export function phoneInput(id, { value = "", cc = DEFAULT_COUNTRY_CODE, placeholder = "Mobile number", required = false, label = "Mobile number" } = {}) {
+  const [c, n] = value ? splitPhone(value, cc) : [String(cc || DEFAULT_COUNTRY_CODE), ""];
+  return `<div class="phone-in"><select id="${id}-cc" aria-label="Country code">${ccOptions(c)}</select><input id="${id}" inputmode="tel" autocomplete="tel-national" ${required ? "required" : ""} value="${esc(n)}" placeholder="${esc(placeholder)}" aria-label="${esc(label)}"></div>`;
+}
+export function readPhone(id, root = document) {
+  const i = root.querySelector("#" + id), c = root.querySelector("#" + id + "-cc");
+  return i && i.value.trim() ? normPhone(i.value, c?.value) : "";
+}
+// valid full number? India must be exactly 10 digits after +91
+export const phoneOk = (d) => /^\d{8,15}$/.test(d || "") && (!d.startsWith("91") || d.length === 12) && !(d.startsWith("1") && d.length !== 11);
+export const phoneHint = (d) => (String(d || "").startsWith("91") ? "Enter a 10-digit mobile number." : "Enter a valid mobile number with its country code.");
 export const prettyPhone = (p) => { const d = String(p || ""); return d.length > 10 ? "+" + d.slice(0, d.length - 10) + " " + d.slice(-10, -5) + " " + d.slice(-5) : d; };
 
 export function toast(msg, kind) {
@@ -68,6 +101,7 @@ export function formModal({ title, fields, values = {}, submitLabel = "Save", on
     else if (f.type === "multiselect") input = `<div class="chips" id="${id}" data-multi>${(f.options || []).map(([val, lab]) => `<button type="button" class="chip" data-val="${esc(val)}" aria-pressed="${(v(f.key) || []).includes(val)}">${esc(lab)}</button>`).join("")}</div>`;
     else if (f.type === "textarea") input = `<textarea id="${id}" ${req} placeholder="${esc(f.placeholder || "")}">${esc(v(f.key))}</textarea>`;
     else if (f.type === "checkbox") return `<label class="check ${f.full ? "" : ""}" style="${f.full ? "grid-column:1/-1" : ""}"><input type="checkbox" id="${id}" ${v(f.key) ? "checked" : ""}> ${esc(f.label)}</label>`;
+    else if (f.type === "phone") input = phoneInput(id, { value: v(f.key), cc: f.cc, required: !!f.required, label: f.label });
     else if (f.type === "lines") input = `<textarea id="${id}" placeholder="One per line">${esc((v(f.key) || []).join("\n"))}</textarea>`;
     else input = `<input id="${id}" type="${f.type || "text"}" ${req} value="${esc(v(f.key))}" placeholder="${esc(f.placeholder || "")}" ${f.min != null ? `min="${f.min}"` : ""} ${f.step ? `step="${f.step}"` : ""}>`;
     return `<div class="field" style="${f.full ? "grid-column:1/-1" : ""}"><label for="${id}">${esc(f.label)}</label>${input}${f.help ? `<span class="muted small" style="margin-top:4px">${esc(f.help)}</span>` : ""}</div>`;
@@ -82,6 +116,7 @@ export function formModal({ title, fields, values = {}, submitLabel = "Save", on
       const el = m.querySelector("#fm-" + f.key);
       if (f.type === "checkbox") out[f.key] = el.checked;
       else if (f.type === "multiselect") out[f.key] = [...el.querySelectorAll('.chip[aria-pressed="true"]')].map((c) => c.dataset.val);
+      else if (f.type === "phone") out[f.key] = readPhone("fm-" + f.key, m);
       else if (f.type === "lines") out[f.key] = el.value.split("\n").map((s) => s.trim()).filter(Boolean);
       else if (f.type === "number") out[f.key] = el.value === "" ? null : +el.value;
       else out[f.key] = el.value.trim();

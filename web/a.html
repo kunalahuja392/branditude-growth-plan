@@ -22,7 +22,7 @@
 <script type="module">
 // Staff check-in / check-out: a.html?b=<business-slug>. Phone + PIN, optional location check (enforced on the server).
 import { sb, friendly } from "./assets/js/sb.js";
-import { $, esc } from "./assets/js/ui.js";
+import { $, esc, phoneInput, readPhone, phoneOk, phoneHint } from "./assets/js/ui.js";
 const slug = new URLSearchParams(location.search).get("b") || "";
 const k = $("#k");
 let B, timer;
@@ -31,7 +31,7 @@ const clock = () => new Date().toLocaleTimeString("en-IN", { hour: "numeric", mi
 function form(msg = "") {
   clearTimeout(timer);
   k.innerHTML = `<p class="k-biz">${esc(B.name)}</p><div class="clock" id="clk">${clock()}</div><p class="k-sub">${new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}</p>
-    <form class="punch" id="pf"><input id="ph" inputmode="tel" autocomplete="tel" placeholder="Your mobile number" value="${esc(remembered())}" aria-label="Mobile number" required>
+    <form class="punch" id="pf">${phoneInput("ph", { cc: B.country_code || "91", value: remembered(), placeholder: "Your mobile number", required: true })}
       <input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="PIN" aria-label="PIN" required>
       <label class="check" style="justify-content:center"><input type="checkbox" id="rem" ${remembered() ? "checked" : ""}> Remember my number on this phone</label>
       <p class="err" id="err" role="alert">${esc(msg)}</p>
@@ -41,11 +41,12 @@ function form(msg = "") {
   $(remembered() ? "#pin" : "#ph").focus();
   $("#pf").onsubmit = async (e) => {
     e.preventDefault(); const btn = $("#go"); btn.disabled = true; btn.textContent = "Checking…"; $("#err").textContent = "";
-    const phone = $("#ph").value.trim(), pin = $("#pin").value.trim();
+    const phone = readPhone("ph"), pin = $("#pin").value.trim();
+    if (!phoneOk(phone)) { btn.disabled = false; btn.textContent = "Check in / Check out"; $("#err").textContent = phoneHint(phone); return; }
     try { if ($("#rem").checked) localStorage.setItem("bgp_staff_phone_" + slug, phone); else localStorage.removeItem("bgp_staff_phone_" + slug); } catch {}
     const pos = await new Promise((res) => { if (!navigator.geolocation) return res(null);
       navigator.geolocation.getCurrentPosition((p) => res(p.coords), () => res(null), { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }); });
-    const { data, error } = await sb.rpc("staff_punch", { p_slug: slug, p_phone: phone, p_pin: pin, p_lat: pos?.latitude ?? null, p_lng: pos?.longitude ?? null });
+    const { data, error } = await sb.rpc("staff_punch", { p_slug: slug, p_phone: "+" + phone, p_pin: pin, p_lat: pos?.latitude ?? null, p_lng: pos?.longitude ?? null });
     if (error || data?.error) { btn.disabled = false; btn.textContent = "Check in / Check out"; $("#pin").value = ""; $("#err").textContent = data?.error || friendly(error); return; }
     done(data);
   };

@@ -1,6 +1,6 @@
 // Business portal: Staff & attendance (#staff) and Salary (#salary)
 import { sb, q } from "./sb.js";
-import { $, esc, inr, inr2, fmtDate, toast, openModal, closeModal, confirmBox, formModal, ico, normPhone, prettyPhone, copy } from "./ui.js";
+import { $, esc, inr, inr2, fmtDate, toast, openModal, closeModal, confirmBox, formModal, ico, normPhone, prettyPhone, phoneOk, phoneHint, copy } from "./ui.js";
 import { computeStaffMonth, DEFAULT_SETTINGS, CODES, ist, todayIST, monthDates } from "./payroll.js";
 
 const STAFF_COLS = "id,business_id,name,phone,designation,pay_type,pay_rate,shift_start,shift_end,break_minutes,weekly_off,joined_on,active,sort,created_at";
@@ -190,9 +190,9 @@ function staffForm(s = {}) {
   const isNew = !s.id;
   formModal({ title: isNew ? "Add staff" : `Edit ${s.name}`, submitLabel: isNew ? "Add staff" : "Save",
     values: { pay_type: "monthly", shift_start: "10:00", shift_end: "19:00", break_minutes: 0, weekly_off: ["0"], joined_on: todayIST(), active: true, ...s,
-      phone: s.phone ? s.phone.slice(-10) : "", shift_start: (s.shift_start || "10:00").slice(0, 5), shift_end: (s.shift_end || "19:00").slice(0, 5), weekly_off: (s.weekly_off ?? [0]).map(String) },
+      phone: s.phone || "", shift_start: (s.shift_start || "10:00").slice(0, 5), shift_end: (s.shift_end || "19:00").slice(0, 5), weekly_off: (s.weekly_off ?? [0]).map(String) },
     fields: [
-      { key: "name", label: "Name", required: true }, { key: "phone", label: "Mobile number", type: "tel", required: true, help: "They check in with this number + their PIN" },
+      { key: "name", label: "Name", required: true }, { key: "phone", label: "Mobile number", type: "phone", cc: ctx().D.biz.country_code || "91", required: true, help: "They check in with this number + their PIN" },
       { key: "designation", label: "Role", placeholder: "Chef, Stylist, Helper…" }, { key: "joined_on", label: "Joined on", type: "date" },
       { key: "pay_type", label: "Paid", type: "select", options: [["monthly", "Monthly salary"], ["daily", "Per day (daily wage)"], ["hourly", "Per hour"]] },
       { key: "pay_rate", label: "Amount ₹", type: "number", required: true, min: 0 },
@@ -203,7 +203,7 @@ function staffForm(s = {}) {
       ...(isNew ? [] : [{ key: "active", label: "Still working here", type: "checkbox" }]),
     ],
     onSave: async (v) => {
-      const phone = normPhone(v.phone); if (phone.length < 12) throw new Error("Enter a valid 10-digit mobile number");
+      const phone = v.phone; if (!phoneOk(phone)) throw new Error(phoneHint(phone));
       if (v.pin && !/^\d{4,6}$/.test(v.pin)) throw new Error("PIN must be 4 to 6 digits");
       if (isNew && !v.pin) throw new Error("Set a PIN so they can check in");
       const row = { name: v.name, phone, designation: v.designation, pay_type: v.pay_type, pay_rate: v.pay_rate || 0, shift_start: v.shift_start, shift_end: v.shift_end,

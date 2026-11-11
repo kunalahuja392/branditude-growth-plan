@@ -329,3 +329,5 @@ td .who span{font-size:13px;color:var(--ink-3)}
 .ai-fab,.ai-head b{white-space:nowrap}
 .ai-fab svg,.ai-head svg{width:18px;height:18px;flex:none}
 .ai-head b{display:flex;align-items:center;gap:6px}
+.phone-in{display:flex;gap:6px;width:100%}.phone-in select{width:auto;flex:0 0 auto;max-width:132px;padding-right:6px}.phone-in input{flex:1;min-width:0}
+[hidden]{display:none!important}
