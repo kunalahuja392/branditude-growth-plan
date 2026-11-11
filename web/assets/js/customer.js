@@ -66,7 +66,7 @@ document.addEventListener("click", (e) => {
       if (rating >= 4 && b.google_review_link) {   // their own words → tidied options → copy → Google
         const go = (text) => { q(sb.rpc("submit_feedback", { p_slug: b.slug, p_rating: rating, p_tags: [], p_text: text || "", p_name: C.profile.full_name || "", p_phone: "", p_opened_google: true })).catch(() => {});
           window.open(b.google_review_link, "_blank", "noopener"); closeModal(); toast(text ? "Copied! Paste it on Google." : "Opening Google reviews…"); };
-        return mountReviewHelper(m.querySelector("#rate-more"), { slug: b.slug, bizName: b.name, link: b.google_review_link, compact: true, onSkip: () => go(""), onOpen: (t) => go(t) });
+        return mountReviewHelper(m.querySelector("#rate-more"), { slug: b.slug, rating, bizName: b.name, link: b.google_review_link, compact: true, onSkip: () => go(""), onOpen: (t) => go(t) });
       }
       const quiet = b.google_review_link ? `<p class="k-quiet">You can also <a href="${esc(b.google_review_link)}" target="_blank" rel="noopener" id="rate-g">post a public review on Google</a>.</p>` : "";
       m.querySelector("#rate-more").innerHTML = rating >= 4

@@ -20,7 +20,7 @@
 import { sb, friendly } from "./assets/js/sb.js";
 import { $, esc } from "./assets/js/ui.js";
 import { mountReviewHelper } from "./assets/js/review-helper.js";
-const slug = new URLSearchParams(location.search).get("b") || "";
+const qs = new URLSearchParams(location.search), slug = qs.get("b") || "", fromKiosk = qs.get("k") === "1", preRating = +qs.get("r") || 0;
 const FACES = ["", "Very bad", "Bad", "Okay", "Good", "Excellent"], ISSUES = ["Waiting time", "Staff behaviour", "Quality", "Price", "Cleanliness", "Something else"];
 let B, S = { rating: 0, tags: [] };
 const k = $("#k");
@@ -29,7 +29,7 @@ const toGoogle = (text) => { if (text) S.text = text; submit(true).catch(() => {
 function draw(step) {
   if (step === "rate") k.innerHTML = `<p class="k-biz">${esc(B.name)}</p><h1 class="k-q">How was your visit?</h1><p class="k-sub">Tap a star.</p><div class="k-stars">${[1, 2, 3, 4, 5].map((n) => `<button class="k-star" data-n="${n}" aria-label="${n} stars: ${FACES[n]}"><span aria-hidden="true">★</span><b class="num" style="font-size:20px;color:var(--ink)">${n}</b><small>${FACES[n]}</small></button>`).join("")}</div>`;
   if (step === "happy") { k.innerHTML = `<p class="k-biz">${esc(B.name)}</p><div id="rh" style="display:flex;flex-direction:column;gap:14px;align-items:center;width:100%"></div>`;
-    mountReviewHelper($("#rh"), { slug, bizName: B.name, link: B.google_review_link, onSkip: () => toGoogle(""), onOpen: (t) => toGoogle(t) }); }
+    mountReviewHelper($("#rh"), { slug, rating: S.rating, bizName: B.name, link: B.google_review_link, onSkip: () => toGoogle(""), onOpen: (t) => toGoogle(t) }); }
   if (step === "unhappy") k.innerHTML = `<h1 class="k-q">We're sorry we let you down.</h1><p class="k-sub">Please tell the owner what went wrong. It goes straight to them, privately, and they read every message.</p><div class="chips k-chips">${ISSUES.map((t) => `<button class="chip" data-t="${t}" aria-pressed="${S.tags.includes(t)}">${t}</button>`).join("")}</div>
     <textarea id="txt" placeholder="Tell the owner what happened (optional)" aria-label="What happened">${esc(S.text || "")}</textarea><input id="nm" placeholder="Your name (optional)" value="${esc(S.name || "")}" aria-label="Your name"><input id="ph" inputmode="tel" placeholder="Your number, so the owner can call you back (optional)" value="${esc(S.phone || "")}" aria-label="Your phone number">
     <p class="err" id="err"></p><div class="k-actions"><button class="btn primary k-btn" id="send">Send privately to the owner</button></div>${quiet()}`;
@@ -47,6 +47,7 @@ function draw(step) {
 const keep = () => { S.text = $("#txt")?.value || S.text; S.name = $("#nm")?.value || S.name; S.phone = $("#ph")?.value || S.phone; };
 let sentHappy = false;
 async function submit(opened) {
+  if (fromKiosk) return;   // the counter screen already saved this rating
   if (S.rating >= 4 && sentHappy && !opened) return; if (S.rating >= 4) sentHappy = true;
   const { error } = await sb.rpc("submit_feedback", { p_slug: slug, p_rating: S.rating, p_tags: S.tags, p_text: S.text || "", p_name: S.name || "", p_phone: S.phone || "", p_opened_google: !!opened });
   if (error) throw error;
@@ -54,7 +55,8 @@ async function submit(opened) {
 (async () => {
   const { data, error } = await sb.rpc("public_business", { p_slug: slug });
   if (error || !data) { k.innerHTML = `<h1 class="k-q">This feedback link isn't working.</h1><p class="k-sub">Please ask the business for a new one.</p>`; return; }
-  B = data; document.title = "Rate " + B.name; draw("rate");
+  B = data; document.title = "Rate " + B.name;
+  if (preRating >= 4 && B.google_review_link) { S.rating = preRating; draw("happy"); } else draw("rate");
 })();
 </script>
 </body>
