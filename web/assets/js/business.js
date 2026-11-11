@@ -628,14 +628,14 @@ function lockedView(key) {
 VIEWS.profile = () => { const b = D.biz;
   return head("Business profile", "These details appear in your messages, feedback page and customer app.") + `
   <form id="prof" class="card" style="max-width:820px"><div class="fields">
-    ${[["p-name", "Business name", b.name], ["p-phone", "Business phone", b.phone], ["p-email", "Email", b.email], ["p-city", "City", b.city], ["p-cc", "Country code", b.country_code]].map(([id, l, v]) => `<div class="field"><label for="${id}">${l}</label><input id="${id}" value="${esc(v || "")}"></div>`).join("")}
+    ${[["p-name", "Business name", b.name], ["p-phone", "Business phone", b.phone], ["p-email", "Email", b.email], ["p-city", "City", b.city], ["p-loc", "Locality / area (e.g. Khamla)", b.locality], ["p-cc", "Country code", b.country_code]].map(([id, l, v]) => `<div class="field"><label for="${id}">${l}</label><input id="${id}" value="${esc(v || "")}"></div>`).join("")}
     <div class="field"><label>Category</label><input value="${esc(b.categories?.name || "")}" disabled title="Ask Branditude to change your category"></div></div>
     <div class="field" style="margin-top:14px"><label for="p-addr">Address</label><input id="p-addr" value="${esc(b.address || "")}"></div>
     <div class="field" style="margin-top:14px"><label for="p-review">Google review link</label><input id="p-review" value="${esc(b.google_review_link || "")}" placeholder="https://g.page/r/…/review"><span class="muted small" style="margin-top:4px">Google Business Profile → Ask for reviews → copy link</span></div>
     <div class="modal-foot" style="justify-content:flex-start"><button class="btn primary" ${canWrite() ? "" : "disabled"}>Save profile</button></div></form>
   <div class="card" style="max-width:820px;margin-top:16px"><div class="card-head"><h2>Account</h2></div><dl class="kv"><dt>Signed in as</dt><dd>${esc(C.user.email || C.user.phone || "")}</dd><dt>Feedback page</dt><dd><a href="${esc(feedbackLink())}" target="_blank" rel="noopener">${esc(feedbackLink())}</a></dd></dl></div>`; };
 after.profile = () => { $("#prof").onsubmit = async (e) => { e.preventDefault();
-  try { await q(sb.from("businesses").update({ name: $("#p-name").value.trim(), phone: normPhone($("#p-phone").value, $("#p-cc").value), email: $("#p-email").value.trim(), city: $("#p-city").value.trim(), country_code: $("#p-cc").value.replace(/\D/g, "") || "91", address: $("#p-addr").value.trim(), google_review_link: $("#p-review").value.trim() }).eq("id", BID));
+  try { await q(sb.from("businesses").update({ name: $("#p-name").value.trim(), phone: normPhone($("#p-phone").value, $("#p-cc").value), email: $("#p-email").value.trim(), city: $("#p-city").value.trim(), locality: $("#p-loc").value.trim().slice(0, 60), country_code: $("#p-cc").value.replace(/\D/g, "") || "91", address: $("#p-addr").value.trim(), google_review_link: $("#p-review").value.trim() }).eq("id", BID));
     await reload("biz"); toast("Profile saved"); render(); } catch (err) { toast(err.message, "error"); } }; };
 
 /* ---------- Keywords & SEO ---------- */

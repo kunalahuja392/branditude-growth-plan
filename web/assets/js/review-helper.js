@@ -39,16 +39,28 @@ export async function reviewOptions(slug, text) {
 const PLAIN = ["Friendly staff", "Quick service", "Clean place", "Good value", "Nice ambience"];
 const low = (t) => (/^[A-Z]{2,}/.test(t) ? t : t.charAt(0).toLowerCase() + t.slice(1));
 const list = (a) => (a.length <= 1 ? a.join("") : a.slice(0, -1).join(", ") + " and " + a[a.length - 1]);
-// → three different suggestions from the picked chips (no extra claims)
-export function suggestReviews(bizName, picks, rating = 5) {
-  const p = picks.map(low), good = rating >= 5 ? "excellent" : "really good", g2 = rating >= 5 ? "Loved" : "Liked";
-  if (!p.length) return [];
-  const one = p[0], rest = p.slice(1);
-  return [
-    { key: "s1", label: "Suggestion 1", text: `${g2} my visit to ${bizName}. The ${list(p)} ${p.length > 1 ? "were" : "was"} ${good}. Will definitely come back!` },
-    { key: "s2", label: "Suggestion 2", text: `Had a ${rating >= 5 ? "great" : "good"} experience at ${bizName}. The ${one} stood out${rest.length ? `, and I also liked the ${list(rest)}` : ""}. Recommended.` },
-    { key: "s3", label: "Short", text: `${good.charAt(0).toUpperCase() + good.slice(1)} ${list(p)} at ${bizName}. Thank you!` },
-  ];
+// Built-in suggestions (used when AI is off): three varied drafts from the picked chips only.
+// One or two mention the locality or city naturally; at least one never does. Wording is randomised per customer.
+const rnd = (a) => a[Math.floor(Math.random() * a.length)];
+export function suggestReviews(bizName, picks, rating = 5, place = {}) {
+  const p = picks.map(low); if (!p.length) return [];
+  const five = rating >= 5, good = five ? rnd(["excellent", "amazing", "really great"]) : rnd(["really good", "very nice", "good"]);
+  const loc = place.locality || "", city = place.city || "", one = p[0], rest = p.slice(1), be = p.length > 1 ? "were" : "was";
+  const inLoc = loc ? ` in ${loc}` : city ? ` in ${city}` : "", inCity = city ? ` in ${city}` : "";
+  const a = rnd([`${five ? "Loved" : "Liked"} my visit to ${bizName}.`, `Visited ${bizName} today.`, `Had a ${five ? "lovely" : "nice"} time at ${bizName}.`])
+    + ` The ${list(p)} ${be} ${good}. ` + rnd(["Will definitely come back!", "Will be back soon.", "Totally worth it."]);
+  const b = `${rnd(["One of my favourite places", "A great spot", "My go-to place"])}${inLoc}. The ${one} ${rnd(["stood out", "is a must-try", "never disappoints"])}`
+    + (rest.length ? `, and I also liked the ${list(rest)}` : "") + `. ${rnd(["Recommended.", "Highly recommend it.", "Do try it."])}`;
+  const c = `${good.charAt(0).toUpperCase() + good.slice(1)} ${list(p)} at ${bizName}${Math.random() < 0.5 ? inCity : ""}. ${rnd(["Thank you!", "Thanks to the team!", "Keep it up!"])}`;
+  return [a, b, c].sort(() => Math.random() - 0.5).map((text, i) => ({ key: "s" + i, label: `Suggestion ${i + 1}`, text: text.replace(/\s+/g, " ").trim() }));
+}
+// AI first (varied, SEO-friendly, mentions the area sometimes), built-in if AI is off or busy
+export async function getSuggestions(slug, bizName, picks, rating, place) {
+  try {
+    const { data, error } = await sb.functions.invoke("review-suggest", { body: { slug, picks, rating } });
+    if (!error && data?.suggestions?.length) return data.suggestions.map((x, i) => ({ key: "a" + i, label: x.label || `Suggestion ${i + 1}`, text: x.text }));
+  } catch {}
+  return suggestReviews(bizName, picks, rating, place);
 }
 
 export async function copyText(t) {
@@ -60,9 +72,9 @@ export async function copyText(t) {
    opts: { slug, bizName, link, compact, onSkip(), onOpen(text) }  — onOpen/onSkip should record feedback and open Google. */
 export function mountReviewHelper(el, opts) {
   const H = opts.compact ? "h2" : "h1", hc = opts.compact ? "" : "k-q", sc = opts.compact ? "muted" : "k-sub", bc = opts.compact ? "btn" : "btn k-btn";
-  let text = "", options = [], pick = 0, picks = [], chips = null, mode = "own";
+  let text = "", options = [], pick = 0, picks = [], chips = null, mode = "own", place = {};
   const like = async () => {
-    if (!chips) { try { const { data } = await sb.rpc("review_chips", { p_slug: opts.slug }); chips = [...(data || []), ...PLAIN].filter((c, i, a) => a.findIndex((x) => x.toLowerCase() === c.toLowerCase()) === i).slice(0, 12); } catch { chips = PLAIN; } }
+    if (!chips) { try { const { data } = await sb.rpc("review_chips", { p_slug: opts.slug }); const kw = Array.isArray(data) ? data : data?.chips || []; place = { city: data?.city || "", locality: data?.locality || "" }; chips = [...kw, ...PLAIN].filter((c, i, a) => a.findIndex((x) => x.toLowerCase() === c.toLowerCase()) === i).slice(0, 12); } catch { chips = PLAIN; } }
     el.innerHTML = `<${H} class="${hc}">So glad you enjoyed it! 😊</${H}>
       <p class="${sc}">What did you like at ${esc(opts.bizName)}? Tap all that apply and we'll suggest a review you can edit.</p>
       <div class="chips k-chips rh-chips">${chips.map((c) => `<button class="chip" data-c="${esc(c)}" aria-pressed="${picks.includes(c)}">${esc(c)}</button>`).join("")}</div>
@@ -71,9 +83,10 @@ export function mountReviewHelper(el, opts) {
     el.querySelectorAll("[data-c]").forEach((b) => (b.onclick = () => { const c = b.dataset.c; picks = picks.includes(c) ? picks.filter((x) => x !== c) : [...picks, c]; b.setAttribute("aria-pressed", picks.includes(c)); }));
     el.querySelector("#rh-skip").onclick = () => opts.onSkip();
     el.querySelector("#rh-own").onclick = () => { mode = "own"; write(); };
-    el.querySelector("#rh-sug").onclick = () => {
+    el.querySelector("#rh-sug").onclick = async (e) => {
       if (!picks.length) { el.querySelector("#rh-err").textContent = "Tap at least one thing you liked, or write your own."; return; }
-      mode = "sug"; options = suggestReviews(opts.bizName, picks, opts.rating || 5); pick = 0; choose();
+      e.target.disabled = true; e.target.textContent = "Writing suggestions…";
+      mode = "sug"; options = await getSuggestions(opts.slug, opts.bizName, picks, opts.rating || 5, place); pick = 0; choose();
     };
   };
   const write = () => {
