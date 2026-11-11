@@ -4,12 +4,35 @@
 // POST /functions/v1/review-polish   Body: { slug, text }
 // Returns { short, detailed } — both keep the customer's meaning and words. No keywords, no new claims.
 // The page always also offers the customer's original text, and the customer chooses.
-// Secret: ANTHROPIC_API_KEY (optional AI_MODEL). Without it → 503 {fallback:true} and the page tidies locally.
+// Secret: GROQ_API_KEY (free) or ANTHROPIC_API_KEY. Without it → 503 {fallback:true} and the page tidies locally.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS" };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
+
+// AI provider: Groq (free tier) when GROQ_API_KEY is set (optional GROQ_MODEL), otherwise Anthropic (ANTHROPIC_API_KEY, optional AI_MODEL).
+const aiOn = () => !!(Deno.env.get("GROQ_API_KEY") || Deno.env.get("ANTHROPIC_API_KEY"));
+async function ai(prompt: string, maxTokens: number, temperature = 0.7): Promise<string | null> {
+  try {
+    const groq = Deno.env.get("GROQ_API_KEY");
+    if (groq) {
+      const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST", headers: { Authorization: `Bearer ${groq}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model: Deno.env.get("GROQ_MODEL") ?? "llama-3.3-70b-versatile", max_tokens: maxTokens, temperature, messages: [{ role: "user", content: prompt }] }),
+      });
+      if (!r.ok) return null;
+      const j = await r.json(); return String(j?.choices?.[0]?.message?.content ?? "").trim() || null;
+    }
+    const key = Deno.env.get("ANTHROPIC_API_KEY"); if (!key) return null;
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({ model: Deno.env.get("AI_MODEL") ?? "claude-haiku-5-5", max_tokens: maxTokens, temperature, messages: [{ role: "user", content: prompt }] }),
+    });
+    if (!r.ok) return null;
+    const j = await r.json(); return (j.content ?? []).map((c: { text?: string }) => c.text ?? "").join("").trim() || null;
+  } catch { return null; }
+}
 const PER_IP_DAY = 8, PER_BIZ_DAY = 300;
 
 async function sha(s: string) {
@@ -34,8 +57,7 @@ Reply with ONLY JSON: {"short":"...","detailed":"..."}`;
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
-  const key = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!key) return json({ error: "AI is off", fallback: true }, 503);
+  if (!aiOn()) return json({ error: "AI is off", fallback: true }, 503);
 
   let body: { slug?: string; text?: string };
   try { body = await req.json(); } catch { return json({ error: "Invalid request" }, 400); }
@@ -59,14 +81,8 @@ Deno.serve(async (req: Request) => {
   if ((ipCount ?? 0) >= PER_IP_DAY || (bizCount ?? 0) >= PER_BIZ_DAY) return json({ error: "Limit reached", fallback: true }, 429);
   await admin.from("review_polish_usage").insert({ business_id: b.id, ip_hash: ipHash });
 
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model: Deno.env.get("AI_MODEL") ?? "claude-haiku-5-5", max_tokens: 700, messages: [{ role: "user", content: PROMPT(text) }] }),
-  });
-  if (!r.ok) return json({ error: "AI busy", fallback: true }, 502);
-  const out = await r.json();
-  const reply = (out.content ?? []).map((c: { text?: string }) => c.text ?? "").join("").trim();
+  const reply = await ai(PROMPT(text), 700, 0.3);
+  if (!reply) return json({ error: "AI busy", fallback: true }, 502);
   try {
     const j = JSON.parse(reply.slice(reply.indexOf("{"), reply.lastIndexOf("}") + 1));
     const clean = (s: unknown) => String(s ?? "").replace(/#\w+/g, "").trim().slice(0, 1800);

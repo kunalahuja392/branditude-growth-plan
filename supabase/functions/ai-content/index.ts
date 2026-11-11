@@ -6,12 +6,35 @@
 // Body: { business_id, kind: "suggest_keywords"|"auto_keywords"|"description"|"post"|"faq"|"reply", input?: {...} }
 // auto_keywords: builds keywords from the business profile (about, services, city, locality) and SAVES them (every plan;
 //   short "what customers like" words feed the review helper, local search phrases feed the SEO studio).
-// Secret: ANTHROPIC_API_KEY (optional AI_MODEL, default claude-haiku-5-5). Without the key → 503 and the app uses templates.
+// Secret: GROQ_API_KEY (free; optional GROQ_MODEL) or ANTHROPIC_API_KEY (optional AI_MODEL). Without either → 503 and the app uses templates.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS" };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
+
+// AI provider: Groq (free tier) when GROQ_API_KEY is set (optional GROQ_MODEL), otherwise Anthropic (ANTHROPIC_API_KEY, optional AI_MODEL).
+const aiOn = () => !!(Deno.env.get("GROQ_API_KEY") || Deno.env.get("ANTHROPIC_API_KEY"));
+async function ai(prompt: string, maxTokens: number, temperature = 0.7): Promise<string | null> {
+  try {
+    const groq = Deno.env.get("GROQ_API_KEY");
+    if (groq) {
+      const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST", headers: { Authorization: `Bearer ${groq}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model: Deno.env.get("GROQ_MODEL") ?? "llama-3.3-70b-versatile", max_tokens: maxTokens, temperature, messages: [{ role: "user", content: prompt }] }),
+      });
+      if (!r.ok) return null;
+      const j = await r.json(); return String(j?.choices?.[0]?.message?.content ?? "").trim() || null;
+    }
+    const key = Deno.env.get("ANTHROPIC_API_KEY"); if (!key) return null;
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({ model: Deno.env.get("AI_MODEL") ?? "claude-haiku-5-5", max_tokens: maxTokens, temperature, messages: [{ role: "user", content: prompt }] }),
+    });
+    if (!r.ok) return null;
+    const j = await r.json(); return (j.content ?? []).map((c: { text?: string }) => c.text ?? "").join("").trim() || null;
+  } catch { return null; }
+}
 const DAILY_LIMIT = 40;
 
 const RULES = `Rules:
@@ -41,8 +64,7 @@ function prompt(kind: string, b: Record<string, string>, kws: string[], input: R
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
-  const key = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!key) return json({ error: "AI writing isn't switched on yet.", fallback: true }, 503);
+  if (!aiOn()) return json({ error: "AI writing isn't switched on yet.", fallback: true }, 503);
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 
   const jwt = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
@@ -73,14 +95,8 @@ Deno.serve(async (req: Request) => {
   const biz = { name: b?.name ?? "", city: b?.city ?? "", locality: (b as any)?.locality ?? "", description: (b as any)?.description ?? "", services: (b as any)?.services ?? "", category: (b as any)?.categories?.name ?? "" };
   const text = prompt(kind!, biz, (kw ?? []).map((k) => k.keyword), input);
 
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model: Deno.env.get("AI_MODEL") ?? "claude-haiku-5-5", max_tokens: 900, messages: [{ role: "user", content: text }] }),
-  });
-  const out = await r.json();
-  if (!r.ok) return json({ error: "AI is busy right now. Try again in a minute.", fallback: true }, 502);
-  const reply = (out.content ?? []).map((c: { text?: string }) => c.text ?? "").join("").trim();
+  const reply = await ai(text, 900);
+  if (!reply) return json({ error: "AI is busy right now. Try again in a minute.", fallback: true }, 502);
   await admin.from("ai_usage").insert({ business_id, kind });
 
   if (kind === "auto_keywords") {

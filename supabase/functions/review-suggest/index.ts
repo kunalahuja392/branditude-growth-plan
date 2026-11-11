@@ -2,12 +2,35 @@
 // Public (feedback page, no login): verify_jwt off, validated and rate-limited here (shares review_polish_usage).
 // POST { slug, picks: string[], rating }  →  { suggestions: [{label, text}] }   (3 varied, natural, SEO-friendly)
 // Some suggestions mention the city or locality naturally; never all three, never stuffed. The customer edits before posting.
-// Secret: ANTHROPIC_API_KEY (optional AI_MODEL). Without it → 503 {fallback:true} and the page uses its built-in suggestions.
+// Secret: GROQ_API_KEY (free) or ANTHROPIC_API_KEY. Without it → 503 {fallback:true} and the page uses its built-in suggestions.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS" };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
+
+// AI provider: Groq (free tier) when GROQ_API_KEY is set (optional GROQ_MODEL), otherwise Anthropic (ANTHROPIC_API_KEY, optional AI_MODEL).
+const aiOn = () => !!(Deno.env.get("GROQ_API_KEY") || Deno.env.get("ANTHROPIC_API_KEY"));
+async function ai(prompt: string, maxTokens: number, temperature = 0.7): Promise<string | null> {
+  try {
+    const groq = Deno.env.get("GROQ_API_KEY");
+    if (groq) {
+      const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST", headers: { Authorization: `Bearer ${groq}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model: Deno.env.get("GROQ_MODEL") ?? "llama-3.3-70b-versatile", max_tokens: maxTokens, temperature, messages: [{ role: "user", content: prompt }] }),
+      });
+      if (!r.ok) return null;
+      const j = await r.json(); return String(j?.choices?.[0]?.message?.content ?? "").trim() || null;
+    }
+    const key = Deno.env.get("ANTHROPIC_API_KEY"); if (!key) return null;
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({ model: Deno.env.get("AI_MODEL") ?? "claude-haiku-5-5", max_tokens: maxTokens, temperature, messages: [{ role: "user", content: prompt }] }),
+    });
+    if (!r.ok) return null;
+    const j = await r.json(); return (j.content ?? []).map((c: { text?: string }) => c.text ?? "").join("").trim() || null;
+  } catch { return null; }
+}
 const PER_IP_DAY = 10, PER_BIZ_DAY = 400;
 const sha = async (s: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)))].map((x) => x.toString(16).padStart(2, "0")).join("");
 
@@ -30,8 +53,7 @@ Reply with ONLY JSON: {"suggestions":["...","...","..."]}`;
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "Use POST" }, 405);
-  const key = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!key) return json({ error: "AI is off", fallback: true }, 503);
+  if (!aiOn()) return json({ error: "AI is off", fallback: true }, 503);
   let body: { slug?: string; picks?: string[]; rating?: number };
   try { body = await req.json(); } catch { return json({ error: "Invalid request" }, 400); }
   const slug = String(body.slug ?? "").slice(0, 80), rating = Math.min(5, Math.max(4, Number(body.rating) || 5));
@@ -54,14 +76,8 @@ Deno.serve(async (req: Request) => {
   if ((ipCount ?? 0) >= PER_IP_DAY || (bizCount ?? 0) >= PER_BIZ_DAY) return json({ error: "Limit reached", fallback: true }, 429);
   await admin.from("review_polish_usage").insert({ business_id: b.id, ip_hash: ipHash });
 
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model: Deno.env.get("AI_MODEL") ?? "claude-haiku-5-5", max_tokens: 700, temperature: 1,
-      messages: [{ role: "user", content: PROMPT({ name: b.name, category: info.category ?? "", city: info.city ?? "", locality: info.locality ?? "", picks, rating }) }] }),
-  });
-  if (!r.ok) return json({ error: "AI busy", fallback: true }, 502);
-  const out = await r.json();
-  const reply = (out.content ?? []).map((c: { text?: string }) => c.text ?? "").join("").trim();
+  const reply = await ai(PROMPT({ name: b.name, category: info.category ?? "", city: info.city ?? "", locality: info.locality ?? "", picks, rating }), 700, 1);
+  if (!reply) return json({ error: "AI busy", fallback: true }, 502);
   try {
     const j = JSON.parse(reply.slice(reply.indexOf("{"), reply.lastIndexOf("}") + 1));
     const list = (j.suggestions ?? []).map((s: unknown) => String(s ?? "").replace(/#\w+/g, "").replace(/\bnear me\b/gi, "").trim().slice(0, 600)).filter((s: string) => s.length > 10).slice(0, 3);

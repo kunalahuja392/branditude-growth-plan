@@ -653,7 +653,7 @@ async function autoKeywords(quiet) {
   const loc = (D.biz.locality || "").trim().toLowerCase(), extra = loc ? svc.slice(0, 3).map((x) => `${x} in ${loc}`) : [];
   let n = 0; for (const k of [...svc, ...extra, ...cat]) { if (have.has(k) || have.size >= 30) continue; have.add(k);
     try { await q(sb.from("business_keywords").insert({ business_id: BID, keyword: k, source: svc.includes(k) ? "own" : "suggested" })); n++; } catch {} }
-  if (!quiet || n) toast(n ? `${n} keywords added from your services${j?.fallback ? " (AI keywords switch on once Branditude enables AI)" : ""}` : (j?.error || "No new keywords")); drawKwList();
+  if (!quiet || n) toast(n ? `${n} keywords added from your services${j?.fallback ? " (AI keywords switch on once the Groq key is added)" : ""}` : (j?.error || "No new keywords")); drawKwList();
 }
 after.profile = () => { drawKwList();
   $("#prof").onsubmit = async (e) => { e.preventDefault();
