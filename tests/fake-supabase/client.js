@@ -25,7 +25,12 @@
   window.__BGP_FAKE_SB__ = {
     from: (t) => new Q(t),
     rpc: (fn, args) => post("/__q", { user: getSess()?.user?.id || null, op: { kind: "rpc", fn, args } }).then((r) => (r.error ? { data: null, error: r.error } : { data: r.data, error: null })),
-    storage: { from: () => ({ upload: async () => ({ error: { message: "Photo upload isn't available in the local test" } }), getPublicUrl: (p) => ({ data: { publicUrl: "https://example.test/" + p } }) }) },
+    // "bills" keeps files in memory for the session (signed URL = blob URL); other buckets aren't available locally
+    storage: { from: (bucket) => bucket === "bills" ? {
+        upload: async (path, file) => { (window.__BILLS__ = window.__BILLS__ || {})[path] = file; return { data: { path }, error: null }; },
+        createSignedUrl: async (path) => window.__BILLS__?.[path] ? { data: { signedUrl: URL.createObjectURL(window.__BILLS__[path]) }, error: null } : { data: null, error: { message: "Object not found" } },
+        remove: async (paths) => { paths.forEach((p) => delete (window.__BILLS__ || {})[p]); return { data: [], error: null }; } }
+      : ({ upload: async () => ({ error: { message: "Photo upload isn't available in the local test" } }), getPublicUrl: (p) => ({ data: { publicUrl: "https://example.test/" + p } }) }) },
     functions: { invoke: async () => ({ data: null, error: { message: "Edge functions aren't available in the local test", context: { json: async () => ({ error: "AI writing isn't switched on yet.", fallback: true }) } } }) },
     auth: {
       getSession: async () => ({ data: { session: getSess() } }),

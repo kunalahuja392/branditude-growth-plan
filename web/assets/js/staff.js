@@ -29,6 +29,8 @@ const staffList = () => (S.d?.staff || []).filter((s) => S.showLeft || s.active)
 
 async function load(ym = S.ym) {
   const { BID } = ctx(); const [y, m] = ymParts(ym); const from = `${ym}-01`, to = monthDates(y, m).at(-1);
+  // add this month's instalment for open advances (once per month; skipped months stay skipped)
+  if (ctx().canWrite) await sb.rpc("advance_sync", { p_business: BID, p_month: from }).catch?.(() => {});
   const [staff, st, att, hol, adj, slips, pins] = await Promise.all([
     q(sb.from("staff").select(STAFF_COLS).eq("business_id", BID).order("sort").order("name")),
     q(sb.from("att_settings").select("*").eq("business_id", BID).maybeSingle()),
@@ -38,7 +40,8 @@ async function load(ym = S.ym) {
     q(sb.from("salary_slips").select("*").eq("business_id", BID).eq("month", from)),
     q(sb.rpc("staff_pin_status", { b: BID })),
   ]);
-  S.d = { staff, settings: st, att, hol, adj, slips, pins: Object.fromEntries((pins || []).map((p) => [p.staff_id, p])), ym };
+  const adv = await q(sb.rpc("advance_list", { p_business: BID })).catch(() => []);
+  S.d = { staff, settings: st, att, hol, adj, slips, adv, pins: Object.fromEntries((pins || []).map((p) => [p.staff_id, p])), ym };
 }
 const monthCalc = (s) => { const [y, m] = ymParts(S.d.ym); return computeStaffMonth({ settings: settings(), staff: s, records: S.d.att, holidays: S.d.hol, adjustments: S.d.adj, year: y, month: m, today: todayIST() }); };
 const recOf = (staffId, day) => S.d.att.find((r) => r.staff_id === staffId && r.day === day);
@@ -288,7 +291,13 @@ async function onStaffClick(e) {
       toast("Added Republic Day, Independence Day and Gandhi Jayanti"); await load(); return drawStaff();
     }
     if (a === "adj") return adjForm(s);
-    if (a === "adj-del") { if (!(await confirmBox("Remove this entry?", "", "Remove", { danger: true }))) return; await q(sb.from("salary_adjustments").delete().eq("id", id)); closeModal(); await load(); return drawSalary(); }
+    if (a === "adj-del") { const row = S.d.adj.find((x) => x.id === id);
+      if (row?.advance_id) { if (!(await confirmBox("Skip this month's advance cut?", "The balance stays and is cut from the next months instead.", "Skip this month"))) return; await q(sb.rpc("advance_skip", { p_business: BID, p_id: row.advance_id, p_month: S.d.ym + "-01", p_skip: true })); }
+      else { if (!(await confirmBox("Remove this entry?", "", "Remove", { danger: true }))) return; await q(sb.from("salary_adjustments").delete().eq("id", id)); }
+      closeModal(); await load(); return drawSalary(); }
+    if (a === "adv-new") return advanceForm(id);
+    if (a === "adv-skip" || a === "adv-resume") { await q(sb.rpc("advance_skip", { p_business: BID, p_id: id, p_month: S.d.ym + "-01", p_skip: a === "adv-skip" })); await load(); return drawSalary(); }
+    if (a === "adv-del") { if (!(await confirmBox("Delete this advance?", "Its monthly cuts are removed too.", "Delete", { danger: true }))) return; await q(sb.rpc("advance_delete", { p_business: BID, p_id: id })); toast("Advance deleted"); await load(); return drawSalary(); }
     if (a === "slip") return payslip(s);
     if (a === "paid") return paidForm(s);
     if (a === "unpaid") { await q(sb.from("salary_slips").delete().eq("staff_id", id).eq("month", S.d.ym + "-01")); toast("Marked as not paid"); await load(); return drawSalary(); }
@@ -320,13 +329,40 @@ function drawSalary() {
       <td class="num">${c.lateCount}${c.latePenalty ? `<br><span class="small" style="color:var(--bad)">−${inr(c.latePenalty)}</span>` : ""}</td><td class="num">${c.otHours ? `${c.otHours} h` : "—"}</td>
       <td class="num"><b>${inr2(c.net)}</b></td>
       <td>${slip?.paid ? `<span class="pill good">Paid ${fmtDate(slip.paid_on)}</span>${changed ? `<br><span class="pill warn" title="Paid ${inr2(slip.net)}">Changed since paid</span>` : ""}` : '<span class="pill warn">Not paid</span>'}</td>
-      <td style="min-width:200px"><div class="row" style="justify-content:flex-end;gap:6px"><button class="btn sm" data-st="slip" data-id="${s.id}">Payslip</button><button class="btn sm ghost" data-st="adj" data-id="${s.id}" ${ctx().canWrite ? "" : "disabled"}>+ Advance / bonus</button>
+      <td style="min-width:200px"><div class="row" style="justify-content:flex-end;gap:6px"><button class="btn sm" data-st="slip" data-id="${s.id}">Payslip</button><button class="btn sm ghost" data-st="adj" data-id="${s.id}" ${ctx().canWrite ? "" : "disabled"}>+ Bonus / cut</button>
         ${slip?.paid ? `<button class="btn sm ghost" data-st="unpaid" data-id="${s.id}" ${ctx().canWrite ? "" : "disabled"}>Undo paid</button>` : `<button class="btn sm primary" data-st="paid" data-id="${s.id}" ${ctx().canWrite ? "" : "disabled"}>Mark paid</button>`}</div></td></tr>`; }).join("")}
-    <tr><td colspan="5"><b>Total</b> <span class="small muted">· Days: <span class="cc cc-P">P</span> present <span class="cc cc-H">½</span> half <span class="cc cc-A">A</span> absent <span class="cc cc-L">L</span> paid leave</span></td><td class="num"><b>${inr2(total)}</b></td><td colspan="2"></td></tr></tbody></table></div>` : `<div class="card empty">No staff yet. <a href="#staff">Add staff</a> to start.</div>`}`;
+    <tr><td colspan="5"><b>Total</b> <span class="small muted">· Days: <span class="cc cc-P">P</span> present <span class="cc cc-H">½</span> half <span class="cc cc-A">A</span> absent <span class="cc cc-L">L</span> paid leave</span></td><td class="num"><b>${inr2(total)}</b></td><td colspan="2"></td></tr></tbody></table></div>` : `<div class="card empty">No staff yet. <a href="#staff">Add staff</a> to start.</div>`}` + (rows.length ? advancesCard() : "");
+}
+/* ---------- advances: given once, cut from salary in monthly instalments ---------- */
+function advancesCard() {
+  const list = S.d.adv || [], open = list.filter((a) => +a.recovered < +a.amount), month = S.d.ym + "-01", can = ctx().canWrite;
+  const cutThis = (a) => S.d.adj.find((x) => x.advance_id === a.id);
+  const row = (a) => { const bal = +a.amount - +a.recovered, c = cutThis(a), skipped = (a.skip_months || []).includes(month);
+    const W = (t) => `<span style="font-weight:700;color:var(--ink)">${t}</span>`;
+    return `<div class="item"><div class="grow"><b>${esc(a.staff_name)}</b><span class="muted small">${inr(a.amount)} given ${fmtDate(a.given_on)} from ${a.paid_from}${a.note ? " · " + esc(a.note) : ""}</span>
+      <div class="bar" style="margin:6px 0;max-width:320px"><i style="width:${Math.round((+a.recovered / +a.amount) * 100)}%"></i></div>
+      <span class="small muted">${inr(a.recovered)} recovered · ${W(inr(bal) + " left")} · ${inr(a.monthly_cut)} a month${c ? ` · ${W(inr(c.amount) + " cut in " + ymLabel(S.d.ym))}` : skipped ? ` · skipped in ${ymLabel(S.d.ym)}` : ""}</span></div>
+      ${!can ? "" : bal > 0 && c ? `<button class="btn sm ghost" data-st="adv-skip" data-id="${a.id}">Skip this month</button>` : skipped ? `<button class="btn sm ghost" data-st="adv-resume" data-id="${a.id}">Cut this month</button>` : ""}
+      ${can && +a.recovered_paid === 0 ? `<button class="btn sm ghost danger" data-st="adv-del" data-id="${a.id}">Delete</button>` : ""}</div>`; };
+  return `<div class="card" style="margin-top:16px"><div class="card-head"><h2>Advances</h2><button class="btn sm primary" data-st="adv-new" ${can ? "" : "disabled"}>+ Give an advance</button></div>
+    <p class="small muted" style="margin:-4px 0 10px">Give money now and cut it from salary a bit each month. Cuts show on the payslip automatically.</p>
+    ${open.length ? `<div class="list">${open.map(row).join("")}</div>` : `<div class="empty">No advances to recover.</div>`}
+    ${list.length > open.length ? `<details style="margin-top:10px"><summary class="small">Fully recovered (${list.length - open.length})</summary><div class="list">${list.filter((a) => +a.recovered >= +a.amount).map(row).join("")}</div></details>` : ""}</div>`;
+}
+function advanceForm(staffId) {
+  const staff = (S.d.staff || []).filter((s) => s.active), next = ymShift(S.d.ym, 1);
+  formModal({ title: "Give an advance", submitLabel: "Save advance", values: { staff_id: staffId || staff[0]?.id, given_on: todayIST(), start: S.d.ym, paid_from: "cash" },
+    fields: [{ key: "staff_id", label: "Staff", type: "select", options: staff.map((s) => [s.id, s.name]), full: true },
+      { key: "amount", label: "Advance amount ₹", type: "number", required: true, min: 1 }, { key: "monthly_cut", label: "Cut from salary each month ₹", type: "number", required: true, min: 1 },
+      { key: "given_on", label: "Given on", type: "date", required: true }, { key: "start", label: "Start cutting from", type: "select", options: [[S.d.ym, ymLabel(S.d.ym) + " salary"], [next, ymLabel(next) + " salary"]] },
+      { key: "paid_from", label: "Paid from", type: "select", options: [["cash", "Cash"], ["bank", "Bank / UPI"]] }, { key: "note", label: "Note", placeholder: "e.g. medical, festival" }],
+    onSave: async (v) => { if (!(v.amount > 0) || !(v.monthly_cut > 0)) throw new Error("Enter the amount and the monthly cut");
+      await q(sb.rpc("advance_give", { p_business: ctx().BID, p: { staff_id: v.staff_id, amount: v.amount, monthly_cut: v.monthly_cut, given_on: v.given_on, start_month: v.start + "-01", paid_from: v.paid_from, note: v.note } }));
+      toast(`Advance saved. ${inr(Math.min(v.monthly_cut, v.amount))} will be cut each month.`); await load(); drawSalary(); } });
 }
 function adjForm(s) {
-  formModal({ title: `Advance or bonus · ${s.name}`, submitLabel: "Add", values: { kind: "advance" },
-    fields: [{ key: "kind", label: "Type", type: "select", options: [["advance", "Advance (taken from salary)"], ["deduction", "Other deduction (fine, damage, loan EMI…)"], ["bonus", "Bonus"], ["allowance", "Allowance (travel, food…)"]] },
+  formModal({ title: `Bonus or one-time cut · ${s.name}`, submitLabel: "Add", values: { kind: "bonus" },
+    fields: [{ key: "kind", label: "Type", type: "select", options: [["bonus", "Bonus"], ["allowance", "Allowance (travel, food…)"], ["deduction", "Deduction (fine, damage, loan EMI…)"], ["advance", "One-time advance, cut fully this month"]] },
       { key: "amount", label: "Amount ₹", type: "number", required: true, min: 1 }, { key: "note", label: "Note", full: true, placeholder: "Diwali bonus, advance on 5th…" }],
     onSave: async (v) => { if (!(v.amount > 0)) throw new Error("Enter an amount"); await q(sb.from("salary_adjustments").insert({ business_id: ctx().BID, staff_id: s.id, month: S.d.ym + "-01", kind: v.kind, amount: v.amount, note: v.note }));
       toast("Added to " + ymLabel(S.d.ym)); await load(); drawSalary(); } });
