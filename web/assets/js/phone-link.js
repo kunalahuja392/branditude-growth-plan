@@ -23,8 +23,11 @@ export function bindPhoneLink(onDone) {
     $("#pl-otp").hidden = false; $("#pl-code").focus(); toast("Code sent on WhatsApp to " + phone);
   };
   $("#pl-verify").onclick = async (e) => {
-    $("#pl-err").textContent = ""; e.target.disabled = true;
-    const { error } = await sb.auth.verifyOtp({ phone, token: $("#pl-code").value.trim(), type: "phone_change" });
+    $("#pl-err").textContent = ""; const token = $("#pl-code").value.replace(/\D/g, "");
+    if (!phone) { $("#pl-err").textContent = "Tap Send code first."; return; }
+    if (token.length !== 6) { $("#pl-err").textContent = "Enter the 6-digit code from WhatsApp."; return; }
+    e.target.disabled = true;
+    const { error } = await sb.auth.verifyOtp({ phone, token, type: "phone_change" });
     e.target.disabled = false;
     if (error) { $("#pl-err").textContent = "That code didn't work. Check it and try again."; return; }
     toast("Mobile login is on"); onDone && onDone();
