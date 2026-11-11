@@ -73,7 +73,7 @@ Deno.serve(async (req: Request) => {
     return json({ error: `Fill in all ${expectedParams} message fields.` }, 400);
 
   const { data: customers } = await admin.from("customers").select("id,name,phone").eq("business_id", business_id).in("id", customerIds);
-  const { data: optout } = await admin.from("wa_optout").select("phone").in("phone", (customers ?? []).map((c) => c.phone));
+  const { data: optout } = await admin.from("wa_optout").select("phone").limit(50000);   // small list: everyone who replied STOP
   const stopped = new Set((optout ?? []).map((o) => o.phone));
   const recipients = (customers ?? []).filter((c) => /^\d{11,15}$/.test(c.phone) && !stopped.has(c.phone));
   if (recipients.length === 0) return json({ error: "None of the selected customers has a valid number." }, 400);

@@ -1,5 +1,5 @@
 // Supabase Edge Function: Branditude team sends a business's WhatsApp template to Meta for approval, and checks its status.
-// POST { action:"submit"|"status"|"test"|"register"|"spend"|"profile"|"profile_get", template_id?, to?, since?, about?… }   Authorization: Bearer <super_admin/team token>
+// POST { action:"submit"|"status"|"test"|"register"|"spend"|"profile"|"profile_get"|"auth_template"|"auth_template_status", template_id?, to?, since?, about?… }   Authorization: Bearer <super_admin/team token>
 // Secrets: WA_TOKEN, WA_WABA_ID (WhatsApp Business Account id), optional WA_API_VERSION.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";

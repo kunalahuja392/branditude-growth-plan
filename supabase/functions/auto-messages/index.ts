@@ -32,7 +32,7 @@ Deno.serve(async (req: Request) => {
     if (!tpl) { await note(r, "Skipped: message template not set up yet."); out[key] = "no template"; continue; }
     const { data: due, error } = await admin.rpc("due_auto_msgs", { p_business: r.business_id, p_kind: r.kind });
     if (error) { await note(r, "Error: " + error.message); out[key] = error.message; continue; }
-    const { data: optout } = await admin.from("wa_optout").select("phone").in("phone", (due ?? []).map((c: { phone: string }) => c.phone));
+    const { data: optout } = await admin.from("wa_optout").select("phone").limit(50000);
     const stopped = new Set((optout ?? []).map((o: { phone: string }) => o.phone));
     const list = (due ?? []).filter((c: { phone: string }) => /^\d{11,15}$/.test(c.phone) && !stopped.has(c.phone));
     if (!list.length) { await note(r, "Nobody due today."); out[key] = 0; continue; }

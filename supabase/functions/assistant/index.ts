@@ -39,22 +39,22 @@ async function chat(messages: Msg[], maxTokens = 700): Promise<string | null> {
 }
 
 const GUIDE = `HOW THE SOFTWARE WORKS (menu on the left; on phones, the bar at the bottom):
-- Dashboard: Log a visit (phone, name, bill, optional coupon code) — this builds the customer list, stamps loyalty cards and counts revenue. Scan card: scan a customer's loyalty card QR. Feedback screen: counter tablet where customers rate the visit.
-- Customers: list, search, import from Excel (Import), tags, birthdays, send a WhatsApp message to one customer.
-- Reviews & feedback: average rating, unhappy customers who need a call back (Mark resolved), feedback link + QR to print. Happy customers (4–5★) get review suggestions, copy them and paste on Google.
-- Keywords & SEO: keywords, AI-written Google profile description, posts, FAQs, replies.
-- Offers & coupons: create codes (percent or flat ₹ off, minimum bill, expiry, usage limit, show in customer app).
+- Dashboard: Log a visit (phone, name, bill, optional coupon code, optional group) — this builds the customer list, stamps loyalty cards and counts revenue. Scan card: scan a customer's loyalty card QR. Feedback screen: counter tablet where customers rate the visit.
+- Customers: list, search, groups (VIP, Regular, your own), import from Excel (Import), birthdays, send a WhatsApp message to one customer.
+- Reviews & feedback: average rating, unhappy customers who need a call back (Draft a reply with AI, Mark resolved), feedback link + QR to print. Happy customers (4–5★) get review suggestions, copy them and paste on Google.
+- Keywords & SEO: keywords (made by AI from the Business profile), AI-written Google profile description, posts, FAQs.
+- Offers & coupons: create codes (percent or flat ₹ off, minimum bill, expiry, usage limit, show in customer app); Ideas with AI.
 - Loyalty card: stamps needed, rewards on certain visits; each logged visit adds a stamp; customers get a digital card link.
-- WhatsApp & reminders: buy credits (promotional for offers/wishes/review requests, utility for loyalty/visit updates; type any quantity or buy a pack), automatic reminders (birthday, loyalty, offer ending, we miss you, thank-you after each visit, reward used) — each needs to be switched on and needs credits of its type. Messages only send when the WhatsApp add-on is on and the plan is active.
-- Message templates (Pro): write your own WhatsApp message; Branditude/WhatsApp approve it, then use it for bulk messages.
+- WhatsApp & reminders: buy credits (promotional for offers/wishes/review requests, utility for loyalty/visit updates; type any quantity or buy a pack), automatic reminders (birthday, loyalty, offer ending, we miss you, thank-you after each visit, reward used) — each needs to be switched on and needs credits of its type. Broadcasts to a group, people seen in the last 30 days, or not seen in 60+ days. Message report shows delivered/read/failed. Messages only send when the WhatsApp add-on is on and the plan is active. Customers who reply STOP get no more messages.
+- Message templates: write your own WhatsApp message (Write with AI); WhatsApp approves it, then use it for bulk messages.
 - Alerts: things that need attention.
 - Orders & QR menu (food businesses): menu with photos, table QR codes, live orders.
-- Staff & attendance: add staff with a PIN; staff check in/out on the staff link; Salary: monthly pay, advances in instalments, payslips.
+- Staff & attendance: add staff with a PIN; staff check in/out on the staff link; Salary: monthly pay, tips (one person or shared, split your way), advances in instalments, payslips.
 - Accounts & GST: income/expense entries with categories (only owner/admin add categories), bill photo upload, P&L, balance sheet, GST report, Tally export, expense report.
-- Plan & services: current plan, add-ons, renew/upgrade, pay online or by UPI.
-- Business profile: name, phone, city, locality, address, About your business, Services & products (keywords are created from these), Google review link.
+- Plan & services: current plan, add-ons, renew/upgrade, pay online or by UPI; Refer a business and earn 10% (your code and link).
+- Business profile: name, phone, city, locality, address, About your business, Services & products (keywords are created from these), Google review link, Mobile login (sign in with a WhatsApp code).
 - Team & logins: invite admin/staff by email and choose which areas they can use.
-Common problems: WhatsApp not sending → add-on off, no credits of that type, reminder switched off, or message waiting for WhatsApp approval. Review button missing → add the Google review link in Business profile. Can't edit something → your login doesn't have that area; ask the owner. Account read-only → plan expired or paused; renew in Plan & services.`;
+Common problems: WhatsApp not sending → add-on off, no credits of that type, reminder switched off, customer replied STOP, or message waiting for WhatsApp approval. Review button missing → add the Google review link in Business profile. Can't edit something → your login doesn't have that area; ask the owner. Account read-only → plan expired or paused; renew in Plan & services.`;
 
 const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
 const day = (d: Date) => d.toISOString().slice(0, 10);
@@ -85,7 +85,7 @@ Deno.serve(async (req: Request) => {
   // Read as the user: RLS decides what they can see
   // (WhatsApp inbox: no user token, so read with the service client; every query below is limited to this business and to the member's areas)
   const us = internal ? admin : createClient(url, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authz } }, auth: { persistSession: false } });
-  const can = async (area: string) => (await admin.rpc("member_has_perm", { b: bid, u: u.user.id, area })).data === true;
+  const can = async (area: string) => (await admin.rpc("member_has_perm", { b: bid, u: u!.user.id, area })).data === true;
   const [cCust, cRev, cWa, cAtt, cAcc] = await Promise.all(["customers", "reviews", "whatsapp", "attendance", "accounts"].map(can));
   const now = new Date(), ago = (d: number) => new Date(now.getTime() - d * 864e5);
   const D: string[] = [];
@@ -99,7 +99,7 @@ Deno.serve(async (req: Request) => {
 
   if (cCust) {
     const [{ data: cs }, { data: vs }, { data: cps }] = await Promise.all([
-      us.from("customers").select("id,name,phone,visits,spend,last_visit,stamps,birthday,created_at,review_status").eq("business_id", bid).order("spend", { ascending: false }).limit(1000),
+      us.from("customers").select("id,name,phone,visits,spend,last_visit,stamps,birthday,created_at,review_status,tags").eq("business_id", bid).order("spend", { ascending: false }).limit(1000),
       us.from("visits").select("customer_id,gross,discount,net,coupon_code,loyalty_reward,created_at").eq("business_id", bid).gte("created_at", ago(60).toISOString()).order("created_at", { ascending: false }).limit(3000),
       us.from("coupons").select("code,title,type,value,used,usage_limit,expiry,active").eq("business_id", bid).limit(30),
     ]);
@@ -109,7 +109,8 @@ Deno.serve(async (req: Request) => {
     const w1 = inRange(7, 0), w0 = inRange(14, 7), m1 = inRange(30, 0), m0 = inRange(60, 30);
     const byDay: Record<string, number> = {}; for (const v of inRange(14, 0)) { const k = day(new Date(v.created_at)); byDay[k] = (byDay[k] ?? 0) + Number(v.net || 0); }
     const cname = new Map(C.map((c) => [c.id, c.name]));
-    D.push(`CUSTOMERS: ${C.length} total; new in last 30 days: ${C.filter((c) => new Date(c.created_at) > ago(30)).length}; came back (2+ visits): ${C.filter((c) => c.visits >= 2).length}; not seen for 45+ days: ${C.filter((c) => c.last_visit && new Date(c.last_visit) < ago(45)).length}.`);
+    const groups: Record<string, number> = {}; for (const c of C) for (const t of (c as any).tags ?? []) groups[t] = (groups[t] ?? 0) + 1;
+    D.push(`CUSTOMERS: ${C.length} total; new in last 30 days: ${C.filter((c) => new Date(c.created_at) > ago(30)).length}; came back (2+ visits): ${C.filter((c) => c.visits >= 2).length}; not seen for 60+ days: ${C.filter((c) => c.last_visit && new Date(c.last_visit) < ago(60)).length}. Groups: ${Object.entries(groups).map(([k, v]) => `${k} ${v}`).join(", ") || "none"}.`);
     D.push(`SALES (visits logged): last 7 days ${w1.length} visits ${inr(sum(w1))} (previous 7 days ${w0.length} visits ${inr(sum(w0))}); last 30 days ${m1.length} visits ${inr(sum(m1))} (previous 30 days ${inr(sum(m0))}); average bill last 30 days ${m1.length ? inr(sum(m1) / m1.length) : "–"}; discounts given 30 days ${inr(m1.reduce((s, v) => s + Number(v.discount || 0), 0))}; loyalty rewards used 30 days ${m1.filter((v) => v.loyalty_reward).length}; coupon uses 30 days ${m1.filter((v) => v.coupon_code).length}.`);
     D.push(`DAILY SALES last 14 days: ${Object.entries(byDay).sort().map(([k, v]) => `${k.slice(5)} ${inr(v)}`).join(", ") || "none"}.`);
     D.push(`TOP CUSTOMERS by spend: ${C.slice(0, 10).map((c) => `${c.name} (${c.visits} visits, ${inr(c.spend)}, last ${c.last_visit ? day(new Date(c.last_visit)) : "–"}, ${c.stamps} stamps)`).join("; ") || "none"}.`);
@@ -117,7 +118,6 @@ Deno.serve(async (req: Request) => {
     const md = (d: string) => d.slice(5);
     const soon = new Set(Array.from({ length: 8 }, (_, i) => md(day(new Date(now.getTime() + i * 864e5)))));
     D.push(`BIRTHDAYS next 7 days: ${C.filter((c) => c.birthday && soon.has(md(c.birthday))).map((c) => `${c.name} ${md(c.birthday)}`).join(", ") || "none"}.`);
-    // customers mentioned in the question
     const q = history[history.length - 1].content.toLowerCase(), words = q.split(/[^a-zऀ-ॿ0-9]+/).filter((w) => w.length >= 3);
     const hits = C.filter((c) => words.some((w) => c.name.toLowerCase().split(/\s+/).includes(w) || (w.length >= 6 && c.phone.includes(w)))).slice(0, 5);
     if (hits.length) D.push(`CUSTOMERS MATCHING THE QUESTION: ${hits.map((c) => `${c.name} phone ${c.phone}, ${c.visits} visits, spend ${inr(c.spend)}, last visit ${c.last_visit ? day(new Date(c.last_visit)) : "–"}, stamps ${c.stamps}, birthday ${c.birthday ?? "–"}, Google review ${c.review_status}`).join("; ")}.`);
