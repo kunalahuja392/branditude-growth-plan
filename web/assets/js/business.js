@@ -3,6 +3,7 @@ import { sb, q } from "./sb.js";
 import { $, $$, esc, inr, inr2, nfmt, fmtDate, fmtShort, fmtDT, ago, daysSince, daysToBirthday, todayISO, normPhone, prettyPhone, toast, copy,
   openModal, closeModal, modalOpen, confirmBox, formModal, ico, shell, barChart, statusPill, THEMES, rwLabel, rwShort, rewardAt, nextReward, loyaltyCard } from "./ui.js";
 import { registerStaff } from "./staff.js";
+import { phoneLinkHTML, bindPhoneLink } from "./phone-link.js";
 import { registerMenu, newOrderCount } from "./menu-admin.js";
 import { rzpOn, payOnline } from "./razorpay.js";
 import { registerTeam, AREA_OF } from "./team.js";
@@ -106,11 +107,13 @@ const openComplaints = () => (D.feedback || []).filter((f) => f.status === "open
 const loyOn = () => !!D.prog?.enabled;
 function segments() {
   const c = D.customers || [];
-  return { all: ["All customers", c], birthday: ["Birthday in next 30 days", c.filter((x) => daysToBirthday(x.birthday) <= 30)], inactive: ["Not visited in 30+ days", c.filter((x) => daysSince(x.last_visit) >= 30)],
+  return { all: ["All customers", c], birthday: ["Birthday in next 30 days", c.filter((x) => daysToBirthday(x.birthday) <= 30)], recent: ["Visited in the last 30 days", c.filter((x) => x.last_visit && daysSince(x.last_visit) < 30)], inactive: ["Not visited in 30+ days", c.filter((x) => daysSince(x.last_visit) >= 30)], lapsed60: ["Not visited in 60+ days", c.filter((x) => daysSince(x.last_visit) >= 60)],
     noreview: ["Haven't reviewed yet", c.filter((x) => x.review_status !== "reviewed")], newbies: ["New (1 visit)", c.filter((x) => (x.visits || 0) <= 1)], loyal: ["Regulars (5+ visits)", c.filter((x) => (x.visits || 0) >= 5)],
     nearreward: ["One visit from final reward", c.filter((x) => loyOn() && (x.stamps || 0) === D.prog.stamps - 1)] };
 }
-const allTags = () => [...new Set((D.customers || []).flatMap((c) => c.tags || []))].sort();
+const allTags = () => [...new Set((D.customers || []).flatMap((c) => c.tags || []))].filter((t) => t !== "New").sort();
+const GROUP_IDEAS = ["VIP", "Regular", "Corporate", "Family", "Students"];
+const groupOptions = (extra = []) => [...new Set([...allTags(), ...GROUP_IDEAS, ...extra])].map((g) => [g, g]);
 const audience = (key) => (key?.startsWith("tag:") ? D.customers.filter((c) => (c.tags || []).includes(key.slice(4))) : (segments()[key] || [, []])[1]);
 function couponStatus(k) {
   if (!k.active) return ["Paused", ""]; if (k.expiry && k.expiry < todayISO()) return ["Expired", "bad"];
@@ -364,6 +367,7 @@ after.whatsapp = async () => {
   const packsHtml = customBuy() + packGroups(packs);
   const el = $("#wa-view"); if (!el) return;
   D.autoRules = await q(sb.from("auto_msgs").select("*").eq("business_id", BID)).catch(() => []);
+  D.waReport = await q(sb.rpc("wa_delivery_report", { p_business: BID })).catch(() => null);
   D.autoPrev = await q(sb.rpc("auto_msgs_preview", { p_business: BID })).catch(() => ({}));
   D.autoLog = await q(sb.from("auto_msg_log").select("kind,status,created_at").eq("business_id", BID).order("created_at", { ascending: false }).limit(200)).catch(() => []);
   const promo = packs.filter((p) => (p.kind || "marketing") === "marketing"), perMsg = promo.length ? [Math.min(...promo.map((p) => p.price / p.credits)), Math.max(...promo.map((p) => p.price / p.credits))] : null;
@@ -389,7 +393,7 @@ after.whatsapp = async () => {
   <div class="grid g2">
     <div class="card"><div class="card-head"><h2>New broadcast</h2></div>
       <div class="fields">
-        <div class="field"><label for="wa-aud">Send to</label><select id="wa-aud">${Object.entries(sg).map(([k, [l, list]]) => `<option value="${k}" ${WA.aud === k ? "selected" : ""}>${l} (${list.length})</option>`).join("")}${allTags().map((x) => `<option value="tag:${esc(x)}" ${WA.aud === "tag:" + x ? "selected" : ""}>Tag: ${esc(x)}</option>`).join("")}</select></div>
+        <div class="field"><label for="wa-aud">Send to</label><select id="wa-aud">${Object.entries(sg).map(([k, [l, list]]) => `<option value="${k}" ${WA.aud === k ? "selected" : ""}>${l} (${list.length})</option>`).join("")}${allTags().map((x) => `<option value="tag:${esc(x)}" ${WA.aud === "tag:" + x ? "selected" : ""}>Group: ${esc(x)} (${D.customers.filter((c) => (c.tags || []).includes(x)).length})</option>`).join("")}</select></div>
         <div class="field"><label for="wa-tpl">Message</label><select id="wa-tpl">${tpls.map((x) => `<option value="${x.id}" ${t?.id === x.id ? "selected" : ""}>${esc(x.title)}</option>`).join("")}</select></div>
       </div>
       ${(t?.params || []).map((p, i) => `<div class="field" style="margin-top:12px"><label for="wa-p${i}">${esc(p)}</label><input id="wa-p${i}" data-wp="${i}" value="${esc(WA.params[i] ?? defaultParam(p))}"></div>`).join("")}
@@ -399,7 +403,7 @@ after.whatsapp = async () => {
     <div class="card"><div class="card-head"><h2>Preview</h2></div><div class="bubble" id="wa-prev">${esc(preview)}</div><p class="small muted" style="margin-top:12px">Messages use templates approved by WhatsApp, so the wording is fixed. You fill in the highlighted parts.</p></div>
   </div>
   <div class="grid g2" style="margin-top:16px">
-    <div class="card"><div class="card-head"><h2>Past broadcasts</h2></div>${bcs.length ? `<div class="list">${bcs.map((b) => `<div class="item"><div class="grow"><b>${esc(b.title)}</b><span class="muted small">${fmtDT(b.created_at)} · ${esc(b.audience)}</span></div><span class="small num">${b.sent} sent${b.failed ? `, ${b.failed} failed` : ""} · ${b.credits_used} cr</span></div>`).join("")}</div>` : `<div class="empty">No broadcasts yet.</div>`}</div>
+    ${deliveryCard(bcs)}
     <div class="card"><div class="card-head"><h2>Credit history</h2></div>${ledger.length ? `<div class="list">${ledger.map((x) => `<div class="item small"><div class="grow">${esc(x.reason)} <span class="muted">${fmtDT(x.created_at)}</span></div><b class="num" style="color:${x.delta > 0 ? "var(--good)" : "var(--ink-2)"}">${x.delta > 0 ? "+" : ""}${x.delta}</b></div>`).join("")}</div>` : `<div class="empty">No credits yet.</div>`}</div>
   </div>`;
   $("#wa-aud").onchange = (e) => { WA.aud = e.target.value; after.whatsapp(); };
@@ -435,6 +439,16 @@ function remindersCard() {
         ${a.help ? `<p class="small muted">${a.help}</p>` : ""}
         <p class="small muted">${loyOff ? "Needs the loyalty card." : `${a.instant ? "" : `Due today: <b class="num">${D.autoPrev?.[k] ?? 0}</b> · `}sent in 30 days: <b class="num">${sentMonth(k)}</b>${r.last_note ? ` · last run: ${esc(r.last_note)}` : ""}`}</p>
         <button class="btn sm" data-a="am-save" data-id="${k}">Save</button></div>`; }).join("")}</div></div>`;
+}
+const KIND_NAME = { birthday: "Birthday wish", loyalty: "Loyalty reminder", offer_expiry: "Offer ending", win_back: "We miss you", visit_update: "Thank-you after visit", reward_used: "Reward used" };
+function deliveryCard(bcs) {
+  const R = D.waReport || { broadcasts: [], auto: [], problems: [], tracking: false };
+  const stat = (x) => `<span class="small num">${x.sent ?? 0} sent${R.tracking ? ` · <b>${x.delivered ?? 0}</b> delivered · ${x.read ?? 0} read` : ""}${(+x.failed || 0) + (+x.failed_later || 0) ? ` · <span style="color:var(--bad)">${(+x.failed || 0) + (+x.failed_later || 0)} failed</span>` : ""}</span>`;
+  const list = R.broadcasts.length ? R.broadcasts : bcs;
+  return `<div class="card"><div class="card-head"><h2>Message report</h2>${R.tracking ? "" : '<span class="pill">Delivery tracking starting soon</span>'}</div>
+    <h3 style="margin:0 0 6px">Broadcasts</h3>${list.length ? `<div class="list">${list.map((b) => `<div class="item"><div class="grow"><b>${esc(b.title)}</b><span class="muted small">${fmtDT(b.created_at)} · ${esc(b.audience)}</span></div>${stat(b)}</div>`).join("")}</div>` : `<div class="empty">No broadcasts yet.</div>`}
+    ${R.auto.length ? `<h3 style="margin:14px 0 6px">Automatic messages · last 30 days</h3><div class="list">${R.auto.map((a) => `<div class="item"><div class="grow"><b>${esc(KIND_NAME[a.kind] || a.kind)}</b></div>${stat(a)}</div>`).join("")}</div>` : ""}
+    ${R.problems.length ? `<details style="margin-top:12px"><summary class="small">Why some messages failed (${R.problems.length})</summary><div class="list">${R.problems.map((p) => `<div class="item small"><div class="grow"><b class="num">${esc(prettyPhone(p.phone || ""))}</b><span class="muted">${fmtDT(p.at)} · ${esc(KIND_NAME[p.template_name] || p.template_name || "")}</span><span style="color:var(--bad)">${esc(p.error || "Not delivered")}</span></div></div>`).join("")}</div><p class="small muted">Common reasons: the number isn't on WhatsApp, the person blocked business messages, or WhatsApp limits how many offers one person gets. Failed messages are refunded.</p></details>` : ""}</div>`;
 }
 function bulkUpsell() {
   if (hasMod("bulk_whatsapp")) return "";
@@ -484,7 +498,7 @@ async function sendWA(customerIds, templateName, params, title) {
   if (error) { let msg = error.message; try { msg = (await error.context.json()).error || msg; } catch {} throw new Error(msg); }
   return data;
 }
-const audienceLabel = (k) => (k?.startsWith("tag:") ? "Tag: " + k.slice(4) : segments()[k]?.[0] || k);
+const audienceLabel = (k) => (k?.startsWith("tag:") ? "Group: " + k.slice(4) : segments()[k]?.[0] || k);
 async function waOne(c, tplName) {
   if (!D.tpls) D.tpls = await q(sb.from("wa_templates").select("*").eq("active", true).order("created_at"));
   const tpls = D.tpls; let t = tpls.find((x) => x.name === tplName) || tpls[0]; if (!t) return toast("No WhatsApp templates yet. Ask Branditude.", "error");
@@ -552,7 +566,20 @@ after.plan = async () => {
     ${services.length ? `<div class="list">${services.map((p) => `<div class="item"><div class="grow"><b>${esc(p.name)}</b><span class="muted small">${esc(p.description || "")}</span></div><b class="num">${inr(p.price)}${p.billing === "monthly" ? "/mo" : ""}</b><button class="btn sm" data-a="buy-product" data-id="${p.id}" ${b.status === "active" ? "" : "disabled"}>Buy</button></div>`).join("")}</div>` : `<div class="empty">No extra services right now.</div>`}</div>
   <div class="card" style="margin-top:16px"><div class="card-head"><h2>Payment history</h2></div>${pays.filter((p) => p.status !== "pending").map((p) => `<div class="item"><div class="grow"><b>${esc(p.description)}</b><span class="muted small">${fmtDT(p.created_at)}</span></div><span class="num">${inr2(p.total)}</span>${statusPill(p.status)}</div>`).join("") || `<div class="empty">No payments yet.</div>`}</div>`;
   D.pays = pays;
+  if (["owner", "admin"].includes(D.me.role)) referCard();
 };
+async function referCard() {
+  const el = $("#plan-view"); if (!el) return;
+  let r; try { r = await q(sb.rpc("my_referral", { p_business: BID })); } catch { return; }
+  const link = `${location.origin}/?ref=${encodeURIComponent(r.code)}`, msg = `I use Branditude Growth Plan for ${D.biz.name}: Google reviews, loyalty cards and WhatsApp offers in one app. Sign up with my link: ${link}`;
+  const box = document.createElement("div"); box.className = "card"; box.style.marginTop = "16px";
+  box.innerHTML = `<div class="card-head"><h2>🎁 Refer a business, earn ${+r.pct}%</h2></div>
+    <p class="muted small" style="margin-top:-6px">When a business signs up with your link or code, you get ${+r.pct}% of what they pay for their plan and add-ons${r.months ? ` for their first ${r.months} months` : ""}. Branditude pays you by UPI or bank.</p>
+    <div class="row" style="margin:12px 0;gap:8px;flex-wrap:wrap"><span class="tag" style="font-size:15px;padding:6px 12px">Code: <b>${esc(r.code)}</b></span><button class="btn sm" data-a="copy" data-text="${esc(link)}">${ico("copy")} Copy link</button><a class="btn sm wa" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(msg)}">${ico("wa")} Share on WhatsApp</a></div>
+    <div class="grid g4">${kpi("Businesses referred", r.referred, `${r.paying} paying`)}${kpi("Earned, to be paid", inr2(r.due), "")}${kpi("Paid to you", inr2(r.paid), r.payouts?.[0] ? "last " + fmtDate(r.payouts[0].paid_on) : "")}</div>
+    ${(r.businesses || []).length ? `<div class="list" style="margin-top:10px">${r.businesses.map((x) => `<div class="item small"><div class="grow">${esc(x.name)}</div><span class="pill ${x.status === "active" ? "good" : ""}">${x.status === "active" ? "Paying" : "Not paying yet"}</span></div>`).join("")}</div>` : ""}`;
+  el.appendChild(box);
+}
 function addonsCard(pend) {
   const b = D.biz, mods = (D.mods || []).filter((m) => !m.core && fitsBiz(m.key)), yr = b.billing === "yearly";
   if (!mods.length) return "";
@@ -638,6 +665,7 @@ VIEWS.profile = () => { const b = D.biz;
   <div class="card" style="max-width:820px;margin-top:16px"><div class="card-head"><h2>Your keywords</h2><div class="row" style="gap:8px"><button class="btn sm" data-a="kw-auto" ${canWrite() ? "" : "disabled"}>${ico("spark")} Create again</button><a class="btn sm ghost" href="#seo">Edit</a></div></div>
     <p class="small muted" style="margin-top:-6px">Made from your profile. Short ones appear as "what did you like?" options when happy customers write a Google review; local search phrases are used in your Google posts and descriptions.</p>
     <div class="chips" id="kw-list" style="margin-top:8px"><span class="muted small">Loading…</span></div></div>
+  ${phoneLinkHTML(C.user)}
   <div class="card" style="max-width:820px;margin-top:16px"><div class="card-head"><h2>Account</h2></div><dl class="kv"><dt>Signed in as</dt><dd>${esc(C.user.email || C.user.phone || "")}</dd><dt>Feedback page</dt><dd><a href="${esc(feedbackLink())}" target="_blank" rel="noopener">${esc(feedbackLink())}</a></dd></dl></div>`; };
 async function drawKwList() { const el = $("#kw-list"); if (!el) return;
   const kw = await q(sb.from("business_keywords").select("keyword,source").eq("business_id", BID).order("created_at")).catch(() => []);
@@ -655,7 +683,7 @@ async function autoKeywords(quiet) {
     try { await q(sb.from("business_keywords").insert({ business_id: BID, keyword: k, source: svc.includes(k) ? "own" : "suggested" })); n++; } catch {} }
   if (!quiet || n) toast(n ? `${n} keywords added from your services${j?.fallback ? " (AI keywords switch on once the Groq key is added)" : ""}` : (j?.error || "No new keywords")); drawKwList();
 }
-after.profile = () => { drawKwList();
+after.profile = () => { drawKwList(); bindPhoneLink(async () => { const { data } = await sb.auth.getUser(); if (data?.user) C.user = data.user; render(); });
   $("#prof").onsubmit = async (e) => { e.preventDefault();
   const before = [D.biz.description, D.biz.services, D.biz.city, D.biz.locality].join("|");
   const extra = {}; if ("description" in D.biz) { extra.description = $("#p-desc").value.trim(); extra.services = $("#p-svc").value.trim(); }
@@ -877,7 +905,8 @@ function visitModal(pre = {}) {
       <div class="field"><label for="v-phone">Customer's mobile number</label><input id="v-phone" inputmode="tel" required placeholder="98xxxxxxxx"></div>
       <div class="field"><label for="v-name">Name</label><input id="v-name" placeholder="New customer? Enter name"></div>
       <div class="field"><label for="v-bill">Bill amount ₹</label><input id="v-bill" type="number" min="0" required></div>
-      <div class="field"><label for="v-code">Coupon code</label><input id="v-code" style="text-transform:uppercase" placeholder="Optional"></div></div>
+      <div class="field"><label for="v-code">Coupon code</label><input id="v-code" style="text-transform:uppercase" placeholder="Optional"></div>
+      <div class="field"><label for="v-grp">Add to group</label><select id="v-grp"><option value="">No group</option>${groupOptions().map(([g]) => `<option>${esc(g)}</option>`).join("")}</select></div></div>
       <div id="v-status" style="margin-top:12px"></div><p class="err" id="v-err"></p>
       <div class="modal-foot"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary">Save visit</button></div></form>`);
   let timer, seq = 0;
@@ -904,6 +933,7 @@ function visitModal(pre = {}) {
     e.preventDefault(); const btn = e.submitter || m.querySelector("button.primary"); btn.disabled = true;
     try {
       const r = await q(sb.rpc("log_visit", { p_business: BID, p_phone: m.querySelector("#v-phone").value, p_name: m.querySelector("#v-name").value, p_gross: +m.querySelector("#v-bill").value, p_coupon: m.querySelector("#v-code").value.trim() }));
+      const grp = m.querySelector("#v-grp")?.value; if (grp) { const cur = D.customers.find((x) => x.id === r.customer_id)?.tags || []; if (!cur.includes(grp)) await q(sb.from("customers").update({ tags: [...cur, grp] }).eq("id", r.customer_id)).catch(() => {}); }
       if (waOn()) sb.functions.invoke("wa-notify", { body: { business_id: BID, customer_id: r.customer_id } }).then(({ data }) => {
         if (data?.ok) toast("WhatsApp update sent to the customer"); else if (/credits/.test(data?.skipped || "")) toast("WhatsApp update not sent: no utility credits left", "error"); }).catch(() => {});
       await reload("customers", "visits", "coupons"); const c = D.customers.find((x) => x.id === r.customer_id);
@@ -952,11 +982,11 @@ document.addEventListener("click", async (e) => {
 
 /* ---------- forms ---------- */
 function customerForm(c = { tags: [] }) {
-  formModal({ title: c.id ? "Edit customer" : "Add customer", values: { ...c, tags: (c.tags || []).join(", "), phone: c.phone ? prettyPhone(c.phone) : "" },
+  formModal({ title: c.id ? "Edit customer" : "Add customer", values: { ...c, groups: (c.tags || []).filter((t) => t !== "New"), phone: c.phone ? prettyPhone(c.phone) : "" },
     fields: [{ key: "name", label: "Name", required: true }, { key: "phone", label: "Mobile number", required: true }, { key: "birthday", label: "Birthday", type: "date" }, { key: "email", label: "Email", type: "email" },
-      { key: "tags", label: "Tags, separated by commas", full: true, placeholder: "VIP, Regular" }, { key: "notes", label: "Notes", type: "textarea", full: true }],
+      { key: "groups", label: "Groups (for broadcasts)", type: "multiselect", full: true, options: groupOptions(c.tags || []) }, { key: "newgroup", label: "New group", full: true, placeholder: "e.g. Gym members, Wedding enquiry" }, { key: "notes", label: "Notes", type: "textarea", full: true }],
     extraFoot: c.id ? `<button type="button" class="btn danger" style="margin-right:auto" id="cust-del">Delete</button>` : "",
-    onSave: async (v) => { const row = { name: v.name, phone: normPhone(v.phone, D.biz.country_code), birthday: v.birthday || null, email: v.email || null, tags: v.tags.split(",").map((s) => s.trim()).filter(Boolean), notes: v.notes };
+    onSave: async (v) => { const row = { name: v.name, phone: normPhone(v.phone, D.biz.country_code), birthday: v.birthday || null, email: v.email || null, tags: [...new Set([...(v.groups || []), ...String(v.newgroup || "").split(",").map((s) => s.trim().slice(0, 40)).filter(Boolean)])], notes: v.notes };
       if (row.phone.length < 11) throw new Error("Enter a valid mobile number");
       if (c.id) await q(sb.from("customers").update(row).eq("id", c.id)); else await q(sb.from("customers").insert({ ...row, business_id: BID }));
       await reload("customers"); toast("Customer saved"); render(); } });

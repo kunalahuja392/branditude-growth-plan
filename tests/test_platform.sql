@@ -749,4 +749,77 @@ set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-00000000
 do $$ begin begin perform visit_message((select id from businesses), null); assert false; exception when insufficient_privilege then null; end;
   assert (select count(*) from wa_delivery)=0; end $$;
 reset role;
+\echo '--- 25. Agents, referral codes, commissions, payouts, tips'
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
+do $$ declare g uuid; begin
+  insert into agents(name, email, commission_pct, months) values ('Rahul Agent', 'agent1@example.test', 20, null) returning id into g;
+  insert into promo_codes(code, type, value, agent_id) values ('RAHUL5', 'percent', 5, g);
+  begin insert into promo_codes(code, type, value, agent_id) values ('RAHUL30', 'percent', 30, g); assert false; exception when others then assert sqlerrm like '%at most%', sqlerrm; end;
+  perform set_config('test.agent', g::text, false);
+end $$;
+reset role;
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000f1', 'newbiz@example.test'), ('00000000-0000-0000-0000-0000000000f2', 'refbiz@example.test');
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000f1');
+do $$ declare r jsonb; begin
+  r := register_business(jsonb_build_object('name','Agent Shop','phone','9811111111','package_id',(select id from packages where slug='growth'),'promo_code','rahul5'));
+  assert (r->>'promo_ok')::boolean, 'agent code gives discount';
+  assert (select agent_id from businesses where id=(r->>'business_id')::uuid) = current_setting('test.agent')::uuid, 'business linked to agent';
+  perform set_config('test.ab', r->>'business_id', false); perform set_config('test.ap', r->>'payment_id', false);
+end $$;
+reset role;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
+do $$ declare c record; begin
+  perform admin_confirm_payment(current_setting('test.ap')::uuid, true);
+  select * into c from commissions where payment_id = current_setting('test.ap')::uuid;
+  assert c.pct = 15, 'agent 20% minus 5% code = 15%: '||c.pct;
+  assert c.amount = round(c.base * 0.15, 2) and c.status = 'due', 'commission amount';
+  begin perform agent_payout(current_setting('test.agent')::uuid, array[c.id], c.amount, current_date, '', null, ''); assert false; exception when others then assert sqlerrm like '%UTR%'; end;
+  perform agent_payout(current_setting('test.agent')::uuid, array[c.id], c.amount, current_date, 'UTR123456', null, 'Nov');
+  assert (select status from commissions where id = c.id) = 'paid', 'marked paid';
+end $$;
+reset role;
+-- agent sees their own dashboard by email
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000a1');
+do $$ begin assert agent_me() is null, 'a business owner is not an agent'; end $$;
+reset role;
+update auth.users set email = 'agent1@example.test' where id = '00000000-0000-0000-0000-0000000000c2';
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000c2');
+do $$ declare r jsonb := agent_me(); begin assert (r->>'paid')::numeric > 0 and jsonb_array_length(r->'businesses') = 1, 'agent dashboard: '||r::text; end $$;
+reset role;
+-- business referral: Spice Route refers a new business, earns 10% for 12 months
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000a1');
+do $$ declare r jsonb; begin
+  r := my_referral((select id from businesses where name='Spice Route Cafe'));
+  assert (r->>'pct')::numeric = 10 and (r->>'months')::int = 12, 'business referral 10% for 12 months';
+  perform set_config('test.refcode', r->>'code', false);
+  begin perform my_referral((select id from businesses where name='Glow Salon')); assert false; exception when others then null; end;
+end $$;
+reset role;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000f2');
+do $$ declare r jsonb; q jsonb; begin
+  q := quote((select id from packages where slug='starter'), 'monthly', '{}', current_setting('test.refcode'));
+  assert (q->>'referral')::boolean and (q->>'promo_ok')::boolean and (q->>'subtotal')::numeric = 299, 'referral code: no discount, valid: '||q::text;
+  r := register_business(jsonb_build_object('name','Referred Gym','phone','9822222222','package_id',(select id from packages where slug='starter'),'promo_code',current_setting('test.refcode')));
+  perform set_config('test.rp', r->>'payment_id', false);
+end $$;
+reset role;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
+do $$ begin perform admin_confirm_payment(current_setting('test.rp')::uuid, true);
+  assert (select pct from commissions where payment_id = current_setting('test.rp')::uuid) = 10, 'referrer gets 10%'; end $$;
+reset role;
+-- WhatsApp credit purchases never earn commission
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000f1');
+do $$ declare r jsonb; begin r := order_wa_credits(current_setting('test.ab')::uuid, 100, 0); perform set_config('test.wp', r->>'payment_id', false); end $$;
+reset role;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
+do $$ begin perform admin_confirm_payment(current_setting('test.wp')::uuid, true);
+  assert not exists (select 1 from commissions where payment_id = current_setting('test.wp')::uuid), 'no commission on credits'; end $$;
+reset role;
+-- tips are a salary adjustment kind
+set role service_role;
+do $$ declare b uuid := (select id from businesses where name='Glow Salon'); s uuid; begin
+  insert into staff(business_id, name) values (b, 'Tip Test') returning id into s;
+  insert into salary_adjustments(business_id, staff_id, month, kind, amount, note, tip_day) values (b, s, date_trunc('month', current_date)::date, 'tip', 150, 'Shared tip', current_date);
+end $$;
+reset role;
 \echo 'ALL TESTS PASSED'

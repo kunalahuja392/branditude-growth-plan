@@ -296,6 +296,8 @@ async function onStaffClick(e) {
       else { if (!(await confirmBox("Remove this entry?", "", "Remove", { danger: true }))) return; await q(sb.from("salary_adjustments").delete().eq("id", id)); }
       closeModal(); await load(); return drawSalary(); }
     if (a === "adv-new") return advanceForm(id);
+    if (a === "tip-new") return tipForm();
+    if (a === "tip-del") { if (!(await confirmBox("Remove this tip?", "It comes off the salary for this month.", "Remove", { danger: true }))) return; await q(sb.from("salary_adjustments").delete().eq("id", id)); await load(); return drawSalary(); }
     if (a === "adv-skip" || a === "adv-resume") { await q(sb.rpc("advance_skip", { p_business: BID, p_id: id, p_month: S.d.ym + "-01", p_skip: a === "adv-skip" })); await load(); return drawSalary(); }
     if (a === "adv-del") { if (!(await confirmBox("Delete this advance?", "Its monthly cuts are removed too.", "Delete", { danger: true }))) return; await q(sb.rpc("advance_delete", { p_business: BID, p_id: id })); toast("Advance deleted"); await load(); return drawSalary(); }
     if (a === "slip") return payslip(s);
@@ -331,9 +333,51 @@ function drawSalary() {
       <td>${slip?.paid ? `<span class="pill good">Paid ${fmtDate(slip.paid_on)}</span>${changed ? `<br><span class="pill warn" title="Paid ${inr2(slip.net)}">Changed since paid</span>` : ""}` : '<span class="pill warn">Not paid</span>'}</td>
       <td style="min-width:200px"><div class="row" style="justify-content:flex-end;gap:6px"><button class="btn sm" data-st="slip" data-id="${s.id}">Payslip</button><button class="btn sm ghost" data-st="adj" data-id="${s.id}" ${ctx().canWrite ? "" : "disabled"}>+ Bonus / cut</button>
         ${slip?.paid ? `<button class="btn sm ghost" data-st="unpaid" data-id="${s.id}" ${ctx().canWrite ? "" : "disabled"}>Undo paid</button>` : `<button class="btn sm primary" data-st="paid" data-id="${s.id}" ${ctx().canWrite ? "" : "disabled"}>Mark paid</button>`}</div></td></tr>`; }).join("")}
-    <tr><td colspan="5"><b>Total</b> <span class="small muted">· Days: <span class="cc cc-P">P</span> present <span class="cc cc-H">½</span> half <span class="cc cc-A">A</span> absent <span class="cc cc-L">L</span> paid leave</span></td><td class="num"><b>${inr2(total)}</b></td><td colspan="2"></td></tr></tbody></table></div>` : `<div class="card empty">No staff yet. <a href="#staff">Add staff</a> to start.</div>`}` + (rows.length ? advancesCard() : "");
+    <tr><td colspan="5"><b>Total</b> <span class="small muted">· Days: <span class="cc cc-P">P</span> present <span class="cc cc-H">½</span> half <span class="cc cc-A">A</span> absent <span class="cc cc-L">L</span> paid leave</span></td><td class="num"><b>${inr2(total)}</b></td><td colspan="2"></td></tr></tbody></table></div>` : `<div class="card empty">No staff yet. <a href="#staff">Add staff</a> to start.</div>`}` + (rows.length ? tipsCard() + advancesCard() : "");
 }
 /* ---------- advances: given once, cut from salary in monthly instalments ---------- */
+/* ---------- tips: for one person, or a shared pool split by the owner; paid with the month's salary ---------- */
+function tipsCard() {
+  const tips = (S.d.adj || []).filter((a) => a.kind === "tip"), can = ctx().canWrite, name = (id) => (S.d.staff.find((s) => s.id === id) || {}).name || "";
+  const byStaff = {}; for (const t of tips) byStaff[t.staff_id] = (byStaff[t.staff_id] || 0) + +t.amount;
+  return `<div class="card" style="margin-top:16px"><div class="card-head"><h2>Tips</h2><button class="btn sm primary" data-st="tip-new" ${can ? "" : "disabled"}>+ Add tips</button></div>
+    <p class="small muted" style="margin:-4px 0 10px">Tips for one person go to them. Shared tips are split the way you choose. Both are added to ${ymLabel(S.d.ym)} salary and show on the payslip.</p>
+    ${tips.length ? `<div class="chips" style="margin-bottom:10px">${Object.entries(byStaff).map(([id, v]) => `<span class="tag">${esc(name(id))}: <b>${inr2(v)}</b></span>`).join("")}</div>
+      <div class="list">${tips.map((t) => `<div class="item small"><div class="grow"><b>${esc(name(t.staff_id))}</b><span class="muted">${t.tip_day ? fmtDate(t.tip_day) + " · " : ""}${esc(t.note || "Tip")}</span></div><b class="num">${inr2(t.amount)}</b>${can ? `<button class="btn sm ghost danger" data-st="tip-del" data-id="${t.id}" aria-label="Remove">✕</button>` : ""}</div>`).join("")}</div>` : `<div class="empty">No tips this month.</div>`}</div>`;
+}
+function tipForm() {
+  const staff = (S.d.staff || []).filter((s) => s.active), today = new Date(Date.now() + 5.5 * 36e5).toISOString().slice(0, 10);
+  const def = today.slice(0, 7) === S.d.ym ? today : S.d.ym + "-01";
+  const m = openModal(`<div class="modal-head"><h2>Add tips</h2><button class="btn ghost" data-close>Close</button></div>
+    <div class="fields"><div class="field"><label for="tp-day">Date</label><input id="tp-day" type="date" value="${def}" min="${S.d.ym}-01" max="${S.d.ym}-31"></div><div class="field"><label for="tp-amt">Amount ₹</label><input id="tp-amt" type="number" min="1" step="1"></div>
+      <div class="field full"><label for="tp-who">Who gets it</label><select id="tp-who"><option value="pool">Shared by the team</option>${staff.map((s) => `<option value="${s.id}">${esc(s.name)} only</option>`).join("")}</select></div>
+      <div class="field full" id="tp-how-f"><label for="tp-how">How to split it</label><select id="tp-how"><option value="present">Equally among staff present that day</option><option value="all">Equally among all staff</option><option value="custom">I'll choose each person's share</option></select></div>
+      <div class="field full"><label for="tp-note">Note</label><input id="tp-note" placeholder="e.g. Saturday tip box, wedding order"></div></div>
+    <div id="tp-split" style="margin-top:10px"></div><p class="err" id="tp-err"></p><div class="modal-foot"><button class="btn primary" id="tp-go">Add to salary</button></div>`);
+  const $m = (s) => m.querySelector(s);
+  const present = (day) => staff.filter((s) => { const r = S.d.att.find((x) => x.staff_id === s.id && x.day === day); return r && (r.check_in || ["present", "half_day"].includes(r.mark)); });
+  const shares = () => { const amt = +$m("#tp-amt").value || 0, who = $m("#tp-who").value, how = $m("#tp-how").value;
+    if (who !== "pool") return [{ id: who, amt }];
+    let list = how === "present" ? present($m("#tp-day").value) : staff;
+    if (how === "custom") { const ws = staff.map((s) => ({ id: s.id, w: Math.max(0, +($m(`[data-w="${s.id}"]`)?.value || 0)) })).filter((x) => x.w > 0), tw = ws.reduce((t, x) => t + x.w, 0);
+      return tw ? split(amt, ws.map((x) => ({ id: x.id, f: x.w / tw }))) : []; }
+    return list.length ? split(amt, list.map((s) => ({ id: s.id, f: 1 / list.length }))) : []; };
+  const split = (amt, parts) => { let left = Math.round(amt * 100); const out = parts.map((p, i) => { const v = i === parts.length - 1 ? left : Math.round(amt * 100 * p.f); left -= v; return { id: p.id, amt: v / 100 }; }); return out.filter((x) => x.amt > 0); };
+  const draw = () => { const who = $m("#tp-who").value, how = $m("#tp-how").value; $m("#tp-how-f").hidden = who !== "pool";
+    const custom = who === "pool" && how === "custom";
+    const sh = shares(), nm = (id) => staff.find((s) => s.id === id)?.name || "";
+    $m("#tp-split").innerHTML = custom ? `<p class="small muted">Give each person a share (for example 2 for senior staff, 1 for helpers, 0 to leave someone out).</p><div class="list">${staff.map((s) => `<div class="item small"><div class="grow">${esc(s.name)}</div><input data-w="${s.id}" type="number" min="0" step="0.5" value="${$m(`[data-w="${s.id}"]`)?.value ?? 1}" style="max-width:90px" aria-label="Share for ${esc(s.name)}"><b class="num" style="min-width:80px;text-align:right">${inr2(sh.find((x) => x.id === s.id)?.amt || 0)}</b></div>`).join("")}</div>`
+      : who === "pool" ? (sh.length ? `<div class="chips">${sh.map((x) => `<span class="tag">${esc(nm(x.id))}: <b>${inr2(x.amt)}</b></span>`).join("")}</div>` : `<p class="small muted">${how === "present" ? "Nobody is marked present on that day. Choose another split." : "Add staff first."}</p>`) : "";
+    m.querySelectorAll("[data-w]").forEach((i) => (i.oninput = () => { const v = i.value; draw(); const j = $m(`[data-w="${i.dataset.w}"]`); j.value = v; j.focus(); })); };
+  ["#tp-amt", "#tp-who", "#tp-how", "#tp-day"].forEach((s) => ($m(s).oninput = $m(s).onchange = draw)); draw();
+  $m("#tp-go").onclick = async (e) => { const err = $m("#tp-err"); err.textContent = ""; const sh = shares(), day = $m("#tp-day").value, amt = +$m("#tp-amt").value || 0, pool = $m("#tp-who").value === "pool";
+    if (!(amt > 0)) return (err.textContent = "Enter the tip amount"); if (!sh.length) return (err.textContent = "Nobody to give it to");
+    if (day.slice(0, 7) !== S.d.ym) return (err.textContent = "Pick a date in " + ymLabel(S.d.ym));
+    const note = ($m("#tp-note").value.trim() || (pool ? "Shared tip" : "Tip")) + (pool ? ` (${inr2(amt)} split ${sh.length} ways)` : "");
+    e.target.disabled = true;
+    try { await q(sb.from("salary_adjustments").insert(sh.map((x) => ({ business_id: ctx().BID, staff_id: x.id, month: S.d.ym + "-01", kind: "tip", amount: x.amt, note, tip_day: day }))));
+      closeModal(); toast(`${inr2(amt)} in tips added to salary`); await load(); drawSalary(); } catch (x) { err.textContent = x.message; e.target.disabled = false; } };
+}
 function advancesCard() {
   const list = S.d.adv || [], open = list.filter((a) => +a.recovered < +a.amount), month = S.d.ym + "-01", can = ctx().canWrite;
   const cutThis = (a) => S.d.adj.find((x) => x.advance_id === a.id);

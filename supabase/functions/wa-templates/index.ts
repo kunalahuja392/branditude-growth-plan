@@ -34,6 +34,22 @@ Deno.serve(async (req: Request) => {
     if (!r.ok) return json({ error: j?.error?.error_data?.details || j?.error?.message || "Meta refused it", code: j?.error?.code }, 502);
     return json({ ok: true, registered: true, pin_saved_as: key });
   }
+  // Admin: create the WhatsApp authentication template used for login codes (copy-code button, 10-minute expiry)
+  if (body.action === "auth_template") {
+    const r = await fetch(`https://graph.facebook.com/${v}/${waba}/message_templates`, {
+      method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "login_code", language: "en", category: "AUTHENTICATION", components: [
+        { type: "BODY", add_security_recommendation: true }, { type: "FOOTER", code_expiration_minutes: 10 },
+        { type: "BUTTONS", buttons: [{ type: "OTP", otp_type: "COPY_CODE", text: "Copy code" }] }] }),
+    });
+    const j = await r.json();
+    if (!r.ok) return json({ error: j?.error?.error_user_msg || j?.error?.message || "Meta refused it", code: j?.error?.code }, 400);
+    return json({ ok: true, id: j.id, status: j.status });
+  }
+  if (body.action === "auth_template_status") {
+    const r = await fetch(`https://graph.facebook.com/${v}/${waba}/message_templates?name=login_code&fields=name,status,rejected_reason,category`, { headers: { Authorization: `Bearer ${token}` } });
+    const j = await r.json(); return r.ok ? json({ ok: true, templates: j.data ?? [] }) : json({ error: j?.error?.message }, 502);
+  }
   // Admin: what Meta actually charged (pricing analytics), by category, since a date
   if (body.action === "spend") {
     const from = Math.floor(new Date(String(body.since || "2026-11-01") + "T00:00:00+05:30").getTime() / 1000), to = Math.floor(Date.now() / 1000);

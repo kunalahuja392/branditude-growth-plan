@@ -162,7 +162,7 @@ export function computeStaffMonth({ settings, staff, records = [], holidays = []
     if (otPay) lines.push({ label: `Overtime: ${r2(otMin / 60)} h × ${r2(hourRate)}${mult !== 1 ? ` × ${mult}` : ""}${type === "hourly" ? " (extra over normal rate)" : ""}`, amount: otPay });
   }
   for (const a of adjustments.filter((a) => a.staff_id === staff.id)) {
-    const sign = a.kind === "bonus" || a.kind === "allowance" ? 1 : -1;
+    const sign = a.kind === "bonus" || a.kind === "allowance" || a.kind === "tip" ? 1 : -1;
     lines.push({ label: `${a.kind[0].toUpperCase() + a.kind.slice(1)}${a.note ? ": " + a.note : ""}`, amount: sign * +a.amount, adjustmentId: a.id });
   }
   lines.forEach((l) => (l.amount = r2(l.amount)));

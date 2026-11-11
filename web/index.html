@@ -757,7 +757,7 @@ document.addEventListener("click", (e) => {
 /* ---------- checkout ---------- */
 let co = null;
 function openCheckout(pkg) {
-  co = { step: 1, pkg, billing, cat, products: [], promo: "", biz: {}, quote: null, mode: "signup" };
+  co = { step: 1, pkg, billing, cat, products: [], promo: (() => { try { return localStorage.getItem("bgp_ref") || ""; } catch { return ""; } })(), biz: {}, quote: null, mode: "signup" };
   document.body.style.overflow = "hidden"; draw();
 }
 function close() { $("#checkout-root").innerHTML = ""; document.body.style.overflow = ""; co = null; }
@@ -919,6 +919,8 @@ document.addEventListener("click", (e) => {
 });
 if (location.hash) { const t = document.getElementById(location.hash.slice(1)); history.replaceState(null, "", location.pathname + location.search); if (t) addEventListener("load", () => setTimeout(() => t.scrollIntoView({ block: "start" }), 300)); }
 load();
+// Referral links: ?ref=CODE fills the promo code at sign-up
+try { const r = new URLSearchParams(location.search).get("ref"); if (r) localStorage.setItem("bgp_ref", r.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20)); } catch {}
 </script>
 </body>
 </html>

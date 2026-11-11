@@ -1,5 +1,6 @@
 // Agency portal: super admin + team
 import { sb, q } from "./sb.js";
+import { phoneLinkHTML, bindPhoneLink } from "./phone-link.js";
 import { $, $$, esc, inr, inr2, nfmt, fmtDate, fmtDT, ago, toast, openModal, closeModal, confirmBox, formModal, ico, shell, barChart, hbars, statusPill, prettyPhone, copy, todayISO } from "./ui.js";
 
 let C, D = {};
@@ -7,7 +8,7 @@ const isSuper = () => C.profile.role === "super_admin";
 const ROUTES = () => [
   { label: "", items: [["overview", "Overview", "dash"], ["leads", "Leads", "inbox", D.stats?.leads_open || ""], ["businesses", "Businesses", "store"], ["payments", "Payments", "rupee", D.stats?.payments_pending || ""]] },
   { label: "Catalogue", items: [["packages", "Packages", "box"], ["promos", "Package discounts", "tag"], ["categories", "Categories", "grid"], ["products", "Category services", "spark"], ["keywords", "Keyword suggestions", "star"], ["whatsapp", "WhatsApp", "wa"]] },
-  { label: "Agency", items: [...(isSuper() ? [["team", "Team", "shield"], ["settings", "Settings", "cog"]] : []), ["signout", "Sign out", "out"]] },
+  { label: "Agency", items: [...(isSuper() ? [["agents", "Agents & referrals", "users"], ["team", "Team", "shield"], ["settings", "Settings", "cog"]] : []), ["signout", "Sign out", "out"]] },
 ];
 const route = () => { const h = location.hash.slice(1); return ROUTES().flatMap((g) => g.items).some((r) => r[0] === h) ? h : "overview"; };
 
@@ -323,6 +324,72 @@ after.keywords = () => { const f = $("#ckw-form"); if (!f) return;
     try { await q(sb.from("category_keywords").upsert(lines.map((kw, i) => ({ category_id: KW_CAT, keyword: kw, sort: start + i })), { onConflict: "category_id,keyword", ignoreDuplicates: true })); toast(`Added ${lines.length}`); render(); }
     catch (err) { toast(err.message, "error"); } }; };
 
+/* ---------------- Agents & referrals ---------------- */
+VIEWS.agents = async () => {
+  if (!isSuper()) return head("Agents & referrals", "Only the super admin can see this.");
+  const [agents, codes, comms, payouts, ref, bizs] = await Promise.all([
+    q(sb.from("agents").select("*").order("created_at", { ascending: false })), q(sb.from("promo_codes").select("*").not("agent_id", "is", null)),
+    q(sb.from("commissions").select("*").order("created_at", { ascending: false }).limit(1000)), q(sb.from("agent_payouts").select("*").order("paid_on", { ascending: false }).limit(200)),
+    q(sb.from("settings").select("*").eq("key", "referral").maybeSingle()), q(sb.from("businesses").select("id,name,status,agent_id,referred_at").not("agent_id", "is", null)),
+  ]);
+  const bname = new Map(bizs.map((b) => [b.id, b.name])); comms.forEach((c) => (c.businesses = { name: bname.get(c.business_id) || "" }));
+  D.ag = { agents, codes, comms, payouts, ref: ref?.value || { business_pct: 10, business_months: 12 } };
+  const sum = (a, st) => comms.filter((c) => c.agent_id === a.id && c.status === st).reduce((t, c) => t + +c.amount, 0);
+  const period = (a) => (a.months ? `first ${a.months} months` : "lifetime");
+  const totalDue = comms.filter((c) => c.status === "due").reduce((t, c) => t + +c.amount, 0);
+  const row = (a) => { const cs = codes.filter((c) => c.agent_id === a.id), n = bizs.filter((b) => b.agent_id === a.id), due = sum(a, "due");
+    return `<tr><td><div class="who"><b>${esc(a.name)}</b><span>${a.kind === "business" ? "Business referrer" : esc([a.phone, a.email].filter(Boolean).join(" · ") || "Sales agent")}</span></div></td>
+      <td class="num">${+a.commission_pct}%<br><span class="small muted">${period(a)}</span></td>
+      <td>${cs.map((c) => `<span class="tag" title="${+c.value ? c.value + "% off for the customer, " + (+a.commission_pct - +c.value) + "% to the agent" : "Referral code, no discount"}">${esc(c.code)}${+c.value ? ` · ${+c.value}% off` : ""} · ${c.used} used</span>`).join(" ") || '<span class="muted small">No code</span>'}</td>
+      <td class="num">${n.length}<br><span class="small muted">${n.filter((b) => b.status === "active").length} paying</span></td>
+      <td class="num"><b style="color:${due ? "var(--accent)" : "inherit"}">${inr2(due)}</b><br><span class="small muted">${inr2(sum(a, "paid"))} paid</span></td>
+      <td><div class="row" style="gap:6px;justify-content:flex-end">${a.kind === "agent" ? `<button class="btn sm ghost" data-a="ag-code" data-id="${a.id}">+ Code</button>` : ""}<button class="btn sm ghost" data-a="ag-edit" data-id="${a.id}">Edit</button><button class="btn sm ${due ? "primary" : ""}" data-a="ag-pay" data-id="${a.id}" ${due ? "" : "disabled"}>Pay</button></div></td></tr>`; };
+  return head("Agents & referrals", "Sales agents earn a percentage of the plan and add-on payments of businesses they bring in. Businesses that refer another business earn too. Pay them by UPI or bank, then record it here.",
+    `<button class="btn" data-a="ag-settings">Business referral: ${+D.ag.ref.business_pct}% for ${D.ag.ref.business_months ? D.ag.ref.business_months + " months" : "lifetime"}</button><button class="btn primary" data-a="ag-new">${ico("plus")} New agent</button>`) + `
+  <div class="grid g4" style="margin-bottom:16px"><div class="kpi"><div class="label">Commission to pay</div><div class="value num">${inr2(totalDue)}</div></div>
+    <div class="kpi"><div class="label">Paid so far</div><div class="value num">${inr2(payouts.reduce((t, p) => t + +p.amount, 0))}</div></div>
+    <div class="kpi"><div class="label">Referred businesses</div><div class="value num">${bizs.length}</div><div class="sub">${bizs.filter((b) => b.status === "active").length} paying</div></div>
+    <div class="kpi"><div class="label">Agents</div><div class="value num">${agents.filter((a) => a.kind === "agent").length}</div><div class="sub">${agents.filter((a) => a.kind === "business").length} business referrers</div></div></div>
+  <div class="card"><div class="table-wrap"><table><thead><tr><th>Agent</th><th>Commission</th><th>Codes</th><th>Businesses</th><th>Earned</th><th></th></tr></thead><tbody>
+    ${agents.length ? agents.map(row).join("") : `<tr><td colspan="6"><div class="empty">No agents yet. Add your first sales agent.</div></td></tr>`}</tbody></table></div>
+    <p class="small muted" style="margin-top:10px">Commission is on plan and add-on payments only (not WhatsApp credits or one-time services), worked out on the amount before GST once you confirm the payment. If an agent's code gives a discount, it comes out of their share.</p></div>
+  <div class="card" style="margin-top:16px"><div class="card-head"><h2>Payout history</h2></div>
+    ${payouts.length ? `<div class="list">${payouts.map((p) => `<div class="item"><div class="grow"><b>${esc(agents.find((a) => a.id === p.agent_id)?.name || "")}</b><span class="muted small">${fmtDate(p.paid_on)}${p.utr ? " · UTR " + esc(p.utr) : ""}${p.note ? " · " + esc(p.note) : ""}</span></div><b class="num">${inr2(p.amount)}</b>${p.proof_path ? `<button class="btn sm ghost" data-a="ag-proof" data-id="${esc(p.proof_path)}">Screenshot</button>` : ""}</div>`).join("")}</div>` : `<div class="empty">No payouts yet.</div>`}</div>`;
+};
+function agentForm(a = { kind: "agent", commission_pct: 20, active: true }) {
+  formModal({ title: a.id ? "Edit " + (a.kind === "business" ? "business referrer" : "agent") : "New sales agent", values: { ...a, period: a.months ? "months" : "lifetime", months: a.months || 12 },
+    fields: [{ key: "name", label: "Name", required: true }, { key: "phone", label: "Mobile" }, { key: "email", label: "Email (they sign in with it to see their earnings)", type: "email", full: true },
+      { key: "commission_pct", label: "Commission %", type: "number", required: true, min: 0, step: "0.5" }, { key: "period", label: "Commission on renewals", type: "select", options: [["lifetime", "Lifetime (every renewal)"], ["months", "Only for some months"]] },
+      { key: "months", label: "Months (if limited)", type: "number", min: 1 }, { key: "payout_details", label: "UPI ID or bank details", full: true }, { key: "active", label: "Active", type: "checkbox", full: true }],
+    onSave: async (v) => { const row = { name: v.name.trim(), phone: v.phone || "", email: (v.email || "").trim(), commission_pct: +v.commission_pct, months: v.period === "months" ? Math.max(1, +v.months || 12) : null, payout_details: v.payout_details || "", active: !!v.active };
+      if (a.id) await q(sb.from("agents").update(row).eq("id", a.id)); else await q(sb.from("agents").insert({ ...row, kind: "agent" }));
+      toast("Saved"); render(); } });
+}
+function agentCodeForm(a) {
+  formModal({ title: `Code for ${a.name}`, values: { code: a.name.split(" ")[0].toUpperCase().replace(/[^A-Z0-9]/g, "") + Math.round(Math.min(5, +a.commission_pct)), value: Math.min(5, +a.commission_pct) },
+    fields: [{ key: "code", label: "Code", required: true }, { key: "value", label: `Discount for the customer % (0–${+a.commission_pct})`, type: "number", min: 0, help: "0 = referral only, no discount" },
+      { key: "max_uses", label: "Max uses (empty = unlimited)", type: "number", min: 1 }, { key: "valid_until", label: "Valid until", type: "date" }],
+    onSave: async (v) => { await q(sb.from("promo_codes").insert({ code: v.code.toUpperCase().replace(/\s+/g, ""), type: "percent", value: +v.value || 0, max_uses: v.max_uses || null, valid_until: v.valid_until || null, agent_id: a.id }));
+      toast(`Code ready. Share: ${location.origin}/?ref=${v.code.toUpperCase().replace(/\s+/g, "")}`); render(); } });
+}
+function agentPay(a) {
+  const due = D.ag.comms.filter((c) => c.agent_id === a.id && c.status === "due");
+  const m = openModal(`<div class="modal-head"><h2>Pay ${esc(a.name)}</h2><button class="btn ghost" data-close>Close</button></div>
+    ${a.payout_details ? `<p class="small">Pay to: <b>${esc(a.payout_details)}</b></p>` : ""}
+    <div class="list" style="margin:10px 0">${due.map((c) => `<label class="item" style="cursor:pointer"><input type="checkbox" data-c="${c.id}" data-amt="${c.amount}" checked style="width:auto;flex:none"><div class="grow"><b>${esc(c.businesses?.name || "")}</b><span class="muted small">${fmtDate(c.created_at)} · ${+c.pct}% of ${inr2(c.base)}</span></div><b class="num">${inr2(c.amount)}</b></label>`).join("")}</div>
+    <div class="fields"><div class="field"><label for="ap-amt">Amount paid ₹</label><input id="ap-amt" type="number" min="1" step="0.01"></div><div class="field"><label for="ap-date">Paid on</label><input id="ap-date" type="date" value="${todayISO()}"></div>
+      <div class="field"><label for="ap-utr">UTR / reference</label><input id="ap-utr" placeholder="12-digit UPI reference"></div><div class="field"><label for="ap-file">Screenshot (optional)</label><input id="ap-file" type="file" accept="image/*,application/pdf"></div>
+      <div class="field full"><label for="ap-note">Note</label><input id="ap-note" placeholder="e.g. November commission"></div></div><p class="err" id="ap-err"></p>
+    <div class="modal-foot"><button class="btn primary" id="ap-go">Record payout</button></div>`);
+  const tot = () => { const t = [...m.querySelectorAll("[data-c]:checked")].reduce((s, x) => s + +x.dataset.amt, 0); m.querySelector("#ap-amt").value = t.toFixed(2); };
+  tot(); m.querySelectorAll("[data-c]").forEach((x) => (x.onchange = tot));
+  m.querySelector("#ap-go").onclick = async (e) => { const err = m.querySelector("#ap-err"); err.textContent = ""; e.target.disabled = true;
+    try { let path = null; const f = m.querySelector("#ap-file").files[0];
+      if (f) { if (f.size > 5 * 1024 * 1024) throw new Error("Screenshot must be under 5 MB"); path = `${a.id}/${Date.now()}-${f.name.replace(/[^\w.-]/g, "_")}`; const { error } = await sb.storage.from("payouts").upload(path, f); if (error) throw new Error("Couldn't upload the screenshot: " + error.message); }
+      await q(sb.rpc("agent_payout", { p_agent: a.id, p_commissions: [...m.querySelectorAll("[data-c]:checked")].map((x) => x.dataset.c), p_amount: +m.querySelector("#ap-amt").value, p_paid_on: m.querySelector("#ap-date").value, p_utr: m.querySelector("#ap-utr").value, p_proof: path, p_note: m.querySelector("#ap-note").value }));
+      closeModal(); toast("Payout recorded"); render(); } catch (x) { err.textContent = x.message; e.target.disabled = false; } };
+}
+
 /* ---------------- WhatsApp ---------------- */
 const META_BILLING = "https://business.facebook.com/latest/billing_hub/accounts?business_id=1256389646022701";
 function metaCard(S, recharges) {
@@ -464,6 +531,7 @@ VIEWS.settings = async () => {
   </form>`;
 };
 after.settings = () => {
+  const host = $("#main"); if (host && !$("#pl-card")) { host.insertAdjacentHTML("beforeend", phoneLinkHTML(C.user)); bindPhoneLink(async () => { const { data } = await sb.auth.getUser(); if (data?.user) C.user = data.user; render(); }); }
   const f = $("#set-form"); if (!f) return;
   f.onsubmit = async (e) => { e.preventDefault(); const v = (id) => $("#" + id).value.trim();
     const up = [
@@ -506,6 +574,13 @@ document.addEventListener("click", async (e) => {
       case "ckw-del": await q(sb.from("category_keywords").delete().eq("id", id)); render(); break;
       case "pack-new": packForm(); break;
       case "mr-new": rechargeForm(); break;
+      case "ag-new": agentForm(); break;
+      case "ag-edit": agentForm(D.ag.agents.find((x) => x.id === id)); break;
+      case "ag-code": agentCodeForm(D.ag.agents.find((x) => x.id === id)); break;
+      case "ag-pay": agentPay(D.ag.agents.find((x) => x.id === id)); break;
+      case "ag-proof": { const { data } = await sb.storage.from("payouts").createSignedUrl(id, 300); if (data?.signedUrl) window.open(data.signedUrl, "_blank", "noopener"); else toast("Couldn't open the screenshot", "error"); break; }
+      case "ag-settings": formModal({ title: "Business referral reward", values: D.ag.ref, fields: [{ key: "business_pct", label: "Referrer gets % of the referred business's plan payments", type: "number", min: 0 }, { key: "business_months", label: "For how many months (0 = lifetime)", type: "number", min: 0 }],
+        onSave: async (v) => { await q(sb.from("settings").upsert({ key: "referral", value: { business_pct: +v.business_pct, business_months: +v.business_months }, public: false })); toast("Saved. Applies to new business referrers."); render(); } }); break;
       case "mr-add": addMoney(); break;
       case "mr-rates": await ratesForm(); break;
       case "mr-del": if (await confirmBox("Delete this recharge entry?", "", "Delete", { danger: true })) { await q(sb.from("meta_recharges").delete().eq("id", id)); render(); } break;

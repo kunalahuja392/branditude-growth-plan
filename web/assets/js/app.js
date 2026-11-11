@@ -40,6 +40,7 @@ sb.auth.onAuthStateChange((event) => {
     const ctx = { user, profile, signOut };
     if (profile.role === "super_admin" || profile.role === "team") (await import("./admin.js")).mount(ctx);
     else if (profile.role === "business") (await import("./business.js")).mount(ctx);
-    else (await import("./customer.js")).mount(ctx);
+    else { const me = await sb.rpc("agent_me").then((r) => r.data).catch(() => null);
+      if (me) (await import("./agent.js")).mount(ctx, me); else (await import("./customer.js")).mount(ctx); }
   } catch (e) { fail(e.message || String(e)); }
 })();

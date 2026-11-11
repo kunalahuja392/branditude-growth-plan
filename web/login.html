@@ -40,12 +40,13 @@ const ok = (m) => { $("#ok").textContent = m || ""; $("#err").textContent = ""; 
 if (!configured) err("Setup needed: add your Supabase URL and anon key in assets/js/config.js.");
 
 const QS = new URLSearchParams(location.search);
-let tab = QS.get("as") || "business", joining = QS.has("join");
+let tab = QS.get("as") || "business", joining = QS.has("join"), otpMode = false;
 const emailForm = (who) => `
   <form id="f-email" class="fields" style="grid-template-columns:1fr">
     <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="email" required></div>
     <div class="field"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required minlength="8"></div>
     <button class="btn primary" type="submit" style="justify-content:center">Sign in</button>
+    <button type="button" class="btn sm" id="to-otp" style="justify-content:center">Sign in with a WhatsApp code instead</button>
     <div class="row" style="justify-content:space-between"><button type="button" class="btn ghost sm" id="forgot">Forgot password?</button>
     ${who === "business" ? `<a class="btn ghost sm" href="index.html#pricing">New business? Choose a plan</a>` : `<span class="muted small">Team accounts are added by your super admin.</span>`}</div>
     ${who === "business" ? `<p class="small muted" style="margin:4px 0 0">Added to a business team? <button type="button" class="btn ghost sm" id="to-join" style="padding:2px 6px">Create your login</button></p>` : ""}
@@ -60,19 +61,21 @@ const joinForm = () => `
     <button type="button" class="btn ghost sm" id="to-signin">I already have a login</button>
   </form>`;
 const phoneForm = () => `
-  <p class="muted small">See your loyalty cards and offers from every business you visit. We'll send a one-time code to your phone.</p>
+  <p class="muted small">${tab === "customer" ? "See your loyalty cards and offers from every business you visit. We'll send a one-time code to your WhatsApp." : "We'll send a one-time code to your WhatsApp. Works once your mobile number is added to your login (Business profile → Mobile login)."}</p>
   <form id="f-phone" class="fields" style="grid-template-columns:1fr">
     <div class="field"><label for="phone">Mobile number</label><input id="phone" inputmode="tel" autocomplete="tel" placeholder="98xxxxxxxx" required></div>
     <div class="field" id="otp-wrap" hidden><label for="otp">6-digit code</label><input id="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6"></div>
     <button class="btn primary" type="submit" id="phone-btn" style="justify-content:center">Send code</button>
+    ${tab === "customer" ? "" : `<button type="button" class="btn ghost sm" id="to-email">Use email and password</button>`}
   </form>`;
 function draw() {
   $$("[data-tab]").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === tab));
-  $("#panel").innerHTML = tab === "customer" ? phoneForm() : tab === "business" && joining ? joinForm() : emailForm(tab);
+  const phone = tab === "customer" || otpMode;
+  $("#panel").innerHTML = phone ? phoneForm() : tab === "business" && joining ? joinForm() : emailForm(tab);
   err("");
-  if (tab === "customer") bindPhone(); else if (tab === "business" && joining) bindJoin(); else bindEmail();
+  if (phone) bindPhone(); else if (tab === "business" && joining) bindJoin(); else bindEmail();
 }
-$$("[data-tab]").forEach((b) => (b.onclick = () => { tab = b.dataset.tab; draw(); }));
+$$("[data-tab]").forEach((b) => (b.onclick = () => { tab = b.dataset.tab; otpMode = false; draw(); }));
 
 function bindEmail() {
   $("#f-email").onsubmit = async (e) => {
@@ -82,6 +85,7 @@ function bindEmail() {
     location.href = "app.html";
   };
   $("#to-join")?.addEventListener("click", () => { joining = true; draw(); });
+  $("#to-otp").onclick = () => { otpMode = true; draw(); };
   $("#forgot").onclick = async () => {
     const email = $("#email").value.trim(); if (!email) { err("Enter your email first, then tap Forgot password."); return; }
     const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: new URL("app.html", location.href).href });
@@ -102,15 +106,17 @@ function bindJoin() {
 }
 function bindPhone() {
   let sent = false;
+  $("#to-email")?.addEventListener("click", () => { otpMode = false; draw(); });
   $("#f-phone").onsubmit = async (e) => {
     e.preventDefault(); err(""); const btn = $("#phone-btn"); btn.disabled = true;
     const phone = "+" + normPhone($("#phone").value);
     if (phone.length < 12) { err("Enter a 10-digit mobile number."); btn.disabled = false; return; }
     if (!sent) {
-      const { error } = await sb.auth.signInWithOtp({ phone });
+      // business and team logins never create a new account from a phone number
+      const { error } = await sb.auth.signInWithOtp({ phone, options: { shouldCreateUser: tab === "customer" } });
       btn.disabled = false;
-      if (error) { err(friendly(error)); return; }
-      sent = true; $("#otp-wrap").hidden = false; $("#otp").focus(); btn.textContent = "Verify and sign in"; ok("Code sent to " + phone + ".");
+      if (error) { err(/signups not allowed|not found|otp_disabled/i.test(error.message) && tab !== "customer" ? "This mobile isn't linked to a login yet. Sign in with email once, then add your mobile in your profile." : friendly(error)); return; }
+      sent = true; $("#otp-wrap").hidden = false; $("#otp").focus(); btn.textContent = "Verify and sign in"; ok("Code sent to WhatsApp on " + phone + ".");
     } else {
       const { error } = await sb.auth.verifyOtp({ phone, token: $("#otp").value.trim(), type: "sms" });
       if (error) { err("That code didn't work. Check it and try again."); btn.disabled = false; return; }

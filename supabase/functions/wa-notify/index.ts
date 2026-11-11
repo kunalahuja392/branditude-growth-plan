@@ -33,6 +33,7 @@ Deno.serve(async (req: Request) => {
   const { data: rule } = await admin.from("auto_msgs").select("enabled").eq("business_id", business_id).eq("kind", m.kind).maybeSingle();
   if (!rule?.enabled) return json({ skipped: "Update is switched off" });
   if (!/^\d{11,15}$/.test(m.phone || "")) return json({ skipped: "No valid mobile number" });
+  if ((await admin.from("wa_optout").select("phone").eq("phone", m.phone).maybeSingle()).data) return json({ skipped: "Customer replied STOP" });
   const { data: dup } = await admin.from("auto_msg_log").select("id").eq("business_id", business_id).eq("kind", m.kind).eq("ref", m.visit_id).limit(1);
   if (dup?.length) return json({ skipped: "Already sent" });
   const { data: tpl } = await admin.from("wa_templates").select("*").is("business_id", null).eq("name", m.template).eq("status", "approved").eq("active", true).maybeSingle();
