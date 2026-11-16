@@ -169,3 +169,8 @@ do $$ declare r record; begin
     update public.promo_codes set code = public.make_ref_code(r.name, r.commission_pct) where id = r.id;
   end loop;
 end $$;
+
+-- Plans that had already ended before this rule existed get the normal grace from today (agreed 16 Nov):
+-- treated as ending today, so they get reminders and lock only if still unpaid after 3 days.
+update public.businesses set subscription_ends = current_date
+ where status = 'active' and subscription_ends is not null and subscription_ends < current_date;
