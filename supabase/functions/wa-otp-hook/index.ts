@@ -38,6 +38,6 @@ Deno.serve(async (req: Request) => {
     body: JSON.stringify({ messaging_product: "whatsapp", to, type: "template", template: { name: Deno.env.get("WA_OTP_TEMPLATE") ?? "login_code", language: { code: "en" },
       components: [{ type: "body", parameters: [{ type: "text", text: otp }] }, { type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: otp }] }] } }),
   });
-  if (!r.ok) { const j = await r.json().catch(() => ({})); console.error("wa otp", r.status, JSON.stringify(j).slice(0, 300)); return fail(502, "Couldn't send the code on WhatsApp. Check the number has WhatsApp."); }
+  if (!r.ok) { const j = await r.json().catch(() => ({})); console.error("wa otp", r.status, JSON.stringify(j).slice(0, 300), JSON.stringify({ toLen: to.length, toStart: to.slice(0, 3), otpLen: otp.length, otpDigits: /^\d+$/.test(otp), userKeys: Object.keys(u), smsKeys: Object.keys(p.sms ?? {}) })); return fail(502, "Couldn't send the code on WhatsApp. Check the number has WhatsApp."); }
   return out(200, {});
 });
