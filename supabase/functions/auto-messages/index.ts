@@ -62,14 +62,14 @@ Deno.serve(async (req: Request) => {
     await note(r, `Sent ${sent}${failed ? `, ${failed} failed (refunded)` : ""}.`);
     out[key] = { sent, failed };
   }
-  out.plan_reminders = await planReminders(admin, tpls ?? [], waToken, defaultPhoneId!, apiVersion);
+  out.plan_reminders = await planReminders(admin, waToken, defaultPhoneId!, apiVersion);
   return json({ ok: true, out });
 });
 
 // Renewal / trial-ending reminders to business owners, sent from Branditude's own number (not charged to the business).
 // deno-lint-ignore no-explicit-any
-async function planReminders(admin: any, tpls: any[], waToken: string, phoneId: string, apiVersion: string) {
-  const tpl = tpls.find((t) => t.name === "plan_reminder");
+async function planReminders(admin: any, waToken: string, phoneId: string, apiVersion: string) {
+  const { data: tpl } = await admin.from("wa_templates").select("name,language").is("business_id", null).eq("name", "plan_reminder").eq("status", "approved").maybeSingle();
   if (!tpl || !phoneId) return "template not approved yet";
   const { data: due, error } = await admin.rpc("plan_reminders_due");
   if (error) return error.message;
