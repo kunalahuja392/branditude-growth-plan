@@ -15,7 +15,10 @@ const gstOn = () => +(D.settings?.gst?.rate ?? 0) > 0;
 const plusGst = () => (gstOn() ? " + GST" : "");
 const trialLeft = () => (D.biz?.status === "trial" && D.biz.subscription_ends ? Math.round((new Date(D.biz.subscription_ends + "T23:59:59") - Date.now()) / 864e5) : null);
 const trialOpen = () => D.biz?.status === "trial" && D.biz.subscription_ends >= todayISO();
-const canWrite = () => D.biz?.status === "active" || trialOpen() || (["trial", "pending_payment"].includes(D.biz?.status) && D.payWaiting);
+const GRACE = 3; // days a paid plan keeps working after its end date (same rule as the database)
+const planLeft = () => (D.biz?.subscription_ends ? -daysSince(D.biz.subscription_ends) : null); // days until the plan ends (negative = ended)
+const activeOpen = () => D.biz?.status === "active" && (planLeft() === null || planLeft() >= -GRACE);
+const canWrite = () => activeOpen() || trialOpen() || (["trial", "pending_payment"].includes(D.biz?.status) && D.payWaiting);
 const waOn = () => !!D.biz?.wa_enabled;
 
 // Which module each page belongs to. Pages without an entry are in every plan.
@@ -26,9 +29,10 @@ const allowed = (r) => r === "signout" || can(AREA_OF[r] || "customers");
 const lockBadge = (r, badge) => (ROUTE_MOD[r] && !hasMod(ROUTE_MOD[r]) ? "🔒" : badge);
 const item = (r, label, icon, badge = "") => [r, label, icon, lockBadge(r, badge)];
 const ROUTES = () => [
-  { label: "", items: [item("dashboard", "Dashboard", "dash"), item("customers", "Customers", "users"), item("feedback", "Reviews & feedback", "star", openComplaints() || ""), item("seo", "Keywords & SEO", "spark"),
-    item("offers", "Offers & coupons", "tag"), item("loyalty", "Loyalty card", "card"), item("whatsapp", "WhatsApp & reminders", "wa"), item("templates", "Message templates", "send"), item("alerts", "Alerts", "bell", hasMod("campaigns") ? alerts().length || "" : "")] },
-  { label: "Run the shop", items: [...(fitsBiz("menu") ? [item("orders", "Orders", "receipt", hasMod("menu") ? D.newOrders || "" : ""), item("menu", "QR menu", "food")] : []), item("staff", "Staff & attendance", "clock"), item("salary", "Salary", "rupee"), item("accounts", "Accounts & GST", "chart")] },
+  { label: "Daily", items: [item("dashboard", "Dashboard", "dash"), item("customers", "Customers", "users"), item("feedback", "Reviews & feedback", "star", openComplaints() || ""), item("alerts", "Alerts", "bell", hasMod("campaigns") ? alerts().length || "" : ""),
+    ...(fitsBiz("menu") ? [item("orders", "Orders", "receipt", hasMod("menu") ? D.newOrders || "" : ""), item("menu", "QR menu", "food")] : []), item("staff", "Staff & attendance", "clock")] },
+  { label: "Grow", items: [item("offers", "Offers & coupons", "tag"), item("loyalty", "Loyalty card", "card"), item("whatsapp", "WhatsApp", "wa"), item("seo", "Keywords & SEO", "spark")] },
+  { label: "Money", items: [item("salary", "Salary", "rupee"), item("accounts", "Accounts & GST", "chart")] },
   { label: "Account", items: [["plan", "Plan & services", "box"], ["profile", "Business profile", "store"], ["team", "Team & logins", "shield"], ["signout", "Sign out", "out"]] },
 ].map((g) => ({ ...g, items: g.items.filter((i) => allowed(i[0])) })).filter((g) => g.items.length);
 // On when: core module, in the plan, bought as an add-on, or on the free trial (everything unlocked). The database checks the same rule.
@@ -43,7 +47,8 @@ export async function mount(ctx) {
   const m = await q(sb.from("business_members").select("business_id,role,perms").eq("user_id", C.user.id).order("created_at").limit(1));
   if (!m.length) { $("#main").innerHTML = `<div class="auth-wrap"><div class="auth"><h2>No business yet</h2><p>Choose a plan to set up your business.</p><a class="btn primary" href="index.html#pricing">See plans</a></div></div>`; return; }
   BID = m[0].business_id; D.me = { role: m[0].role, perms: m[0].perms || [] };
-  window.addEventListener("hashchange", () => { if (location.hash === "#signout") return C.signOut(); render(); });
+  window.addEventListener("hashchange", () => { if (location.hash === "#signout") return C.signOut(); if (location.hash === "#templates") { WA.tab = "templates"; return (location.hash = "#whatsapp"); } render(); });
+  if (location.hash === "#templates") { WA.tab = "templates"; location.hash = "#whatsapp"; }
   await loadAll(); render(); mountAssistant();
   if (hasMod("menu")) {
     const tick = async () => { if (route() === "orders") return; try { const n = await newOrderCount(BID); if (n !== (D.newOrders || 0)) { D.newOrders = n; nav(); } } catch {} };
@@ -125,6 +130,7 @@ function alerts() {
   const out = [];
   if (D.biz.status === "pending_payment" && !D.payWaiting) out.push({ sev: "warn", kind: "pay", title: "Complete your payment to activate your plan", sub: "Your account is waiting for payment" });
   if (D.biz.status === "trial" && !D.payWaiting) { const l = trialLeft(); if (!trialOpen()) out.push({ sev: "bad", kind: "pay", title: "Your free trial has ended", sub: "Pay for your plan to keep using the app" }); else if (l <= 1) out.push({ sev: "warn", kind: "pay", title: l <= 0 ? "Your free trial ends today" : "Your free trial ends tomorrow", sub: "Pay now so nothing stops" }); }
+  if (D.biz.status === "active" && planLeft() !== null && planLeft() <= 3) out.push({ sev: planLeft() < 0 ? "bad" : "warn", kind: "pay", title: planLeft() < 0 ? "Your plan has ended: renew to avoid a pause" : `Your plan ends ${planLeft() === 0 ? "today" : planLeft() === 1 ? "tomorrow" : "in " + planLeft() + " days"}`, sub: "Renew now so nothing stops" });
   D.feedback.filter((f) => f.status === "open").forEach((f) => out.push({ sev: "bad", kind: "feedback", f, title: `Unhappy customer: ${f.name || "Walk-in"} rated ${f.rating}★`, sub: [(f.tags || []).join(", "), f.text].filter(Boolean).join(" · ") || "No details given" }));
   D.customers.forEach((c) => {
     const b = daysToBirthday(c.birthday); if (b <= 7) out.push({ sev: b === 0 ? "bad" : "warn", kind: "birthday", c, title: b === 0 ? `${c.name}'s birthday is today` : `${c.name}'s birthday in ${b} day${b > 1 ? "s" : ""}`, sub: "Send a birthday offer" });
@@ -139,7 +145,9 @@ function alerts() {
 
 /* ---------- render ---------- */
 function nav() {
-  $("#nav").innerHTML = shell({ brandSub: "Growth Plan", groups: ROUTES(), current: route(),
+  const g = ROUTES(), has = (k) => g.some((x) => x.items.some((i) => i[0] === k));
+  $("#nav").innerHTML = shell({ brandSub: "Growth Plan", groups: g, current: route(),
+    mobile: { primary: ["dashboard", "customers", "feedback"].filter(has), short: { dashboard: "Home", feedback: "Reviews", customers: "Customers" }, action: can("customers") && canWrite() ? { a: "visit", label: "Log visit", icon: "plus" } : null },
     footer: `<div class="who-box"><b>${esc(D.biz.name)}</b><span>${esc(D.biz.packages?.name || "")} plan · ${esc(D.biz.status.replace("_", " "))}</span></div>` });
 }
 let pendingRender = false;
@@ -151,18 +159,33 @@ function render() {
 }
 function softRender() { const a = document.activeElement; if (a && $("#main").contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) { pendingRender = true; nav(); return; } render(); }
 document.addEventListener("focusout", () => { if (pendingRender) setTimeout(() => { const a = document.activeElement; if (a && $("#main").contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) return; pendingRender = false; render(); }); });
+function planPriceText() { const pk = D.biz.packages; if (!pk) return ""; const y = D.biz.billing === "yearly", v = (y ? pk.yearly_price : pk.monthly_price) * (1 - (+pk.discount_percent || 0) / 100);
+  return `${inr(v)}/${y ? "year" : "month"}${plusGst()}`; }
+const payPlanBtn = (label, primary = true) => `<button class="btn ${primary ? "primary" : ""}" data-a="pay-plan">${label}</button>`;
+// One tap: pay for the plan the business is on (reuses an unfinished checkout for the same plan)
+async function payPlan() {
+  const pk = D.biz.packages; if (!pk) { location.hash = "#plan"; return; }
+  const bill = D.biz.billing || "monthly";
+  const ex = (await q(sb.from("payments").select("id,meta,created_at").eq("business_id", BID).eq("kind", "subscription").eq("status", "pending")))
+    .find((p) => p.meta?.package_id === pk.id && (p.meta?.billing || "monthly") === bill && daysSince(p.created_at) < 7);
+  if (ex) return payModal(ex.id);
+  return order("subscription", pk.id, bill);
+}
 function banner() {
+  const bad = ' style="border-color:var(--bad);background:var(--bad-soft)"', pk = D.biz.packages, plan = pk ? `${esc(pk.name)} plan` : "your plan";
   if (D.biz.status === "trial") {
     const left = trialLeft();
-    if (trialOpen()) return `<div class="banner"><p><b>Free trial: ${left <= 0 ? "last day today" : `${left} day${left === 1 ? "" : "s"} left`}</b> (until ${fmtDate(D.biz.subscription_ends)}). Everything is unlocked. Pay for your plan any time to keep it running after the trial.</p><a class="btn primary" href="#plan">Pay now</a></div>`;
     if (D.payWaiting) return `<div class="banner"><p><b>Thanks, we've got your payment details.</b> Your account stays open while Branditude confirms the payment.</p></div>`;
-    return `<div class="banner" style="border-color:var(--bad);background:var(--bad-soft)"><p><b>Your free trial has ended.</b> Your customers and data are safe. Pay for your plan to keep logging visits and sending offers.</p><a class="btn primary" href="#plan">Pay now</a></div>`;
+    if (trialOpen()) return `<div class="banner"${left <= 1 ? bad : ""}><p><b>Free trial: ${left <= 0 ? "last day today" : `${left} day${left === 1 ? "" : "s"} left`}</b> (until ${fmtDate(D.biz.subscription_ends)}). Everything is unlocked. Continue with the ${plan} for ${planPriceText()} and nothing stops.</p>${payPlanBtn("Continue: pay " + planPriceText().replace(plusGst(), ""))}<a class="btn ghost sm" href="#plan">Other plans</a></div>`;
+    return `<div class="banner"${bad}><p><b>Your free trial has ended.</b> Your customers and data are safe. Pay for the ${plan} to keep logging visits and sending offers.</p>${payPlanBtn("Pay " + planPriceText().replace(plusGst(), ""))}<a class="btn ghost sm" href="#plan">Other plans</a></div>`;
   }
   if (D.biz.status === "pending_payment" && D.payWaiting) return `<div class="banner"><p><b>Thanks, we've got your payment details.</b> You can use everything while Branditude confirms the payment.</p></div>`;
-  if (D.biz.status === "pending_payment") return `<div class="banner"><p><b>Your plan isn't active yet.</b> You can set things up now. Pay for your plan and we'll activate it as soon as the payment is confirmed.</p><a class="btn primary" href="#plan">Pay now</a></div>`;
-  if (D.biz.status === "paused") return `<div class="banner" style="border-color:var(--bad);background:var(--bad-soft)"><p><b>Your account is paused.</b> You can view your data but not make changes. Renew your plan or contact Branditude.</p><a class="btn" href="#plan">Renew</a></div>`;
-  if (D.biz.status === "cancelled") return `<div class="banner" style="border-color:var(--bad);background:var(--bad-soft)"><p><b>Your plan is cancelled.</b> Choose a plan to start again.</p><a class="btn" href="#plan">See plans</a></div>`;
-  if (D.biz.status === "active" && D.biz.subscription_ends && daysSince(D.biz.subscription_ends) > -5) return `<div class="banner"><p><b>Your plan renews ${fmtDate(D.biz.subscription_ends)}.</b> Pay now so nothing stops.</p><a class="btn primary" href="#plan">Renew</a></div>`;
+  if (D.biz.status === "pending_payment") return `<div class="banner"><p><b>Your plan isn't active yet.</b> You can set things up now. It switches on as soon as you pay.</p>${payPlanBtn("Pay " + planPriceText().replace(plusGst(), ""))}</div>`;
+  if (D.biz.status === "cancelled") return `<div class="banner"${bad}><p><b>Your plan is cancelled.</b> Choose a plan to start again.</p><a class="btn" href="#plan">See plans</a></div>`;
+  const l = planLeft();
+  if (D.biz.status === "paused" || (D.biz.status === "active" && l !== null && l < -GRACE)) return `<div class="banner"${bad}><p><b>Your account is paused${D.biz.subscription_ends ? ` (plan ended ${fmtDate(D.biz.subscription_ends)})` : ""}.</b> Your customers and data are safe; you can look but not make changes. Renew to switch everything back on.</p>${payPlanBtn("Renew: pay " + planPriceText().replace(plusGst(), ""))}<a class="btn ghost sm" href="#plan">Other plans</a></div>`;
+  if (D.biz.status === "active" && l !== null && l < 0) return `<div class="banner"${bad}><p><b>Your plan ended on ${fmtDate(D.biz.subscription_ends)}.</b> It keeps working for ${GRACE + l + 1 > 1 ? `${GRACE + l + 1} more days` : "today only"}, then pauses. Renew now to keep reviews, loyalty and offers running.</p>${payPlanBtn("Renew: pay " + planPriceText().replace(plusGst(), ""))}</div>`;
+  if (D.biz.status === "active" && l !== null && l <= 7 && (l <= 3 || ["dashboard", "plan"].includes(route()))) return `<div class="banner"><p><b>Your plan ${l === 0 ? "ends today" : l === 1 ? "ends tomorrow" : `ends on ${fmtDate(D.biz.subscription_ends)} (${l} days)`}.</b> Renew now and the new period starts when this one ends, so you lose nothing.</p>${payPlanBtn("Renew: pay " + planPriceText().replace(plusGst(), ""))}</div>`;
   return "";
 }
 const head = (t, p, actions = "") => `<div class="page-head"><div><h1>${t}</h1>${p ? `<p>${p}</p>` : ""}</div><div class="row">${actions}</div></div>`;
@@ -194,7 +217,7 @@ VIEWS.dashboard = () => {
 function alertRow(a) {
   let act = "";
   if (a.kind === "feedback") act = `<a class="btn sm" href="#feedback">Respond</a>`;
-  else if (a.kind === "pay") act = `<a class="btn sm primary" href="#plan">Pay</a>`;
+  else if (a.kind === "pay") act = `<button class="btn sm primary" data-a="pay-plan">Pay</button>`;
   else if (a.kind === "followup") act = `<button class="btn sm" data-a="mark-reviewed" data-id="${a.c.id}">Mark reviewed</button>`;
   else if (a.kind === "reminder") act = `<button class="btn sm" data-a="rem-done" data-id="${a.r.id}">Done</button>`;
   else if (a.kind === "coupon") act = waBtn("Remind", `data-a="wa-compose" data-aud="all"`);
@@ -206,24 +229,44 @@ function alertRow(a) {
 let custQ = "", custSeg = "all";
 VIEWS.customers = () => {
   const sg = segments();
-  return head("Customers", "Your own customer list. Loyalty stamps and rewards are tracked for each customer.", `<button class="btn" data-a="import" ${canWrite() ? "" : "disabled"}>Import list</button><button class="btn" data-a="export">${ico("copy")} Copy as CSV</button><button class="btn" data-a="scan" ${canWrite() ? "" : "disabled"}>${ico("grid")} Scan card</button><button class="btn primary" data-a="cust-new" ${canWrite() ? "" : "disabled"}>${ico("plus")} Add customer</button>`) + `
-  <input id="cust-q" type="search" placeholder="Search by name, phone or tag" value="${esc(custQ)}" style="margin-bottom:12px" aria-label="Search customers">
-  <div class="chips" style="margin-bottom:16px">${Object.entries(sg).map(([k, [l, list]]) => `<button class="chip" data-a="seg" data-id="${k}" aria-pressed="${custSeg === k}">${l} <span class="num">${list.length}</span></button>`).join("")}${allTags().map((t) => `<button class="chip" data-a="seg" data-id="tag:${esc(t)}" aria-pressed="${custSeg === "tag:" + t}">#${esc(t)}</button>`).join("")}</div>
-  <div class="table-wrap"><table><thead><tr><th>Customer</th><th>Visits</th><th>Spent</th><th>Last visit</th><th>Loyalty</th><th>Review</th><th style="text-align:right">Actions</th></tr></thead><tbody id="cust-rows"></tbody></table></div>`;
+  return head("Customers", "Your own customer list. Tap a customer to see their visits, or log a new visit for them.", `<button class="btn" data-a="import" ${canWrite() ? "" : "disabled"}>Import list</button><button class="btn" data-a="export">${ico("copy")} Copy as CSV</button><button class="btn" data-a="scan" ${canWrite() ? "" : "disabled"}>${ico("grid")} Scan card</button><button class="btn primary" data-a="cust-new" ${canWrite() ? "" : "disabled"}>${ico("plus")} Add customer</button>`) + `
+  <div class="cust-bar"><input id="cust-q" type="search" placeholder="Search by name, phone or group" value="${esc(custQ)}" aria-label="Search customers">
+    <select id="cust-seg" aria-label="Show">${Object.entries(sg).map(([k, [l, list]]) => `<option value="${k}" ${custSeg === k ? "selected" : ""}>${l} (${list.length})</option>`).join("")}${allTags().map((t) => `<option value="tag:${esc(t)}" ${custSeg === "tag:" + t ? "selected" : ""}>Group: ${esc(t)} (${D.customers.filter((c) => (c.tags || []).includes(t)).length})</option>`).join("")}</select></div>
+  <div class="table-wrap cust-table"><table><thead><tr><th>Customer</th><th>Visits</th><th>Spent</th><th>Last visit</th><th>Loyalty</th><th>Review</th><th style="text-align:right">Actions</th></tr></thead><tbody id="cust-rows"></tbody></table></div>
+  <div class="card cust-cards" id="cust-cards"></div>`;
 };
 after.customers = () => {
   const draw = () => {
     const qv = custQ.trim().toLowerCase(); const rv = { reviewed: ["Reviewed", "good"], requested: ["Asked", "info"], none: ["Not asked", ""] };
-    const list = audience(custSeg).filter((c) => !qv || [c.name, c.phone, (c.tags || []).join(" ")].join(" ").toLowerCase().includes(qv));
-    $("#cust-rows").innerHTML = list.length ? list.slice(0, 500).map((c) => `<tr><td><div class="who"><b>${esc(c.name)}</b><span class="num">${esc(prettyPhone(c.phone))}</span>${(c.tags || []).length ? `<div class="chips" style="margin-top:4px">${c.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join("")}</div>` : ""}</div></td>
+    const list = audience(custSeg).filter((c) => !qv || [c.name, c.phone, (c.tags || []).join(" ")].join(" ").toLowerCase().includes(qv)).slice(0, 500);
+    const visitBtn = (c) => (canWrite() ? `<button class="btn sm" data-a="cust-visit" data-id="${c.id}" title="Log a visit for ${esc(c.name)}">${ico("plus")} Visit</button>` : "");
+    const tags = (c) => ((c.tags || []).length ? `<div class="chips" style="margin-top:4px">${c.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join("")}</div>` : "");
+    const empty = `<div class="empty">${D.customers.length ? "No customers match." : "No customers yet. Log a visit or import your list."}</div>`;
+    $("#cust-rows").innerHTML = list.length ? list.map((c) => `<tr><td><button class="who link-like" data-a="cust-open" data-id="${c.id}"><b>${esc(c.name)}</b><span class="num">${esc(prettyPhone(c.phone))}</span></button>${tags(c)}</td>
       <td class="num">${c.visits}</td><td class="num">${inr(c.spend)}</td><td>${ago(c.last_visit)}</td>
       <td>${loyOn() ? `<button class="btn sm" data-a="card" data-id="${c.id}">${ico("card")} ${Math.min(c.stamps, D.prog.stamps)}/${D.prog.stamps}</button>` : "—"}</td>
       <td><span class="pill ${rv[c.review_status][1]}">${rv[c.review_status][0]}</span></td>
-      <td><div class="row" style="justify-content:flex-end;flex-wrap:nowrap">${waBtn("", `data-a="wa-one" data-id="${c.id}" title="Send WhatsApp"`)}<button class="btn sm ghost" data-a="cust-edit" data-id="${c.id}">Edit</button></div></td></tr>`).join("")
-      : `<tr><td colspan="7"><div class="empty">${D.customers.length ? "No customers match." : "No customers yet. Log a visit or import your list."}</div></td></tr>`;
+      <td><div class="row" style="justify-content:flex-end;flex-wrap:nowrap">${visitBtn(c)}${waBtn("", `data-a="wa-one" data-id="${c.id}" title="Send WhatsApp"`)}<button class="btn sm ghost" data-a="cust-edit" data-id="${c.id}">Edit</button></div></td></tr>`).join("")
+      : `<tr><td colspan="7">${empty}</td></tr>`;
+    $("#cust-cards").innerHTML = list.length ? `<div class="list">${list.map((c) => `<div class="item"><button class="grow who link-like" data-a="cust-open" data-id="${c.id}"><b>${esc(c.name)}</b>
+        <span class="muted small num">${c.visits} visit${c.visits === 1 ? "" : "s"} · ${inr(c.spend)} · ${ago(c.last_visit)}${loyOn() ? ` · ${Math.min(c.stamps, D.prog.stamps)}/${D.prog.stamps} stamps` : ""}</span>${tags(c)}</button>${visitBtn(c)}</div>`).join("")}</div>` : empty;
   };
-  $("#cust-q").oninput = (e) => { custQ = e.target.value; draw(); }; draw();
+  $("#cust-q").oninput = (e) => { custQ = e.target.value; draw(); };
+  $("#cust-seg").onchange = (e) => { custSeg = e.target.value; draw(); };
+  draw();
 };
+// One customer: their details and visit history
+async function customerSheet(id) {
+  const c = D.customers.find((x) => x.id === id); if (!c) return;
+  const m = openModal(`<div class="modal-head"><h2>${esc(c.name)}</h2><button class="btn ghost" data-close>Close</button></div>
+    <p class="muted num" style="margin-top:-8px">${esc(prettyPhone(c.phone))}${c.birthday ? ` · birthday ${fmtShort(c.birthday)}` : ""}${(c.tags || []).length ? ` · ${c.tags.map(esc).join(", ")}` : ""}</p>
+    <div class="grid g4" style="margin:12px 0">${kpi("Visits", nfmt(c.visits))}${kpi("Spent", inr(c.spend))}${kpi("Last visit", c.last_visit ? ago(c.last_visit) : "—")}${loyOn() ? kpi("Stamps", `${Math.min(c.stamps, D.prog.stamps)}/${D.prog.stamps}`) : kpi("Review", c.review_status === "reviewed" ? "Yes" : "Not yet")}</div>
+    <div class="row" style="gap:8px;flex-wrap:wrap">${canWrite() ? `<button class="btn primary sm" data-a="cust-visit" data-id="${c.id}">${ico("plus")} Log a visit</button>` : ""}${loyOn() ? `<button class="btn sm" data-a="card" data-id="${c.id}">${ico("card")} Loyalty card</button>` : ""}${waBtn("WhatsApp", `data-a="wa-one" data-id="${c.id}"`)}<a class="btn sm" href="tel:+${esc(c.phone)}">Call</a><button class="btn sm ghost" data-a="cust-edit" data-id="${c.id}">Edit</button></div>
+    <h3 style="margin:18px 0 6px">Visits</h3><div id="cs-visits"><div class="loading" style="height:80px"><span class="spinner"></span></div></div>`);
+  let v = []; try { v = await q(sb.from("visits").select("*").eq("business_id", BID).eq("customer_id", id).order("created_at", { ascending: false }).limit(50)); } catch {}
+  const box = m.querySelector("#cs-visits"); if (!box) return;
+  box.innerHTML = v.length ? `<div class="list">${v.map((x) => `<div class="item small"><div class="grow"><b>${fmtDT(x.created_at)}</b><span class="muted">${+x.discount ? `${inr(x.gross)} − ${inr(x.discount)} ${x.coupon_code ? "coupon " + esc(x.coupon_code) : "loyalty reward"}` : "No discount"}${x.loyalty_visit ? ` · visit ${x.loyalty_visit}` : ""}</span></div><b class="num">${inr(x.net)}</b></div>`).join("")}</div>` : `<div class="empty">No visits saved yet.</div>`;
+}
 
 /* ---------- Reviews ---------- */
 VIEWS.reviews = () => {
@@ -268,10 +311,10 @@ after.feedback = () => { const el = $("#qr-fb"); if (el && window.QRCode) new QR
 VIEWS.offers = () => {
   const v30 = D.visits.filter((x) => x.coupon_code && daysSince(x.created_at) < 30);
   return head("Offers & coupons", "Codes for festivals, birthdays and win-backs. If a customer also has a loyalty reward that visit, whichever is worth more is used.", `<button class="btn" data-a="offer-ai" ${canWrite() ? "" : "disabled"}>${ico("spark")} Ideas with AI</button><button class="btn primary" data-a="coupon-new" ${canWrite() ? "" : "disabled"}>${ico("plus")} New coupon</button>`) + `
-  <div class="grid g4" style="margin-bottom:16px">${kpi("Active coupons", D.coupons.filter((k) => ["Active", "Ending soon"].includes(couponStatus(k)[0])).length, `of ${D.coupons.length}`)}${kpi("Sales with a coupon · 30 days", inr(v30.reduce((a, v) => a + +v.net, 0)), `${v30.length} redemptions`)}${kpi("Discount given · 30 days", inr(v30.reduce((a, v) => a + +v.discount, 0)), "")}</div>
+  <div class="grid g4" style="margin-bottom:16px">${kpi("Active coupons", D.coupons.filter((k) => ["Active", "Ending soon"].includes(couponStatus(k)[0])).length, `of ${D.coupons.length}`)}${kpi("Sales with a coupon · 30 days", inr(v30.reduce((a, v) => a + +v.net, 0)), `${v30.length} redemption${v30.length === 1 ? "" : "s"}`)}${kpi("Discount given · 30 days", inr(v30.reduce((a, v) => a + +v.discount, 0)), "")}</div>
   ${D.coupons.length ? `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))">${D.coupons.map((k) => { const [s, cls] = couponStatus(k); return `<div class="coupon">
     <div class="row" style="justify-content:space-between"><span class="code">${esc(k.code)}</span><span class="pill ${cls}">${s}</span></div>
-    <div><div class="deal">${esc(couponDeal(k))}</div><div class="muted small">${esc(k.title || "")}${+k.min_bill ? " · min bill " + inr(k.min_bill) : ""}${k.expiry ? " · till " + fmtShort(k.expiry) : ""}${k.show_to_customers ? " · shown in customer app" : ""}</div></div>
+    <div><div class="deal">${esc(couponDeal(k))}</div><div class="muted small">${[k.title ? esc(k.title) : "", +k.min_bill ? "min bill " + inr(k.min_bill) : "", k.expiry ? "till " + fmtShort(k.expiry) : "", k.show_to_customers ? "shown in customer app" : ""].filter(Boolean).join(" · ")}</div></div>
     <div class="small">${k.used} used${k.usage_limit ? " of " + k.usage_limit : ""}</div>${k.usage_limit ? `<div class="bar"><i style="width:${Math.min(100, Math.round((k.used / k.usage_limit) * 100))}%"></i></div>` : ""}
     <div class="row">${waBtn("Broadcast", `data-a="wa-compose" data-aud="all"`)}<button class="btn sm" data-a="coupon-edit" data-id="${k.id}">Edit</button></div></div>`; }).join("")}</div>` : `<div class="card empty">No coupons yet.</div>`}`;
 };
@@ -372,63 +415,72 @@ after.whatsapp = async () => {
   D.autoLog = await q(sb.from("auto_msg_log").select("kind,status,created_at").eq("business_id", BID).order("created_at", { ascending: false }).limit(200)).catch(() => []);
   const promo = packs.filter((p) => (p.kind || "marketing") === "marketing"), perMsg = promo.length ? [Math.min(...promo.map((p) => p.price / p.credits)), Math.max(...promo.map((p) => p.price / p.credits))] : null;
   D.perMsg = perMsg;
-  if (!waOn()) {
-    el.innerHTML = head("WhatsApp & reminders", "Optional. Birthday wishes, loyalty and offer reminders, and messages to single customers from a verified WhatsApp business number.") + `
-    <div class="card"><div class="card-head"><h2>Charges</h2><span class="pill">Off</span></div><p><b>Charges apply per message.</b> Buy prepaid credits; each message uses 1 credit of its type. <b>Promotional</b> messages (offers, wishes, review requests) use promotional credits; <b>utility</b> messages (loyalty and service updates) use the cheaper utility credits. Failed messages are refunded automatically.</p>
-    ${D.biz.status === "active" ? "" : `<p class="note" style="margin-top:10px">Your plan needs to be active before you can buy credits.</p>`}<div style="margin-top:16px">${packsHtml}</div>
-    <p class="small muted" style="margin-top:12px">Buying your first pack switches WhatsApp on once the payment is confirmed. You can set up reminders below now; nothing is sent until you have credits.</p></div>
-    ${remindersCard()}${bulkUpsell()}`;
-    return;
-  }
-  if (!hasMod("bulk_whatsapp")) {
-    el.innerHTML = head("WhatsApp & reminders", `Balance: ${balText()}. Charges apply per message.`, `<button class="btn" data-a="wa-buy">${ico("plus")} Buy credits</button>`) + remindersCard() + bulkUpsell() + `
-    <div class="card" style="margin-top:16px"><div class="card-head"><h2>Credit history</h2></div>${ledger.length ? `<div class="list">${ledger.map((x) => `<div class="item small"><div class="grow">${esc(x.reason)} <span class="muted">${x.kind === "utility" ? "utility" : "promotional"} · ${fmtDT(x.created_at)}</span></div><b class="num">${x.delta > 0 ? "+" : ""}${x.delta}</b></div>`).join("")}</div>` : `<div class="empty">No credits used yet.</div>`}</div>`;
-    return;
-  }
-  if (!WA.tpl && tpls.length) WA.tpl = tpls[0].id;
-  const t = tpls.find((x) => x.id === WA.tpl) || tpls[0], aud = audience(WA.aud).filter((c) => c.phone), cost = aud.length * (t?.credits_per_message || 1);
-  const sg = segments();
-  const preview = t ? t.body_preview.replace(/\{\{(\d+)\}\}/g, (m, n) => (n === "1" ? (aud[0]?.name || "Priya").split(" ")[0] : WA.params[n - 2] || `[${t.params[n - 2] || "…"}]`)) : "";
-  el.innerHTML = head("WhatsApp & reminders", `Balance: ${balText()}. Charges apply per message.`, `<button class="btn" data-a="wa-buy">${ico("plus")} Buy credits</button>`) + remindersCard() + `<div style="height:16px"></div>` + `
-  <div class="grid g2">
+  const sg = segments(), histCard = `<div class="card"><div class="card-head"><h2>Credit history</h2></div>${ledger.length ? `<div class="list">${ledger.map((x) => `<div class="item small"><div class="grow">${esc(x.reason)} <span class="muted">${x.kind === "utility" ? "utility" : "promotional"} · ${fmtDT(x.created_at)}</span></div><b class="num" style="color:${x.delta > 0 ? "var(--good)" : "var(--ink-2)"}">${x.delta > 0 ? "+" : ""}${x.delta}</b></div>`).join("")}</div>` : `<div class="empty">No credits used yet.</div>`}</div>`;
+  const tabs = [["reminders", "Reminders"], ["broadcast", "Broadcast"], ["templates", "Templates"], ["credits", "Credits & report"]];
+  if (!tabs.some((x) => x[0] === WA.tab)) WA.tab = waOn() ? "reminders" : "credits";
+  const top = head("WhatsApp", waOn() ? `Balance: ${balText()}. Charges apply per message.` : "Optional. Reminders, offers and updates to your customers from a verified WhatsApp business number. Charges apply per message.", waOn() ? `<button class="btn" data-a="wa-buy">${ico("plus")} Buy credits</button>` : "")
+    + `<div class="tabs" role="tablist" style="margin-bottom:16px;max-width:720px">${tabs.map(([k, l]) => `<button role="tab" aria-selected="${WA.tab === k}" data-wa-tab="${k}">${l}</button>`).join("")}</div>`;
+  let body = "";
+  if (WA.tab === "reminders") body = (waOn() ? "" : `<p class="note" style="margin-bottom:12px">Buy credits under <b>Credits &amp; report</b> to start sending. You can set reminders up now; nothing is sent until you have credits.</p>`) + remindersCard().replace('style="margin-top:16px"', "");
+  else if (WA.tab === "credits") body = (waOn() ? "" : `<div class="card" style="margin-bottom:16px"><h2>How charges work</h2><p>Buy prepaid credits; each message uses 1 credit of its type. <b>Promotional</b> messages (offers, wishes, review requests) use promotional credits; <b>utility</b> messages (loyalty and visit updates) use the cheaper utility credits. Failed messages are refunded automatically.</p>${D.biz.status === "active" ? "" : `<p class="note" style="margin-top:10px">Your plan needs to be active before you can buy credits.</p>`}</div>`)
+    + `<div class="card" style="margin-bottom:16px"><div class="card-head"><h2>Buy credits</h2></div>${packsHtml}${note ? `<p class="small muted" style="margin-top:10px">${esc(note)}</p>` : ""}</div><div class="grid g2">${deliveryCard(bcs)}${histCard}</div>`;
+  else if (WA.tab === "templates") body = hasMod("bulk_whatsapp") ? `<div id="tpl-view"></div>` : bulkUpsell().replace('style="margin-top:16px"', "");
+  else if (!hasMod("bulk_whatsapp")) body = bulkUpsell().replace('style="margin-top:16px"', "");
+  else {
+    if (!WA.tpl && tpls.length) WA.tpl = tpls[0].id;
+    const t = tpls.find((x) => x.id === WA.tpl) || tpls[0], aud = audience(WA.aud).filter((c) => c.phone), cost = aud.length * (t?.credits_per_message || 1);
+    const auto = (lab) => /business/i.test(lab); // filled in for you
+    (t?.params || []).forEach((p, i) => { if (auto(p)) WA.params[i] = D.biz.name; else if (WA.params[i] == null) WA.params[i] = defaultParam(p); });
+    const preview = t ? t.body_preview.replace(/\{\{(\d+)\}\}/g, (m, n) => (n === "1" ? (aud[0]?.name || "Priya").split(" ")[0] : WA.params[n - 2] || `[${t.params[n - 2] || "…"}]`)) : "";
+    body = `<div class="grid g2">
     <div class="card"><div class="card-head"><h2>New broadcast</h2></div>
       <div class="fields">
         <div class="field"><label for="wa-aud">Send to</label><select id="wa-aud">${Object.entries(sg).map(([k, [l, list]]) => `<option value="${k}" ${WA.aud === k ? "selected" : ""}>${l} (${list.length})</option>`).join("")}${allTags().map((x) => `<option value="tag:${esc(x)}" ${WA.aud === "tag:" + x ? "selected" : ""}>Group: ${esc(x)} (${D.customers.filter((c) => (c.tags || []).includes(x)).length})</option>`).join("")}</select></div>
         <div class="field"><label for="wa-tpl">Message</label><select id="wa-tpl">${tpls.map((x) => `<option value="${x.id}" ${t?.id === x.id ? "selected" : ""}>${esc(x.title)}</option>`).join("")}</select></div>
       </div>
-      ${(t?.params || []).map((p, i) => `<div class="field" style="margin-top:12px"><label for="wa-p${i}">${esc(p)}</label><input id="wa-p${i}" data-wp="${i}" value="${esc(WA.params[i] ?? defaultParam(p))}"></div>`).join("")}
+      ${(t?.params || []).map((p, i) => (auto(p) ? "" : `<div class="field" style="margin-top:12px"><label for="wa-p${i}">${esc(p)}</label><input id="wa-p${i}" data-wp="${i}" value="${esc(WA.params[i] ?? "")}"></div>`)).join("")}
       <div class="row" style="margin-top:14px;justify-content:space-between"><span class="small">${aud.length} customers × ${t?.credits_per_message || 1} ${CREDIT[kindOf(t)].short} credit = <b class="num">${nfmt(cost)} credits</b>${cost > balOf(t) ? ` <span class="pill bad">Not enough ${CREDIT[kindOf(t)].short} credits</span>` : ""}</span>
         <button class="btn primary" data-a="wa-send" ${aud.length && cost <= balOf(t) && t ? "" : "disabled"}>${ico("send")} Send to ${aud.length}</button></div>
     </div>
-    <div class="card"><div class="card-head"><h2>Preview</h2></div><div class="bubble" id="wa-prev">${esc(preview)}</div><p class="small muted" style="margin-top:12px">Messages use templates approved by WhatsApp, so the wording is fixed. You fill in the highlighted parts.</p></div>
-  </div>
-  <div class="grid g2" style="margin-top:16px">
-    ${deliveryCard(bcs)}
-    <div class="card"><div class="card-head"><h2>Credit history</h2></div>${ledger.length ? `<div class="list">${ledger.map((x) => `<div class="item small"><div class="grow">${esc(x.reason)} <span class="muted">${fmtDT(x.created_at)}</span></div><b class="num" style="color:${x.delta > 0 ? "var(--good)" : "var(--ink-2)"}">${x.delta > 0 ? "+" : ""}${x.delta}</b></div>`).join("")}</div>` : `<div class="empty">No credits yet.</div>`}</div>
+    <div class="card"><div class="card-head"><h2>Preview</h2></div><div class="bubble" id="wa-prev">${esc(preview)}</div><p class="small muted" style="margin-top:12px">WhatsApp only allows approved wording, so you fill in the blanks. Your business name is added for you. Want different wording? Write it under <b>Templates</b>.</p></div>
   </div>`;
+  }
+  el.innerHTML = top + body;
+  $$("[data-wa-tab]").forEach((b) => (b.onclick = () => { WA.tab = b.dataset.waTab; history.replaceState(null, "", "#whatsapp"); after.whatsapp(); }));
+  $$('[data-am="enabled"]').forEach((cb) => (cb.onchange = () => cb.closest("[data-auto]").querySelector('[data-a="am-save"]').click()));
+  if (WA.tab === "templates" && hasMod("bulk_whatsapp")) return after.templates(true);
+  if (WA.tab !== "broadcast" || !$("#wa-aud")) return;
   $("#wa-aud").onchange = (e) => { WA.aud = e.target.value; after.whatsapp(); };
   $("#wa-tpl").onchange = (e) => { WA.tpl = e.target.value; WA.params = []; after.whatsapp(); };
-  $$("[data-wp]").forEach((inp) => (inp.oninput = () => { WA.params[+inp.dataset.wp] = inp.value; const tt = tpls.find((x) => x.id === WA.tpl);
+  $$("[data-wp]").forEach((inp) => (inp.oninput = () => { WA.params[+inp.dataset.wp] = inp.value; const tt = tpls.find((x) => x.id === WA.tpl) || tpls[0], aud = audience(WA.aud).filter((c) => c.phone);
     $("#wa-prev").textContent = tt.body_preview.replace(/\{\{(\d+)\}\}/g, (m, n) => (n === "1" ? (aud[0]?.name || "Priya").split(" ")[0] : WA.params[n - 2] || `[${tt.params[n - 2]}]`)); }));
-  $$("[data-wp]").forEach((inp) => { if (WA.params[+inp.dataset.wp] == null) WA.params[+inp.dataset.wp] = inp.value; });
 };
 /* ---------- Automatic reminders (every plan, optional, charged per message) ---------- */
 const AUTO = {
   birthday: { t: "Birthday wish", when: "days before their birthday", d: 3, times: false, offer: "Birthday treat in the message", ex: "Happy birthday Priya! 🎂 Everyone at {biz} wishes you a wonderful year. Enjoy {offer} this week." },
-  visit_update: { t: "Thank-you after each visit", instant: true, util: true, ex: "Hi Priya, thank you for visiting {biz} today. Bill paid: ₹450. Your loyalty card at this store now has 3 of 10 stamps, and your next reward is 10% off on visit 5. You can see your card any time here: (card link)", help: "Sent straight after you save a visit. Needs the loyalty card." },
-  reward_used: { t: "Reward or coupon used", instant: true, util: true, ex: "Hi Priya, you have used your loyalty reward (10% off) at {biz} today and saved ₹45. Your loyalty card at this store now has 0 of 10 stamps. You can see your card any time here: (card link)", help: "Sent instead of the thank-you when a reward or coupon was used on the visit." },
-  loyalty: { t: "Loyalty reward reminder", util: true, when: "days after their last visit", d: 7, times: true, ex: "Hi Priya, thank you for your visit! Your {biz} loyalty card now has 4 of 10 stamps. Your next reward: visit 5: 15% off." },
-  offer_expiry: { t: "Offer ending reminder", when: "days before an offer ends", d: 3, times: true, ex: "Hi Priya! 🎉 {biz} has a treat for you: 20% off with code DIWALI20. Valid till 14 Nov.", help: "Goes to customers who visited in the last 120 days, for offers marked 'show to customers'." },
+  visit_update: { t: "Thank-you after each visit", instant: true, util: true, ex: "Hi Priya, thank you for visiting {biz} today. Bill paid: ₹450. Your loyalty card at this store now has {stamps} stamps, and your next reward is {next}. You can see your card any time here: (card link)", help: "Sent straight after you save a visit. Needs the loyalty card." },
+  reward_used: { t: "Reward or coupon used", instant: true, util: true, ex: "Hi Priya, you have used your loyalty reward ({used}) at {biz} today and saved ₹(amount). Your loyalty card at this store now has {after} stamps. You can see your card any time here: (card link)", help: "Sent instead of the thank-you when a reward or coupon was used on the visit." },
+  loyalty: { t: "Loyalty reward reminder", util: true, when: "days after their last visit", d: 7, times: true, ex: "Hi Priya, thank you for your visit! Your {biz} loyalty card now has {stamps} stamps. Your next reward: {next}." },
+  offer_expiry: { t: "Offer ending reminder", when: "days before an offer ends", d: 3, times: true, ex: "Hi Priya! 🎉 {biz} has a treat for you: {coupon}. Valid till {till}.", help: "Goes to customers who visited in the last 120 days, for offers marked 'show to customers'." },
   win_back: { t: "We miss you", when: "days after their last visit", d: 30, times: true, offer: "Offer in the message", ex: "Hi Priya, it's been a while! We'd love to see you again at {biz}. Here's {offer} on your next visit." },
 };
+// Example numbers in reminder previews come from this business's own loyalty card.
+function loyEx() {
+  const N = Math.max(2, +D.prog?.stamps || 10), at = Math.min(N - 1, Math.max(1, Math.ceil(N / 3))), nx = nextReward(at, D.prog || { stamps: N }, D.rewards);
+  const r1 = (D.rewards || []).find((r) => +r.visit_no < N) || (D.rewards || [])[0];
+  return { stamps: `${at} of ${N}`, next: nx ? `${rwLabel(nx.r)} on visit ${nx.visit}` : "a reward on your next visits", used: r1 ? rwLabel(r1) : "10% off", after: `0 of ${N}` };
+}
 function remindersCard() {
   const rule = (k) => (D.autoRules || []).find((r) => r.kind === k) || { kind: k, enabled: false, days: AUTO[k].d, times: 1, gap_days: 3, offer: "", daily_cap: 50 };
   const sentMonth = (k) => (D.autoLog || []).filter((l) => l.kind === k && l.status === "sent" && l.created_at >= new Date(Date.now() - 30 * 864e5).toISOString()).length;
   const pm = D.perMsg ? ` (about ${inr2(D.perMsg[0])}–${inr2(D.perMsg[1])})` : "";
   return `<div class="card" style="margin-top:16px"><div class="card-head"><h2>Automatic reminders</h2><span class="pill">Optional</span></div>
-    <p class="small muted" style="margin-top:-6px">Sent every morning around 10 am to the customers who are due. <b>Charges apply:</b> each message uses 1 credit of the type shown on the reminder. Nothing is sent while a reminder is off or you have no credits of that type.</p>
+    <p class="small muted" style="margin-top:-6px">Flip a switch to turn a reminder on or off. Reminders go out every morning around 10 am to the customers who are due. <b>Charges apply:</b> each message uses 1 credit of the type shown on the reminder. Nothing is sent while a reminder is off or you have no credits of that type.</p>
     <div class="auto-grid">${Object.keys(AUTO).map((k) => { const r = rule(k), a = AUTO[k], loyOff = (k === "loyalty" || a.instant) && !hasMod("loyalty");
-      const ex = a.ex.replace("{biz}", D.biz.name).replace("{card}", D.prog?.name || "Loyalty").replace("{offer}", r.offer || "a special treat");
+      const L = loyEx(), ex = a.ex.replace("{biz}", D.biz.name).replace("{card}", D.prog?.name || "Loyalty").replace("{offer}", r.offer || "a special treat")
+        .replace("{coupon}", (() => { const k = (D.coupons || []).find((x) => couponStatus(x)[1] !== "bad" && x.active); return k ? `${couponDeal(k)} with code ${k.code}` : "20% off with code DIWALI20"; })())
+        .replace("{till}", (() => { const k = (D.coupons || []).find((x) => x.active && x.expiry); return k ? fmtShort(k.expiry) : fmtShort(new Date(Date.now() + 7 * 864e5)); })())
+        .replace("{stamps}", L.stamps).replace("{next}", L.next).replace("{used}", L.used).replace("{after}", L.after);
       return `<div class="auto ${r.enabled ? "on" : ""}" data-auto="${k}">
         <div class="row" style="justify-content:space-between;align-items:center"><b>${a.t} <span class="pill ${a.util ? "info" : ""}" style="font-weight:500">${a.util ? "utility" : "promotional"}</span></b><label class="switch"><input type="checkbox" data-am="enabled" ${r.enabled ? "checked" : ""} ${loyOff ? "disabled" : ""} aria-label="Turn ${a.t} on"><span></span></label></div>
         <div class="bubble small">${esc(ex)}</div>
@@ -438,7 +490,7 @@ function remindersCard() {
           <label>At most <input type="number" min="1" max="1000" data-am="daily_cap" value="${r.daily_cap}" aria-label="Daily limit"> messages a day</label></div>`}
         ${a.help ? `<p class="small muted">${a.help}</p>` : ""}
         <p class="small muted">${loyOff ? "Needs the loyalty card." : `${a.instant ? "" : `Due today: <b class="num">${D.autoPrev?.[k] ?? 0}</b> · `}sent in 30 days: <b class="num">${sentMonth(k)}</b>${r.last_note ? ` · last run: ${esc(r.last_note)}` : ""}`}</p>
-        <button class="btn sm" data-a="am-save" data-id="${k}">Save</button></div>`; }).join("")}</div></div>`;
+        ${a.instant ? `<button class="btn sm" data-a="am-save" data-id="${k}" hidden>Save</button>` : `<button class="btn sm" data-a="am-save" data-id="${k}">Save changes</button>`}</div>`; }).join("")}</div></div>`;
 }
 const KIND_NAME = { birthday: "Birthday wish", loyalty: "Loyalty reminder", offer_expiry: "Offer ending", win_back: "We miss you", visit_update: "Thank-you after visit", reward_used: "Reward used" };
 function deliveryCard(bcs) {
@@ -458,32 +510,43 @@ function bulkUpsell() {
 
 /* ---------- Message templates (Pro): submit your own for bulk messaging ---------- */
 VIEWS.templates = () => `<div id="tpl-view"><div class="loading"><span class="spinner"></span></div></div>`;
-after.templates = async () => {
+// "[Customer name]" and other [Blanks] → WhatsApp's {{1}}, {{2}}… ({{1}} is always the customer's first name)
+const tplReadable = (t) => String(t.body_preview || "").replace(/\{\{(\d+)\}\}/g, (m, n) => (n === "1" ? "[Customer name]" : `[${t.params?.[n - 2] || "Detail " + n}]`));
+function tplBlanks(text) {
+  const labels = [], body = String(text || "").replace(/\{\{(\d+)\}\}/g, (m, n) => (n === "1" ? "[Customer name]" : `[Detail ${n}]`))
+    .replace(/\[([^\]\n]{1,40})\]/g, (m, l) => { l = l.trim(); if (/^customer('?s)? (first )?name$/i.test(l)) return "{{1}}";
+      let i = labels.findIndex((x) => x.toLowerCase() === l.toLowerCase()); if (i < 0) { labels.push(l); i = labels.length - 1; } return `{{${i + 2}}}`; });
+  return { body, labels };
+}
+after.templates = async (embedded) => {
   const all = await q(sb.from("wa_templates").select("*").order("created_at", { ascending: false }));
   const mine = all.filter((t) => t.business_id === BID), shared = all.filter((t) => !t.business_id);
   const el = $("#tpl-view"); if (!el) return;
   const st = { pending: ["warn", "Waiting for Branditude"], submitted: ["info", "With WhatsApp for approval"], approved: ["good", "Approved"], rejected: ["bad", "Not approved"] };
-  el.innerHTML = head("Message templates", "WhatsApp only allows business messages from approved templates. Write yours here; Branditude checks it and sends it to WhatsApp for approval (usually within a day).") + `
+  el.innerHTML = (embedded ? `<p class="muted" style="margin:0 0 14px;max-width:760px">WhatsApp only allows business messages from approved wording. Write your own here; Branditude checks it and sends it to WhatsApp for approval (usually within a day).</p>` : head("Message templates", "WhatsApp only allows business messages from approved templates. Write yours here; Branditude checks it and sends it to WhatsApp for approval (usually within a day).")) + `
   <div class="grid g2">
     <div class="card"><div class="card-head"><h2>New template</h2></div>
       <div class="fields">
         <div class="field full"><label for="nt-title">Title (for you)</label><input id="nt-title" maxlength="60" placeholder="Diwali offer"></div>
         <div class="field"><label for="nt-cat">Type</label><select id="nt-cat"><option value="marketing">Offer or promotion</option><option value="utility">Update about their account or order</option></select></div>
         <div class="field"><label for="nt-lang">Language</label><select id="nt-lang"><option value="en">English</option><option value="hi">Hindi</option><option value="mr">Marathi</option><option value="gu">Gujarati</option></select></div>
-        <div class="field full"><label for="nt-body">Message</label><textarea id="nt-body" rows="5" maxlength="1024" placeholder="Hi {{1}}, this Diwali enjoy {{2}} at ${esc(D.biz.name)}. Valid till {{3}}."></textarea>
-          <p class="small muted">Start with <b>{{1}}</b>, which becomes the customer's first name. Use {{2}}, {{3}}… for parts you fill in each time.</p></div>
+        <div class="field full"><label for="nt-body">Message</label><textarea id="nt-body" rows="5" maxlength="1024" placeholder="Hi [Customer name], this Diwali enjoy [Offer] at ${esc(D.biz.name)}. Valid till [Valid till]."></textarea>
+          <div class="row" style="gap:6px;margin-top:6px"><button class="btn sm ghost" type="button" data-ins="[Customer name]">+ Customer name</button><button class="btn sm ghost" type="button" data-ins="[Offer]">+ Offer</button><button class="btn sm ghost" type="button" data-ins="[Date]">+ Date</button></div>
+          <p class="small muted">Put anything that changes in square brackets, like <b>[Offer]</b> or <b>[Date]</b>. <b>[Customer name]</b> becomes each customer's first name.</p></div>
       </div>
       <div id="nt-params"></div><div class="bubble" id="nt-prev" style="margin-top:12px">Your preview appears here.</div><p class="err" id="nt-err"></p>
       <div class="row" style="margin-top:12px"><button class="btn" data-a="tpl-ai" type="button">${ico("spark")} Write with AI</button><button class="btn primary" data-a="tpl-submit">Send for approval</button></div>
       <p class="small muted" style="margin-top:8px">Avoid: all-caps, many emojis, links to other businesses, and asking for payments or passwords. Charges apply per message when you send.</p></div>
-    <div class="card"><div class="card-head"><h2>Your templates</h2></div>${mine.length ? `<div class="list">${mine.map((t) => `<div class="item"><div class="grow"><b>${esc(t.title)}</b><span class="muted small">${esc(t.body_preview)}</span>${t.reject_reason ? `<span class="small" style="color:var(--bad)">${esc(t.reject_reason)}</span>` : ""}</div><span class="pill ${st[t.status][0]}">${st[t.status][1]}</span></div>`).join("")}</div>` : `<div class="empty">No templates yet. Approved ones appear in WhatsApp → New broadcast.</div>`}
-      <h3 style="margin:18px 0 8px;font-size:16px">Ready-made templates</h3><div class="list">${shared.map((t) => `<div class="item small"><div class="grow"><b>${esc(t.title)}</b><span class="muted">${esc(t.body_preview)}</span></div></div>`).join("")}</div></div>
+    <div class="card"><div class="card-head"><h2>Your templates</h2></div>${mine.length ? `<div class="list">${mine.map((t) => `<div class="item"><div class="grow"><b>${esc(t.title)}</b><span class="muted small">${esc(tplReadable(t))}</span>${t.reject_reason ? `<span class="small" style="color:var(--bad)">${esc(t.reject_reason)}</span>` : ""}</div><span class="pill ${st[t.status][0]}">${st[t.status][1]}</span></div>`).join("")}</div>` : `<div class="empty">No templates yet. Approved ones appear in WhatsApp → New broadcast.</div>`}
+      <h3 style="margin:18px 0 8px;font-size:16px">Ready-made templates</h3><div class="list">${shared.map((t) => `<div class="item small"><div class="grow"><b>${esc(t.title)}</b><span class="muted">${esc(tplReadable(t))}</span></div></div>`).join("")}</div></div>
   </div>`;
-  const body = $("#nt-body"), params = () => { const n = Math.max(1, ...[...(body.value.matchAll(/\{\{(\d+)\}\}/g))].map((m) => +m[1]));
-    const cur = [...$$("[data-ntp]")].map((i) => [i.value, $("#nt-s" + i.dataset.ntp)?.value || ""]);
-    $("#nt-params").innerHTML = Array.from({ length: n - 1 }, (_, i) => `<div class="fields" style="margin-top:10px"><div class="field"><label for="nt-p${i}">Label for {{${i + 2}}}</label><input id="nt-p${i}" data-ntp="${i}" value="${esc(cur[i]?.[0] || "")}" placeholder="${i === 0 ? "Offer" : "Valid till"}"></div><div class="field"><label for="nt-s${i}">Example</label><input id="nt-s${i}" value="${esc(cur[i]?.[1] || "")}" placeholder="${i === 0 ? "20% off" : "14 Nov"}"></div></div>`).join("");
+  const body = $("#nt-body"), params = () => {
+    const blanks = tplBlanks(body.value).labels, cur = Object.fromEntries([...$$("[data-nts]")].map((i) => [i.dataset.nts, i.value]));
+    $("#nt-params").innerHTML = blanks.length ? `<div class="fields" style="margin-top:10px">${blanks.map((l, i) => `<div class="field"><label for="nt-s${i}">Example for [${esc(l)}]</label><input id="nt-s${i}" data-nts="${esc(l)}" value="${esc(cur[l] || "")}" placeholder="${/date|till|valid/i.test(l) ? "14 Nov" : /offer|discount/i.test(l) ? "20% off" : "example"}"></div>`).join("")}</div>` : "";
     prev(); $$("#nt-params input").forEach((x) => (x.oninput = prev)); };
-  const prev = () => { $("#nt-prev").textContent = body.value.replace(/\{\{(\d+)\}\}/g, (m, n) => (n === "1" ? "Priya" : $("#nt-s" + (n - 2))?.value || `[${$("#nt-p" + (n - 2))?.value || "…"}]`)) || "Your preview appears here."; };
+  const prev = () => { const ex = Object.fromEntries([...$$("[data-nts]")].map((i) => [i.dataset.nts.toLowerCase(), i.value]));
+    $("#nt-prev").textContent = body.value.replace(/\[([^\]\n]{1,40})\]/g, (m, l) => (/^customer name$/i.test(l.trim()) ? "Priya" : ex[l.trim().toLowerCase()] || m)) || "Your preview appears here."; };
+  $$("[data-ins]").forEach((b) => (b.onclick = () => { const t = b.dataset.ins, p0 = body.selectionStart ?? body.value.length; body.value = body.value.slice(0, p0) + t + body.value.slice(body.selectionEnd ?? p0); body.focus(); body.selectionStart = body.selectionEnd = p0 + t.length; params(); }));
   body.oninput = params; params();
 };
 function defaultParam(label) {
@@ -545,7 +608,7 @@ after.plan = async () => {
     q(sb.from("payments").select("*").eq("business_id", BID).order("created_at", { ascending: false })),
   ]);
   const myCat = D.biz.category_id, services = prods.filter((p) => !p.product_categories.length || p.product_categories.some((x) => x.category_id === myCat));
-  const pend = pays.filter((p) => p.status === "pending"), b = D.biz, price = (p, bill) => (bill === "yearly" ? p.yearly_price : p.monthly_price) * (1 - p.discount_percent / 100);
+  const pend = pays.filter((p) => p.status === "pending"), unpaid = pend.filter((p) => daysSince(p.created_at) < 7), b = D.biz, price = (p, bill) => (bill === "yearly" ? p.yearly_price : p.monthly_price) * (1 - p.discount_percent / 100);
   const el = $("#plan-view"); if (!el) return;
   el.innerHTML = head("Plan & services", "Your Growth Plan, payments, and extra services for " + esc(b.categories?.name || "your business") + ".") + `
   <div class="grid g2">
@@ -554,8 +617,8 @@ after.plan = async () => {
       <p class="muted small" style="margin-top:4px">${b.subscription_ends ? "Paid until " + fmtDate(b.subscription_ends) : "Not paid yet"}${b.wa_enabled ? " · WhatsApp add-on on" : ""}</p>
       ${b.packages ? `<ul class="small" style="padding-left:18px">${b.packages.features.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : ""}
       <div class="row" style="margin-top:12px">${b.package_id ? `<button class="btn primary" data-a="renew" data-id="${b.package_id}" data-bill="${b.billing}">Renew ${esc(b.billing)} · ${inr(price(b.packages, b.billing))}${plusGst()}</button>` : ""}</div></div>
-    <div class="card"><div class="card-head"><h2>Payments waiting</h2><span class="pill ${pend.length ? "warn" : "good"}">${pend.length}</span></div>
-      ${pend.length ? `<div class="list">${pend.map((p) => `<div class="item"><div class="grow"><b>${esc(p.description)}</b><span class="muted small">${fmtDT(p.created_at)} · ${p.utr ? "UPI ref " + esc(p.utr) + " · being checked" : "not paid yet"}</span></div><b class="num">${inr2(p.total)}</b>${p.utr ? "" : `<button class="btn sm primary" data-a="pay" data-id="${p.id}">Pay</button>`}</div>`).join("")}</div>` : `<div class="empty">Nothing to pay.</div>`}</div>
+    <div class="card"><div class="card-head"><h2>Not paid yet</h2><span class="pill ${unpaid.length ? "warn" : "good"}">${unpaid.length}</span></div>
+      ${unpaid.length ? `<div class="list">${unpaid.map((p) => `<div class="item"><div class="grow"><b>${esc(p.description)}</b><span class="muted small">Started ${fmtDT(p.created_at)}</span></div><b class="num">${inr2(p.total)}</b><button class="btn sm primary" data-a="pay" data-id="${p.id}">Pay</button><button class="btn sm ghost" data-a="pay-cancel" data-id="${p.id}" aria-label="Cancel this payment">✕</button></div>`).join("")}</div>` : `<div class="empty">Nothing to pay.</div>`}</div>
   </div>
   <div class="card" style="margin-top:16px"><div class="card-head"><h2>Change plan</h2></div><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">
     ${pkgs.map((p) => `<div class="coupon" style="border-style:solid;${p.id === b.package_id ? "border-color:var(--accent)" : ""}"><div class="row" style="justify-content:space-between"><b style="font-size:18px">${esc(p.name)}</b>${p.id === b.package_id ? '<span class="pill acc">Current</span>' : p.is_popular ? '<span class="pill">Popular</span>' : ""}</div>
@@ -564,7 +627,7 @@ after.plan = async () => {
   ${addonsCard(pend)}
   <div class="card" style="margin-top:16px"><div class="card-head"><h2>Services for ${esc(b.categories?.name || "you")}</h2></div>
     ${services.length ? `<div class="list">${services.map((p) => `<div class="item"><div class="grow"><b>${esc(p.name)}</b><span class="muted small">${esc(p.description || "")}</span></div><b class="num">${inr(p.price)}${p.billing === "monthly" ? "/mo" : ""}</b><button class="btn sm" data-a="buy-product" data-id="${p.id}" ${b.status === "active" ? "" : "disabled"}>Buy</button></div>`).join("")}</div>` : `<div class="empty">No extra services right now.</div>`}</div>
-  <div class="card" style="margin-top:16px"><div class="card-head"><h2>Payment history</h2></div>${pays.filter((p) => p.status !== "pending").map((p) => `<div class="item"><div class="grow"><b>${esc(p.description)}</b><span class="muted small">${fmtDT(p.created_at)}</span></div><span class="num">${inr2(p.total)}</span>${statusPill(p.status)}</div>`).join("") || `<div class="empty">No payments yet.</div>`}</div>`;
+  <div class="card" style="margin-top:16px"><div class="card-head"><h2>Payment history</h2></div>${pays.filter((p) => p.status === "confirmed").map((p) => `<div class="item"><div class="grow"><b>${esc(p.description)}</b><span class="muted small">${fmtDT(p.created_at)}</span></div><span class="num">${inr2(p.total)}</span>${statusPill(p.status)}</div>`).join("") || `<div class="empty">No payments yet.</div>`}</div>`;
   D.pays = pays;
   if (["owner", "admin"].includes(D.me.role)) referCard();
 };
@@ -591,32 +654,27 @@ function addonsCard(pend) {
       ${m.core || inPlan(m.key) ? '<span class="pill good">In your plan</span>' : bought(m.key) ? '<span class="pill good">Add-on on</span>' : waiting(m.key) ? '<span class="pill warn">Payment waiting</span>'
         : m.addon_price != null ? `<b class="num">${inr(m.addon_price * (yr ? 10 : 1))}${yr ? "/yr" : "/mo"}</b><button class="btn sm" data-a="buy-module" data-id="${m.id}">Add</button>` : ""}</div>`).join("")}</div></div>`;
 }
+// All payments go through Razorpay (UPI, cards, netbanking, wallets) and switch on by themselves once paid.
 async function payModal(paymentId) {
   const p = D.pays?.find((x) => x.id === paymentId) || (await q(sb.from("payments").select("*").eq("id", paymentId).single()));
-  const online = rzpOn(D.settings);
-  const upi = online ? {} : D.settings.payment || {}; const ref = "BGP-" + p.id.slice(0, 8).toUpperCase();
-  const link = upi.upi_id ? `upi://pay?pa=${encodeURIComponent(upi.upi_id)}&pn=${encodeURIComponent(upi.upi_name || "Branditude")}&am=${(+p.total).toFixed(2)}&cu=INR&tn=${encodeURIComponent(ref)}` : "";
   const m = openModal(`<div class="modal-head"><h2>Pay ${inr2(p.total)}</h2><button class="btn ghost" data-close>Close</button></div>
     <p class="muted small">${esc(p.description)}${+p.gst ? ` · ${inr2(p.amount)} + GST ${inr2(p.gst)}` : ""}</p>
-    ${rzpOn(D.settings) ? `<div class="rzp-box"><button class="btn primary" id="rzp-go" style="width:100%;justify-content:center">Pay ${inr2(p.total)} online</button><p class="small muted" style="margin-top:6px;text-align:center">UPI, cards, netbanking or wallets. Switches on instantly.</p></div>
-` : ""}
-    ${upi.upi_id ? `<div class="row" style="gap:18px;margin-top:14px;align-items:center"><div class="qr" id="pay-qr"></div><div><p class="small muted">Scan with any UPI app, or pay to</p><p style="font:800 18px var(--display)">${esc(upi.upi_id)}</p><p class="small muted">Add <b>${ref}</b> in the note</p><a class="btn sm primary" href="${esc(link)}" style="margin-top:8px">Open UPI app</a></div></div>` : online ? "" : `<div class="note">Branditude hasn't added a UPI ID yet. Contact them to pay.</div>`}
-    ${online ? `<div class="modal-foot"><button class="btn" data-close>Later</button></div>` : `<div class="field" style="margin-top:18px"><label for="utr">UPI transaction ID (12-digit UTR)</label><input id="utr" inputmode="numeric" placeholder="e.g. 431298765012"></div><p class="err" id="utr-err"></p>
-    <div class="modal-foot"><button class="btn" data-close>Later</button><button class="btn primary" id="utr-go">I've paid</button></div>`}`);
-  if (link && window.QRCode) new QRCode(m.querySelector("#pay-qr"), { text: link, width: 150, height: 150, colorDark: "#16203a", colorLight: "#ffffff" });
+    <div class="rzp-box"><button class="btn primary" id="rzp-go" style="width:100%;justify-content:center">Pay ${inr2(p.total)}</button>
+    <p class="small muted" style="margin-top:8px;text-align:center">UPI, cards, netbanking or wallets. It switches on as soon as you pay.</p></div>
+    <div class="modal-foot"><button class="btn ghost" id="pay-cancel">Cancel this payment</button><button class="btn" data-close>Later</button></div>`);
   const rz = m.querySelector("#rzp-go");
-  if (rz) rz.onclick = async () => {
+  rz.onclick = async () => {
     rz.disabled = true; rz.innerHTML = `<span class="spinner"></span> Opening…`;
     try { const r = await payOnline(sb, p.id);
       if (r === "paid") { closeModal(); toast("Payment received. Thank you!"); D.pays = null; await reload("biz"); render(); return; } }
-    catch (e) { toast(e.message, "error"); }
-    rz.disabled = false; rz.textContent = `Pay ${inr2(p.total)} online`;
+    catch (e) { toast(/switched on yet/.test(e.message) ? "Online payment is being set up. Please try again in a little while or contact Branditude." : e.message, "error"); }
+    rz.disabled = false; rz.textContent = `Pay ${inr2(p.total)}`;
   };
-  const ug = m.querySelector("#utr-go");
-  if (ug) ug.onclick = async () => {
-    try { await q(sb.rpc("submit_utr", { p_payment: p.id, p_utr: m.querySelector("#utr").value.trim() })); closeModal(); toast("Thanks! We'll confirm your payment shortly."); if (p.kind === "subscription") D.payWaiting = true; render(); }
-    catch (e) { m.querySelector("#utr-err").textContent = e.message; }
-  };
+  m.querySelector("#pay-cancel").onclick = () => cancelPay(p.id);
+}
+async function cancelPay(id) {
+  if (!(await confirmBox("Cancel this payment?", "Nothing has been charged. You can start it again any time.", "Cancel payment"))) return;
+  try { await q(sb.rpc("cancel_payment", { p_payment: id })); closeModal(); toast("Payment cancelled"); D.pays = null; render(); } catch (e) { toast(e.message, "error"); }
 }
 async function order(kind, ref, billing) {
   let r;
@@ -1034,6 +1092,8 @@ document.addEventListener("click", async (e) => {
       case "scan": startScan(); break;
       case "card-copy": copy(cardUrl(cust()), "Card link"); break;
       case "visit": visitModal(); break;
+      case "cust-open": customerSheet(id); break;
+      case "cust-visit": { const c = cust(); if (modalOpen()) closeModal(); visitModal({ phone: c.phone, name: c.name }); break; }
       case "kiosk": closeModal(); kiosk(id); break;
       case "seg": custSeg = id; render(); break;
       case "cust-new": customerForm(); break;
@@ -1131,14 +1191,19 @@ document.addEventListener("click", async (e) => {
         const row = { business_id: BID, kind: id, enabled: v("enabled").checked, days: v("days") ? +v("days").value || 0 : 0, times: v("times") ? Math.min(5, Math.max(1, +v("times").value || 1)) : 1,
           gap_days: v("gap_days") ? Math.min(60, Math.max(1, +v("gap_days").value || 3)) : 3, offer: v("offer") ? v("offer").value.trim() : "", daily_cap: v("daily_cap") ? Math.min(1000, Math.max(1, +v("daily_cap").value || 50)) : 1000, updated_at: new Date().toISOString() };
         if (row.enabled && !(await confirmBox("Turn this reminder on?", `Charges apply: each message uses 1 ${AUTO[id].util ? "utility" : "promotional"} credit${AUTO[id].util ? (D.waRates ? ` (about ${inr2(+D.waRates.utility)})` : "") : D.perMsg ? ` (about ${inr2(D.perMsg[0])}–${inr2(D.perMsg[1])})` : ""}. ${AUTO[id].instant ? "One message per visit, using a utility credit." : `Up to ${row.daily_cap} messages a day.`} You can turn it off any time.`, "Turn on")))
-          break;
+          { v("enabled").checked = false; box.classList.remove("on"); break; }
         await q(sb.from("auto_msgs").upsert(row, { onConflict: "business_id,kind" })); toast(row.enabled ? (AUTO[id].instant ? "On. Customers get it right after each visit." : "Reminder on. It runs every morning.") : "Reminder saved (off)"); after.whatsapp(); break; }
-      case "tpl-submit": { const v = (x) => $("#" + x).value.trim(); const n = $$("[data-ntp]").length;
-        try { await q(sb.rpc("submit_wa_template", { p_business: BID, p: { title: v("nt-title"), category: v("nt-cat"), language: v("nt-lang"), body: v("nt-body"),
-            params: Array.from({ length: n }, (_, i) => v("nt-p" + i)), sample: Array.from({ length: n }, (_, i) => v("nt-s" + i)) } }));
-          toast("Sent to Branditude for approval"); after.templates(); } catch (e) { $("#nt-err").textContent = e.message; }
+      case "tpl-submit": { const v = (x) => $("#" + x).value.trim(), t = tplBlanks(v("nt-body"));
+        if (!t.body.includes("{{1}}")) { $("#nt-err").textContent = "Add [Customer name] so the message greets each customer by name."; break; }
+        const ex = Object.fromEntries([...$$("[data-nts]")].map((i) => [i.dataset.nts.toLowerCase(), i.value.trim()]));
+        if (t.labels.some((l) => !ex[l.toLowerCase()])) { $("#nt-err").textContent = "Fill in an example for every [blank]. WhatsApp needs them to approve the message."; break; }
+        try { await q(sb.rpc("submit_wa_template", { p_business: BID, p: { title: v("nt-title"), category: v("nt-cat"), language: v("nt-lang"), body: t.body,
+            params: t.labels, sample: t.labels.map((l) => ex[l.toLowerCase()]) } }));
+          toast("Sent to Branditude for approval"); WA.tab = "templates"; after.whatsapp(); } catch (e) { $("#nt-err").textContent = e.message; }
         break; }
       case "pay": await payModal(id); break;
+      case "pay-cancel": await cancelPay(id); break;
+      case "pay-plan": await payPlan(); break;
       case "wa-send": {
         const t = D.tpls.find((x) => x.id === WA.tpl), aud = audience(WA.aud).filter((c) => c.phone);
         if (!(await confirmBox(`Send to ${aud.length} customers?`, `This uses ${aud.length * t.credits_per_message} ${CREDIT[kindOf(t)].short} credits. Failed messages are refunded.`, "Send now"))) break;

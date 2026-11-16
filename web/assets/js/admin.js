@@ -1,7 +1,7 @@
 // Agency portal: super admin + team
 import { sb, q } from "./sb.js";
 import { phoneLinkHTML, bindPhoneLink } from "./phone-link.js";
-import { $, $$, esc, inr, inr2, nfmt, fmtDate, fmtDT, ago, toast, openModal, closeModal, confirmBox, formModal, ico, shell, barChart, hbars, statusPill, prettyPhone, copy, todayISO } from "./ui.js";
+import { $, $$, esc, inr, inr2, nfmt, fmtDate, fmtDT, ago, daysSince, toast, openModal, closeModal, confirmBox, formModal, ico, shell, barChart, hbars, statusPill, prettyPhone, copy, todayISO } from "./ui.js";
 
 let C, D = {};
 const isSuper = () => C.profile.role === "super_admin";
@@ -17,7 +17,9 @@ export async function mount(ctx) {
   window.addEventListener("hashchange", () => { if (location.hash === "#signout") return C.signOut(); render(); });
   await loadStats(); render();
 }
-async function loadStats() { try { D.stats = await q(sb.rpc("admin_stats")); } catch (e) { toast(e.message, "error"); D.stats = {}; } }
+async function loadStats() { try { D.stats = await q(sb.rpc("admin_stats"));
+  const soon = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
+  D.stats.ending_7d = (await q(sb.from("businesses").select("id").eq("status", "active").lte("subscription_ends", soon))).length; } catch (e) { toast(e.message, "error"); D.stats = D.stats || {}; } }
 const cats = async (force) => (D.cats && !force ? D.cats : (D.cats = await q(sb.from("categories").select("*").order("sort"))));
 const mods = async (force) => (D.mods && !force ? D.mods : (D.mods = await q(sb.from("modules").select("*").order("sort"))));
 const modName = (k) => (D.mods || []).find((m) => m.key === k)?.name || k;
@@ -43,12 +45,12 @@ const VIEWS = {
     await loadStats(); nav(); const s = D.stats;
     const months = (s.revenue_by_month || []).map((x) => ({ label: new Date(x.month + "-01").toLocaleDateString("en-IN", { month: "short" }), value: +x.total }));
     const ls = s.leads_by_status || {};
-    return head("Agency overview", "How the Growth Plan business is doing across every client.", `<a class="btn" href="#leads">${ico("inbox")} Leads</a><a class="btn primary" href="#payments">${ico("rupee")} Confirm payments</a>`) + `
+    return head("Agency overview", "How the Growth Plan business is doing across every client.", `<a class="btn" href="#leads">${ico("inbox")} Leads</a><a class="btn primary" href="#payments">${ico("rupee")} Payments</a>`) + `
     <div class="grid g4">
       ${kpi("Active businesses", nfmt(s.businesses_active), `${s.businesses_pending} waiting for payment · ${s.businesses_total} total`)}
       ${kpi("Monthly recurring revenue", inr(s.mrr), "from active plans, before GST")}
       ${kpi("Revenue · 30 days", inr(s.revenue_30d), "confirmed payments incl. GST")}
-      ${kpi("Payments to confirm", nfmt(s.payments_pending), inr(s.payments_pending_amount) + " waiting")}
+      ${s.payments_pending ? kpi("UPI payments to check", nfmt(s.payments_pending), inr(s.payments_pending_amount) + " waiting") : kpi("Plans ending in 7 days", nfmt(s.ending_7d ?? 0), "renewal reminders go out on WhatsApp")}
     </div>
     <div class="grid g4" style="margin-top:16px">
       ${kpi("New leads · 7 days", nfmt(s.leads_new_7d), `${s.leads_open} open in total`)}
@@ -182,14 +184,20 @@ async function openBiz(id) {
 /* ---------------- Payments ---------------- */
 VIEWS.payments = async () => {
   D.pay = await q(sb.from("payments").select("*, businesses(name, phone)").order("created_at", { ascending: false }).limit(300));
-  const pend = D.pay.filter((p) => p.status === "pending");
-  const row = (p) => `<tr><td><div class="who"><b>${esc(p.businesses?.name || "—")}</b><span>${esc(p.description)}</span></div></td><td>${esc(p.kind.replace("_", " "))}</td>
-    <td class="num">${inr2(p.total)}<div class="muted small">${inr2(p.amount)} + ${inr2(p.gst)} GST</div></td><td>${p.utr ? `<b class="num">${esc(p.utr)}</b>` : '<span class="muted">Not given yet</span>'}</td><td>${fmtDT(p.created_at)}</td>
-    <td>${p.status === "pending" ? `<div class="row" style="flex-wrap:nowrap"><button class="btn sm primary" data-a="pay-ok" data-id="${p.id}">Confirm</button><button class="btn sm ghost danger" data-a="pay-no" data-id="${p.id}">Reject</button></div>` : statusPill(p.status)}</td></tr>`;
-  return head("Payments", "Match each UPI transaction ID with your bank statement, then confirm. Confirming a plan activates the business. Confirming credits adds them to the business's WhatsApp balance.") + `
-  <div class="card" style="margin-bottom:16px"><div class="card-head"><h2>Waiting for confirmation</h2><span class="pill ${pend.length ? "warn" : "good"} num">${pend.length}</span></div>
-  ${pend.length ? `<div class="table-wrap"><table><thead><tr><th>Business</th><th>Type</th><th>Amount</th><th>UPI ref</th><th>Created</th><th></th></tr></thead><tbody>${pend.map(row).join("")}</tbody></table></div>` : `<div class="empty">Nothing to confirm.</div>`}</div>
-  <div class="card"><div class="card-head"><h2>History</h2></div><div class="table-wrap"><table><thead><tr><th>Business</th><th>Type</th><th>Amount</th><th>UPI ref</th><th>Created</th><th>Status</th></tr></thead><tbody>${D.pay.filter((p) => p.status !== "pending").map(row).join("") || `<tr><td colspan="6"><div class="empty">No history yet.</div></td></tr>`}</tbody></table></div></div>`;
+  const pend = D.pay.filter((p) => p.status === "pending"), started = pend.filter((p) => !p.utr && daysSince(p.created_at) < 7), old = pend.filter((p) => !p.utr && daysSince(p.created_at) >= 7), check = pend.filter((p) => p.utr);
+  const how = (p) => (p.meta?.method === "razorpay" ? "Razorpay" : p.utr ? "UPI ref " + esc(p.utr) : p.confirmed_by ? "Marked paid by team" : "—");
+  const row = (p, act) => `<tr><td><div class="who"><b>${esc(p.businesses?.name || "—")}</b><span>${esc(p.description)}</span></div></td><td>${esc(p.kind.replace("_", " "))}</td>
+    <td class="num">${inr2(p.total)}<div class="muted small">${inr2(p.amount)} + ${inr2(p.gst)} GST</div></td><td class="small">${act === "hist" ? how(p) : p.utr ? `<b class="num">${esc(p.utr)}</b>` : ago(p.created_at)}</td><td>${fmtDT(p.created_at)}</td>
+    <td>${act === "check" ? `<div class="row" style="flex-wrap:nowrap"><button class="btn sm primary" data-a="pay-ok" data-id="${p.id}">Confirm</button><button class="btn sm ghost danger" data-a="pay-no" data-id="${p.id}">Reject</button></div>`
+      : act === "started" ? `<div class="row" style="flex-wrap:nowrap"><button class="btn sm" data-a="pay-ok" data-id="${p.id}" title="Use only if they paid you another way">Mark paid</button><button class="btn sm ghost" data-a="pay-cancel" data-id="${p.id}">Cancel</button></div>` : statusPill(p.status)}</td></tr>`;
+  const table = (list, act, h4) => `<div class="table-wrap"><table><thead><tr><th>Business</th><th>Type</th><th>Amount</th><th>${h4}</th><th>Created</th><th></th></tr></thead><tbody>${list.map((p) => row(p, act)).join("")}</tbody></table></div>`;
+  return head("Payments", "Businesses pay online through Razorpay, and their plan, add-on or credits switch on by themselves. Use this page to follow up on checkouts that weren't finished.") + `
+  ${check.length ? `<div class="card" style="margin-bottom:16px"><div class="card-head"><h2>Paid by UPI, check and confirm</h2><span class="pill warn num">${check.length}</span></div><p class="small muted" style="margin-top:-6px">From before online payments. Match the UPI reference with your bank statement.</p>${table(check, "check", "UPI ref")}</div>` : ""}
+  <div class="card" style="margin-bottom:16px"><div class="card-head"><h2>Started, not paid yet</h2><span class="pill ${started.length ? "warn" : "good"} num">${started.length}</span></div>
+    <p class="small muted" style="margin-top:-6px">Checkouts from the last 7 days. A call or WhatsApp often finishes the sale. "Mark paid" only if they paid you another way.</p>
+    ${started.length ? table(started, "started", "Started") : `<div class="empty">No unfinished checkouts.</div>`}
+    ${old.length ? `<div class="row" style="margin-top:10px;gap:8px"><span class="small muted">${old.length} older unfinished checkout${old.length > 1 ? "s" : ""} hidden.</span><button class="btn sm ghost" data-a="pay-clear-old">Cancel them</button></div>` : ""}</div>
+  <div class="card"><div class="card-head"><h2>Paid</h2></div>${D.pay.some((p) => p.status === "confirmed") ? table(D.pay.filter((p) => p.status === "confirmed"), "hist", "How") : `<div class="empty">No payments yet.</div>`}</div>`;
 };
 
 /* ---------------- Packages ---------------- */
@@ -201,7 +209,7 @@ VIEWS.packages = async () => {
     <div><b class="num" style="font-size:22px">${inr(p.monthly_price * (1 - p.discount_percent / 100))}</b><span class="muted">/month</span>${+p.discount_percent ? ` <s class="muted num">${inr(p.monthly_price)}</s> <span class="pill warn">${+p.discount_percent}% off${p.discount_label ? " · " + esc(p.discount_label) : ""}</span>` : ""}
       <div class="muted small num">${inr(p.yearly_price * (1 - p.discount_percent / 100))}/year · ${p.max_locations} location${p.max_locations > 1 ? "s" : ""}${p.includes_whatsapp ? " · WhatsApp on" : ""}</div></div>
     <ul class="small" style="margin:0;padding-left:18px">${p.features.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
-    <div class="row" style="flex-wrap:wrap">${(p.modules || []).map((m) => `<span class="pill info">${esc(modName(m))}</span>`).join("") || '<span class="small muted">No modules</span>'}</div>
+    <p class="small muted" style="margin-top:8px">Unlocks: ${(p.modules || []).map((m) => esc(modName(m))).join(", ") || "no extra modules"}</p>
     <div class="row"><button class="btn sm" data-a="pkg-edit" data-id="${p.id}">Edit</button></div></div>`).join("")}</div>
   <div class="card" style="margin-top:16px"><div class="card-head"><h2>Modules & add-on prices</h2></div>
     <p class="muted small" style="margin-top:-6px">Core modules are in every plan. Others can be bought on their own per month (yearly = 10 × monthly). Leave the price empty to stop selling it on its own.</p>
@@ -235,7 +243,7 @@ VIEWS.promos = async () => {
   await pkgs(); D.promos = await q(sb.from("promo_codes").select("*").order("created_at", { ascending: false }));
   return head("Package discounts", "Promo codes buyers can enter at checkout. For a sale everyone sees, set a discount on the package instead.", `<button class="btn primary" data-a="promo-new">${ico("plus")} New code</button>`) + `
   <div class="table-wrap"><table><thead><tr><th>Code</th><th>Discount</th><th>Packages</th><th>Valid until</th><th>Used</th><th>Status</th><th></th></tr></thead><tbody>
-  ${D.promos.map((c) => `<tr><td><b>${esc(c.code)}</b></td><td>${c.type === "percent" ? +c.value + "% off plan" : inr(c.value) + " off plan"}</td>
+  ${D.promos.map((c) => `<tr><td><b>${esc(c.code)}</b></td><td>${c.agent_id && !+c.value ? "Referral code (no discount)" : c.type === "percent" ? +c.value + "% off plan" : inr(c.value) + " off plan"}</td>
     <td>${c.package_ids?.length ? c.package_ids.map((id) => esc(D.pkgs.find((p) => p.id === id)?.name || "?")).join(", ") : "All"}</td><td>${c.valid_until ? fmtDate(c.valid_until) : "No end"}</td>
     <td class="num">${c.used}${c.max_uses ? " / " + c.max_uses : ""}</td><td>${c.active ? '<span class="pill good">Active</span>' : '<span class="pill">Off</span>'}</td><td><button class="btn sm ghost" data-a="promo-edit" data-id="${c.id}">Edit</button></td></tr>`).join("") || `<tr><td colspan="7"><div class="empty">No promo codes yet.</div></td></tr>`}
   </tbody></table></div>`;
@@ -473,8 +481,10 @@ VIEWS.whatsapp = async () => {
       <td><div class="row" style="flex-wrap:wrap;gap:6px">${t.status !== "approved" ? `<button class="btn sm" data-a="wt-meta" data-id="${t.id}">Send to Meta</button>` : ""}${t.status === "submitted" ? `<button class="btn sm ghost" data-a="wt-status" data-id="${t.id}">Check status</button>` : ""}
         ${t.status !== "approved" ? `<button class="btn sm primary" data-a="wt-ok" data-id="${t.id}">Mark approved</button>` : ""}${t.status !== "rejected" ? `<button class="btn sm ghost danger" data-a="wt-no" data-id="${t.id}">Reject</button>` : ""}</div></td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">No requests yet.</div>`}</div>`; })()}
   <div class="card" style="margin-top:16px"><div class="card-head"><h2>Shared message templates</h2><button class="btn sm" data-a="tpl-new">${ico("plus")} New template</button></div>
-    <div class="table-wrap"><table><thead><tr><th>Template</th><th>Message</th><th>Meta category</th><th>Credits</th><th></th></tr></thead><tbody>
-    ${tpls.filter((t) => !t.business_id).map((t) => `<tr><td><div class="who"><b>${esc(t.title)}</b><span>${esc(t.name)} · ${esc(t.language)}</span></div></td><td class="small" style="max-width:380px">${esc(t.body_preview)}</td><td>${esc(t.category)}</td><td class="num">${t.credits_per_message}</td><td><button class="btn sm ghost" data-a="tpl-edit" data-id="${t.id}">Edit</button></td></tr>`).join("")}
+    <div class="table-wrap"><table><thead><tr><th>Template</th><th>Message</th><th>Meta category</th><th>Status</th><th></th></tr></thead><tbody>
+    ${tpls.filter((t) => !t.business_id).map((t) => { const ps = { pending: ["warn", "Not sent to Meta"], submitted: ["info", "With Meta"], approved: ["good", "Approved"], rejected: ["bad", "Rejected"] }[t.status] || ["", t.status];
+      return `<tr><td><div class="who"><b>${esc(t.title)}</b><span>${esc(t.name)} · ${esc(t.language)}</span></div></td><td class="small" style="max-width:380px">${esc(t.body_preview)}${t.reject_reason ? `<br><span style="color:var(--bad)">${esc(t.reject_reason)}</span>` : ""}</td><td>${esc(t.category)}</td><td><span class="pill ${ps[0]}">${ps[1]}</span></td>
+      <td><div class="row" style="flex-wrap:wrap;gap:6px">${["pending", "rejected"].includes(t.status) ? `<button class="btn sm primary" data-a="wt-meta" data-id="${t.id}">Send to Meta</button>` : ""}${t.status === "submitted" ? `<button class="btn sm" data-a="wt-status" data-id="${t.id}">Check status</button>` : ""}<button class="btn sm ghost" data-a="tpl-edit" data-id="${t.id}">Edit</button></div></td></tr>`; }).join("")}
     </tbody></table></div></div>`;
 };
 function packForm(p = { active: true, sort: 100 }) {
@@ -520,10 +530,11 @@ VIEWS.settings = async () => {
       ${f("s-phone", "Phone", a.phone)}${f("s-email", "Email", a.email)}${f("s-hours", "Working hours", a.hours)}</div>
     <div class="field" style="margin-top:14px"><label for="s-addr">Office address</label><input id="s-addr" value="${esc(a.address || "")}"></div>
     <h2 style="margin:22px 0 12px">Payments</h2>
-    <div class="fields">${f("s-upi", "UPI ID", p.upi_id, "branditude@okicici")}${f("s-upiname", "UPI payee name", p.upi_name)}${f("s-gstin", "GSTIN", p.gstin)}
+    <p class="small muted" style="margin-top:-6px">Businesses pay online through Razorpay (UPI, cards, netbanking, wallets). Plans, add-ons and credits switch on by themselves once paid.</p>
+    <div class="row" style="gap:8px;margin:8px 0 14px"><span class="pill" id="rzp-state">Checking Razorpay…</span></div>
+    <div class="fields">${f("s-gstin", "GSTIN", p.gstin)}
       <div class="field"><label for="s-gst">GST rate %</label><input id="s-gst" type="number" min="0" max="28" value="${Math.round((D.settings.gst.rate ?? 0.18) * 100)}"></div></div>
-    <label class="check" style="margin-top:14px"><input type="checkbox" id="s-rzp" ${D.settings.razorpay?.enabled ? "checked" : ""}> Show "Pay online" (Razorpay) at checkout and in dashboards</label>
-    <p class="small muted" style="margin-top:6px">Needs the Razorpay keys saved as Supabase secrets RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET, and a webhook to <code>https://dumninwceiqvevndpupc.supabase.co/functions/v1/razorpay</code> (events payment.captured and order.paid) with its secret in RAZORPAY_WEBHOOK_SECRET. Paid online = confirmed automatically. UPI + UTR stays as a backup.</p>
+    <p class="small muted" style="margin-top:6px">Razorpay needs the Supabase secrets RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET, and a webhook to <code>https://dumninwceiqvevndpupc.supabase.co/functions/v1/razorpay</code> (events payment.captured and order.paid) with its secret in RAZORPAY_WEBHOOK_SECRET.</p>
     <h2 style="margin:22px 0 12px">Free trial</h2>
     <div class="fields"><div class="field"><label for="s-trial">Free trial for new businesses (days, 0 = no trial)</label><input id="s-trial" type="number" min="0" max="60" value="${D.settings.trial.days ?? 3}"></div></div>
     <h2 style="margin:22px 0 12px">WhatsApp</h2>
@@ -534,13 +545,16 @@ VIEWS.settings = async () => {
 after.settings = () => {
   const host = $("#main"); if (host && !$("#pl-card")) { host.insertAdjacentHTML("beforeend", phoneLinkHTML(C.user)); bindPhoneLink(async () => { const { data } = await sb.auth.getUser(); if (data?.user) C.user = data.user; render(); }); }
   const f = $("#set-form"); if (!f) return;
+  sb.functions.invoke("razorpay", { body: { action: "status" } }).then(({ data }) => { const el = $("#rzp-state"); if (!el) return;
+    el.className = "pill " + (data?.keys && data?.webhook ? "good" : "bad");
+    el.textContent = !data ? "Couldn't check Razorpay" : data.keys && data.webhook ? "Razorpay connected" : !data.keys ? "Razorpay keys missing: businesses can't pay yet" : "Razorpay webhook secret missing"; });
   f.onsubmit = async (e) => { e.preventDefault(); const v = (id) => $("#" + id).value.trim();
     const up = [
       { key: "agency", public: true, value: { name: v("s-name"), legal_name: v("s-legal"), website: v("s-web"), whatsapp: v("s-wa").replace(/\D/g, ""), phone: v("s-phone"), email: v("s-email"), hours: v("s-hours"), address: v("s-addr") } },
-      { key: "payment", public: true, value: { upi_id: v("s-upi"), upi_name: v("s-upiname"), gstin: v("s-gstin") } },
+      { key: "payment", public: true, value: { ...(D.settings.payment || {}), gstin: v("s-gstin") } },
       { key: "gst", public: true, value: { rate: (+v("s-gst") || 0) / 100 } },
       { key: "whatsapp", public: true, value: { price_note: v("s-wanote") } },
-      { key: "razorpay", public: true, value: { enabled: $("#s-rzp").checked } },
+      { key: "razorpay", public: true, value: { ...(D.settings.razorpay || {}), enabled: true } },
       { key: "trial", public: true, value: { days: Math.max(0, Math.min(60, parseInt(v("s-trial"), 10) || 0)) } },
     ].map((r) => ({ ...r, updated_at: new Date().toISOString() }));
     try { await q(sb.from("settings").upsert(up)); toast("Settings saved"); } catch (err) { toast(err.message, "error"); } };
@@ -561,6 +575,9 @@ document.addEventListener("click", async (e) => {
       case "biz-open": openBiz(id); break;
       case "pay-ok": if (await confirmBox("Confirm this payment?", "Only confirm after you've seen the money in your bank account.", "Confirm payment")) { await q(sb.rpc("admin_confirm_payment", { p_payment: id, p_approve: true })); toast("Payment confirmed"); await loadStats(); render(); } break;
       case "pay-no": if (await confirmBox("Reject this payment?", "The business will see it as rejected and can pay again.", "Reject", { danger: true })) { await q(sb.rpc("admin_confirm_payment", { p_payment: id, p_approve: false })); toast("Payment rejected"); await loadStats(); render(); } break;
+      case "pay-cancel": if (await confirmBox("Cancel this checkout?", "Use this when they don't want it any more. If they pay it later through Razorpay, it still goes through.", "Cancel checkout")) { await q(sb.rpc("cancel_payment", { p_payment: id })); toast("Checkout cancelled"); render(); } break;
+      case "pay-clear-old": { const old = (D.pay || []).filter((p) => p.status === "pending" && !p.utr && daysSince(p.created_at) >= 7);
+        if (await confirmBox(`Cancel ${old.length} old checkout${old.length > 1 ? "s" : ""}?`, "These were started more than 7 days ago and never paid.", "Cancel them")) { for (const p of old) await q(sb.rpc("cancel_payment", { p_payment: p.id })); toast("Old checkouts cancelled"); render(); } break; }
       case "pkg-new": pkgForm(); break;
       case "pkg-edit": pkgForm(D.pkgs.find((p) => p.id === id)); break;
       case "mod-save": { const v = $("#mp-" + id).value.trim();

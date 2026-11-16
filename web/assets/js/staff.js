@@ -373,7 +373,7 @@ function tipForm() {
   $m("#tp-go").onclick = async (e) => { const err = $m("#tp-err"); err.textContent = ""; const sh = shares(), day = $m("#tp-day").value, amt = +$m("#tp-amt").value || 0, pool = $m("#tp-who").value === "pool";
     if (!(amt > 0)) return (err.textContent = "Enter the tip amount"); if (!sh.length) return (err.textContent = "Nobody to give it to");
     if (day.slice(0, 7) !== S.d.ym) return (err.textContent = "Pick a date in " + ymLabel(S.d.ym));
-    const note = ($m("#tp-note").value.trim() || (pool ? "Shared tip" : "Tip")) + (pool ? ` (${inr2(amt)} split ${sh.length} ways)` : "");
+    const note = ($m("#tp-note").value.trim() || (pool ? "Shared tip" : "Tip")) + (pool && sh.length > 1 ? ` (${inr2(amt)} split ${sh.length} ways)` : "");
     e.target.disabled = true;
     try { await q(sb.from("salary_adjustments").insert(sh.map((x) => ({ business_id: ctx().BID, staff_id: x.id, month: S.d.ym + "-01", kind: "tip", amount: x.amt, note, tip_day: day }))));
       closeModal(); toast(`${inr2(amt)} in tips added to salary`); await load(); drawSalary(); } catch (x) { err.textContent = x.message; e.target.disabled = false; } };

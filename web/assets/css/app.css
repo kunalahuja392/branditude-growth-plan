@@ -177,14 +177,32 @@ td .who span{font-size:13px;color:var(--ink-3)}
 .swatch[aria-pressed="true"]{box-shadow:0 0 0 2.5px var(--ink)}
 .stars-txt{color:#f4b400;letter-spacing:1px;white-space:nowrap}
 .loading{display:grid;place-items:center;height:60vh;color:var(--ink-3)}
+.rail-links{display:flex;flex-direction:column;gap:4px}
+.mbar,.msheet{display:none}
 @media (max-width:820px){
   .app{grid-template-columns:1fr;grid-template-rows:1fr auto}
-  nav.rail{order:2;flex-direction:row;border-right:0;border-top:1px solid var(--line);padding:6px;overflow-x:auto;gap:2px}
-  .brand,.rail-foot{display:none}
-  .nav-link{flex-direction:column;gap:2px;font-size:11px;padding:6px 8px;min-width:64px;position:relative}
-  .nav-badge{position:absolute;top:2px;right:6px;margin:0}
+  nav.rail{order:2;flex-direction:row;border-right:0;border-top:1px solid var(--line);padding:0;overflow:visible}
+  .brand,.rail-foot,.rail-links{display:none}
+  .mbar{display:flex;width:100%;align-items:stretch;padding:4px 4px calc(4px + env(safe-area-inset-bottom))}
+  .mlink{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font:600 11px var(--body);color:var(--ink-2);text-decoration:none;padding:6px 2px;border:0;background:none;border-radius:10px;position:relative;cursor:pointer;min-width:0}
+  .mlink span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  .mlink svg{width:22px;height:22px}
+  .mlink[aria-current="page"]{color:var(--ink)}.mlink[aria-current="page"] svg{color:var(--accent)}
+  .mbar-act{flex:1.15;display:flex;flex-direction:column;align-items:center;gap:2px;border:0;background:none;font:700 11px var(--body);color:var(--ink);cursor:pointer;margin-top:-18px}
+  .mbar-act svg{width:26px;height:26px;padding:13px;box-sizing:content-box;background:var(--accent);color:#fff;border-radius:50%;box-shadow:0 4px 12px rgba(240,122,26,.35)}
+  .nav-badge{position:absolute;top:0;right:calc(50% - 22px);margin:0}
+  .msheet:not([hidden]){display:flex;position:fixed;inset:0;z-index:50;background:rgba(10,15,30,.45);align-items:flex-end}
+  .msheet-panel{background:var(--card);width:100%;max-height:82vh;overflow:auto;border-radius:18px 18px 0 0;padding:14px 14px calc(18px + env(safe-area-inset-bottom))}
+  .msheet-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+  .msheet-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .mtile{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;font:600 12px var(--body);color:var(--ink-2);text-decoration:none;padding:12px 4px;border-radius:12px;background:var(--soft);position:relative}
+  .mtile svg{width:22px;height:22px}.mtile[aria-current="page"]{background:var(--accent-soft);color:var(--ink)}
+  .mtile .nav-badge{top:4px;right:6px}
+  .msheet-foot{margin-top:14px;color:var(--ink-3);font-size:12px}
   main{padding-bottom:30px}
   h1{font-size:23px}
+  .grid.g4{grid-template-columns:1fr 1fr;gap:10px}
+  .kpi .value{font-size:24px}.kpi{padding:14px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
@@ -329,5 +347,11 @@ td .who span{font-size:13px;color:var(--ink-3)}
 .ai-fab,.ai-head b{white-space:nowrap}
 .ai-fab svg,.ai-head svg{width:18px;height:18px;flex:none}
 .ai-head b{display:flex;align-items:center;gap:6px}
-.phone-in{display:flex;gap:6px;width:100%}.phone-in select{width:auto;flex:0 0 auto;max-width:132px;padding-right:6px}.phone-in input{flex:1;min-width:0}
+.phone-in{display:flex;gap:6px;width:100%}.phone-in select{width:auto;flex:0 0 auto;min-width:84px;max-width:96px;padding-right:6px}.phone-in input{flex:1;min-width:0}
 [hidden]{display:none!important}
+.cust-bar{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}.cust-bar input{flex:2;min-width:200px}.cust-bar select{flex:1;min-width:180px}
+.link-like{background:none;border:0;padding:0;text-align:left;cursor:pointer;font:inherit;color:inherit}
+.link-like:hover b{text-decoration:underline}
+.cust-cards{display:none;padding:4px 14px}
+@media (max-width:820px){.cust-table{display:none}.cust-cards{display:block}.cust-bar input,.cust-bar select{flex:1 1 100%}}
+.link-like.who{display:flex;flex-direction:column;gap:2px}.link-like.who span{font-size:13px;color:var(--ink-3)}

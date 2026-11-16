@@ -1,4 +1,5 @@
-// Supabase Edge Function: daily automatic WhatsApp reminders (birthday, loyalty reward, offer ending, win-back).
+// Supabase Edge Function: daily automatic WhatsApp reminders (birthday, loyalty reward, offer ending, win-back),
+// plus plan renewal / trial-ending reminders to business owners.
 // Called by the pg_cron job "auto-messages-daily" with the internal cron secret. verify_jwt is off for that reason.
 // Each business turns reminders on itself; each message uses credits from its WhatsApp wallet (failed ones refunded).
 // Secrets: WA_TOKEN, WA_DEFAULT_PHONE_NUMBER_ID (optional WA_API_VERSION).
@@ -61,5 +62,35 @@ Deno.serve(async (req: Request) => {
     await note(r, `Sent ${sent}${failed ? `, ${failed} failed (refunded)` : ""}.`);
     out[key] = { sent, failed };
   }
+  out.plan_reminders = await planReminders(admin, tpls ?? [], waToken, defaultPhoneId!, apiVersion);
   return json({ ok: true, out });
 });
+
+// Renewal / trial-ending reminders to business owners, sent from Branditude's own number (not charged to the business).
+// deno-lint-ignore no-explicit-any
+async function planReminders(admin: any, tpls: any[], waToken: string, phoneId: string, apiVersion: string) {
+  const tpl = tpls.find((t) => t.name === "plan_reminder");
+  if (!tpl || !phoneId) return "template not approved yet";
+  const { data: due, error } = await admin.rpc("plan_reminders_due");
+  if (error) return error.message;
+  const fmt = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  let sent = 0, failed = 0;
+  for (const b of due ?? []) {
+    const d = b.days_left as number;
+    const what = b.trial ? (d <= 0 ? "your free trial ends today" : "your free trial ends tomorrow")
+      : d > 1 ? `it ends on ${fmt(b.ends)}` : d === 1 ? "it ends tomorrow" : d === 0 ? "it ends today" : `it ended on ${fmt(b.ends)} and pauses tonight`;
+    let status = "failed", err: string | null = null;
+    try {
+      const res = await fetch(`https://graph.facebook.com/${apiVersion}/${phoneId}/messages`, {
+        method: "POST", headers: { Authorization: `Bearer ${waToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ messaging_product: "whatsapp", to: b.phone, type: "template",
+          template: { name: tpl.name, language: { code: tpl.language }, components: [{ type: "body", parameters: [b.owner, b.name, what, "https://scale.branditudeglobal.com/app.html#plan"].map((text: string) => ({ type: "text", text: String(text).slice(0, 200) })) }] } }),
+      });
+      const j = await res.json();
+      if (res.ok && j?.messages?.[0]?.id) status = "sent"; else err = j?.error?.message ?? `HTTP ${res.status}`;
+    } catch (e) { err = String(e); }
+    status === "sent" ? sent++ : failed++;
+    await admin.from("plan_reminder_log").insert({ business_id: b.business_id, ends: b.ends, days_left: d, status, error: err });
+  }
+  return { sent, failed };
+}

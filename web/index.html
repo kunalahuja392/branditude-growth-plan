@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <script src="/assets/js/pwa.js" defer></script>
 <title>Branditude Growth Plan Store</title>
-<meta name="description" content="Get more Google reviews, repeat customers and WhatsApp sales for your local business. Plans from ₹999/month by Branditude.">
+<meta name="description" content="Get more Google reviews, repeat customers and WhatsApp sales for your local business. Plans from ₹399/month by Branditude.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;900&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -373,7 +373,7 @@ footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;
 .field{display:flex;flex-direction:column;gap:5px}
 .field.full{grid-column:1/-1}
 label{font-size:14px;font-weight:600;color:var(--ink-2)}
-.phone-in{display:flex;gap:6px;width:100%}.phone-in select{width:auto;flex:0 0 auto;max-width:132px;padding-right:6px}.phone-in input{flex:1;min-width:0}
+.phone-in{display:flex;gap:6px;width:100%}.phone-in select{width:auto;flex:0 0 auto;min-width:84px;max-width:96px;padding-right:6px}.phone-in input{flex:1;min-width:0}
 input,select{font:16px var(--body);color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:11px 12px;width:100%}
 input:focus,select:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
 .err{color:#c2402f;font-size:14px;font-weight:600;margin-top:10px}
@@ -496,9 +496,9 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
           <div class="screen">
             <div class="chat-head"><i>S</i><div>Spice Route Café<small>Business account</small></div></div>
             <div class="chat">
-              <div class="msg anim" data-d="300">Hi Priya, thank you for visiting Spice Route Café today! 🙏 Could you leave us a quick Google review? <a href="#how">g.page/r/spice-route/review</a><span class="t">7:42 pm</span></div>
-              <div class="msg me anim" data-d="1200">Done! Loved the filter coffee ☕<span class="t">7:46 pm ✓✓</span></div>
-              <div class="msg anim" data-d="2000">Thank you! Here's 10% off your next visit: <b>THANKYOU10</b> 🎁<span class="t">7:47 pm</span></div>
+              <div class="msg anim" data-d="300">Hi Priya, thank you for visiting Spice Route Café today! 🙏 Your loyalty card now has 4 of 5 stamps, and here's 10% off your next visit: <b>THANKYOU10</b> 🎁<span class="t">7:42 pm</span></div>
+              <div class="msg me anim" data-d="1200">Thank you! Loved the filter coffee ☕<span class="t">7:46 pm ✓✓</span></div>
+              <div class="msg anim" data-d="2000">So glad you enjoyed it! If you have a minute, a Google review helps us a lot: <a href="#how">g.page/r/spice-route/review</a><span class="t">7:47 pm</span></div>
             </div>
             <div class="rating anim" data-d="2600"><div class="big num" id="rate">4.1</div><div><div class="stars" aria-hidden="true">★★★★★</div><small><span class="num" id="revs">38</span> Google reviews for this example café</small></div></div>
           </div>
@@ -597,7 +597,7 @@ textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1
         <h2 id="founder-h">Big-brand growth tools, at a local-shop price</h2>
         <p>Kunal Ahuja started Branditude in Nagpur to help businesses grow online. Over 5+ years the team has delivered 150+ projects for 80+ clients, from local shops to names like Unacademy and HP, across branding, ads, SEO, websites and social media.</p>
         <p>Along the way he saw the same thing again and again: the café down the road, the salon, the clinic, the gym all do great work, but they can't afford a marketing team. Their happy customers leave without a review, regulars forget to come back, and offers never reach the people who would use them.</p>
-        <blockquote>“Every local business deserves the same growth tools big brands use. The Growth Plan puts reviews, loyalty, offers and WhatsApp in one simple app, starting at ₹299 a month.”</blockquote>
+        <blockquote>“Every local business deserves the same growth tools big brands use. The Growth Plan puts reviews, loyalty, offers and WhatsApp in one simple app, starting at ₹399 a month.”</blockquote>
         <div class="f-stats"><div><b>5+</b><span>years in digital growth</span></div><div><b>150+</b><span>projects delivered</span></div><div><b>80+</b><span>happy clients</span></div></div>
         <p class="f-sign"><b>Kunal Ahuja</b>, founder · <a href="https://www.branditudeglobal.com/our-teams.html" target="_blank" rel="noopener" style="color:var(--accent)">Meet the team</a></p>
       </div>
@@ -774,7 +774,7 @@ function readStep1() {
   co.cat = v("b-cat"); co.pkg = v("b-plan"); co.billing = v("b-bill") || co.billing; co.promo = v("b-promo");
 }
 function draw() {
-  const steps = ["Your business", "Create your account", co.result?.trial ? "Your free trial has started" : (rzpOn(SET) ? "Pay online" : "Pay by UPI"), "Done"];
+  const steps = ["Your business", "Create your account", co.result?.trial ? "Your free trial has started" : "Pay", "Done"];
   let body = "", foot = "";
   if (co.step === 1) {
     const prods = PRODS.filter((p) => !p.product_categories.length || p.product_categories.some((x) => x.category_id === co.cat));
@@ -800,18 +800,9 @@ function draw() {
       <div class="summary">${summary()}</div><p class="err" id="err"></p>`;
     foot = `<button class="btn line sm" data-co="back">Back</button><button class="btn primary" data-co="next2">${co.mode === "signup" ? "Create account" : "Sign in"} and continue</button>`;
   } else if (co.step === 3) {
-    const p = SET.payment || {}, ref = "BGP-" + co.payment_id.slice(0, 8).toUpperCase();
-    const link = p.upi_id ? `upi://pay?pa=${encodeURIComponent(p.upi_id)}&pn=${encodeURIComponent(p.upi_name || "Branditude")}&am=${(+co.result.total).toFixed(2)}&cu=INR&tn=${encodeURIComponent(ref)}` : "";
     const trialNote = co.result.trial ? `<div class="note" style="margin-bottom:18px"><b>Everything is unlocked until ${new Date(co.result.trial_ends + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "long" })}.</b> Pay now or any time before then to keep it running after the trial.</div>` : "";
-    const showUpi = p.upi_id && !rzpOn(SET);
-    const online = rzpOn(SET) ? `<div style="margin-bottom:18px"><button class="btn primary" data-co="rzp" style="width:100%;justify-content:center">Pay ${inr(co.result.total)} online</button><p style="color:var(--ink-3);font-size:13px;text-align:center;margin-top:6px">UPI, cards, netbanking or wallets. Your plan switches on instantly.</p>${showUpi ? `<p style="color:var(--ink-3);font-size:13px;text-align:center;margin-top:14px">or scan and pay by UPI</p>` : ""}</div>` : "";
-    body = trialNote + online + (showUpi ? `<div class="pay"><div class="qrbox" id="upi-qr"></div><div><p style="color:var(--ink-2);font-size:15px">Scan with any UPI app, or pay to</p><p class="upi">${esc(p.upi_id)}</p>
-        <p style="margin-top:10px">Amount <b class="num">${inr(co.result.total)}</b></p><p style="color:var(--ink-3);font-size:14px">Add <b>${ref}</b> in the payment note</p><a class="btn sm primary" href="${esc(link)}" style="margin-top:10px">Open UPI app</a></div></div>
-      <div class="field" style="margin-top:20px"><label for="utr">UPI transaction ID (12-digit UTR)</label><input id="utr" inputmode="numeric" placeholder="e.g. 431298765012"></div><p class="err" id="err"></p>`
-      : online ? "" : `<div class="note">Your account is ready. Branditude will share payment details with you shortly.</div>`);
-    foot = co.result.trial
-      ? `${showUpi ? `<button class="btn line sm" data-co="paid">I've paid</button>` : ""}<a class="btn primary" href="app.html">Start using my free trial</a>`
-      : `<a class="btn line sm" href="app.html#plan">Pay later</a>${showUpi ? `<button class="btn primary" data-co="paid">I've paid</button>` : `<a class="btn primary" href="app.html">Go to my dashboard</a>`}`;
+    body = trialNote + `<div style="margin-bottom:6px"><button class="btn primary" data-co="rzp" style="width:100%;justify-content:center">Pay ${inr(co.result.total)}</button><p style="color:var(--ink-3);font-size:13px;text-align:center;margin-top:6px">UPI, cards, netbanking or wallets. Your plan switches on as soon as you pay.</p></div><p class="err" id="err"></p>`;
+    foot = co.result.trial ? `<a class="btn line sm" href="app.html">Start my free trial first</a>` : `<a class="btn line sm" href="app.html#plan">Pay later</a>`;
   } else {
     body = `<div class="done-mark"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></div>
       <h3 style="font-size:22px">${co.pendingConfirm ? "Check your email" : co.enquiry ? "Thanks! We'll be in touch" : "You're all set"}</h3>
@@ -822,7 +813,6 @@ function draw() {
   $("#checkout-root").innerHTML = `<div class="back" data-co="backdrop"><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="co-title">
     <div class="sheet-head"><h2 id="co-title">${steps[co.step - 1]}</h2><button class="x" data-co="close" aria-label="Close">×</button></div>
     <div class="prog">${steps.map((s, i) => `<i class="${i < co.step ? "on" : ""}"></i>`).join("")}</div><div class="sheet-body">${body}</div><div class="sheet-foot">${foot}</div></div></div>`;
-  if (co.step === 3 && $("#upi-qr") && window.QRCode) new QRCode($("#upi-qr"), { text: `upi://pay?pa=${SET.payment.upi_id}&pn=${encodeURIComponent(SET.payment.upi_name || "Branditude")}&am=${(+co.result.total).toFixed(2)}&cu=INR&tn=BGP-${co.payment_id.slice(0, 8).toUpperCase()}`, width: 170, height: 170, colorDark: "#121a33", colorLight: "#ffffff" });
   if (co.step === 1 && !co.quote) refreshQuote();
 }
 const err = (m) => { const e = $("#err"); if (e) e.textContent = m; };
@@ -850,11 +840,8 @@ document.addEventListener("click", async (e) => {
       await register(); }
     if (a === "rzp") { el.disabled = true; el.textContent = "Opening…";
       try { const r = await payOnline(sb, co.payment_id); if (r === "paid") { co.paidOnline = true; co.step = 4; return draw(); } }
-      catch (x) { err(x.message); }
-      el.disabled = false; el.textContent = `Pay ${inr(co.result.total)} online`; return; }
-    if (a === "paid") { const utr = $("#utr").value.trim(); el.disabled = true;
-      const { error } = await sb.rpc("submit_utr", { p_payment: co.payment_id, p_utr: utr }); if (error) { el.disabled = false; return err(friendly(error)); }
-      co.step = 4; draw(); }
+      catch (x) { err(/switched on yet/.test(x.message) ? "Online payment is being set up. You can pay later from your dashboard." : x.message); }
+      el.disabled = false; el.textContent = `Pay ${inr(co.result.total)}`; return; }
   } catch (x) { err(friendly(x)); el.disabled = false; }
 });
 async function register() {

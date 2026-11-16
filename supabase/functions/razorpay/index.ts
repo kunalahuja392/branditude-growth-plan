@@ -44,8 +44,11 @@ Deno.serve(async (req: Request) => {
     return json({ ok: true });
   }
 
+  // Setup check for the admin Settings page (only says whether the secrets exist)
+  try { if (JSON.parse(raw || "{}").action === "status") return json({ keys: !!(keyId && keySecret), webhook: !!env("RAZORPAY_WEBHOOK_SECRET") }); } catch { /* not JSON */ }
+
   // 2. Signed-in user
-  if (!keyId || !keySecret) return json({ error: "Online payment isn't switched on yet. Please pay by UPI.", setup: true }, 503);
+  if (!keyId || !keySecret) return json({ error: "Online payment isn't switched on yet.", setup: true }, 503);
   const jwt = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
   const { data: u } = await admin.auth.getUser(jwt);
   if (!u?.user) return json({ error: "Please sign in again." }, 401);

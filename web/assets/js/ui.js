@@ -42,12 +42,24 @@ export function splitPhone(full, cc = DEFAULT_COUNTRY_CODE) {
 }
 export function ccOptions(cc = DEFAULT_COUNTRY_CODE) {
   const c = String(cc || DEFAULT_COUNTRY_CODE).replace(/\D/g, ""), list = COUNTRIES.some((x) => x[0] === c) ? COUNTRIES : [[c, "Other"], ...COUNTRIES];
-  return list.map(([v, n]) => `<option value="${v}" ${v === c ? "selected" : ""}>+${v} ${esc(n)}</option>`).join("");
+  return list.map(([v, n]) => `<option value="${v}" data-long="+${v} ${esc(n)}" ${v === c ? "selected" : ""}>+${v} ${esc(n)}</option>`).join("");
 }
 // country code picker + number box. Read it back with readPhone(id).
 export function phoneInput(id, { value = "", cc = DEFAULT_COUNTRY_CODE, placeholder = "Mobile number", required = false, label = "Mobile number" } = {}) {
   const [c, n] = value ? splitPhone(value, cc) : [String(cc || DEFAULT_COUNTRY_CODE), ""];
   return `<div class="phone-in"><select id="${id}-cc" aria-label="Country code">${ccOptions(c)}</select><input id="${id}" inputmode="tel" autocomplete="tel-national" ${required ? "required" : ""} value="${esc(n)}" placeholder="${esc(placeholder)}" aria-label="${esc(label)}"></div>`;
+}
+// Phone country pickers show just "+91" when closed and full country names while choosing.
+const ccShort = (sel) => [...sel.options].forEach((o) => (o.textContent = o.selected ? "+" + o.value : o.dataset.long || o.textContent));
+const ccLong = (sel) => [...sel.options].forEach((o) => (o.textContent = o.dataset.long || o.textContent));
+if (typeof document !== "undefined") {
+  const isCC = (t) => t && t.tagName === "SELECT" && t.closest && t.closest(".phone-in");
+  document.addEventListener("focusin", (e) => isCC(e.target) && ccLong(e.target));
+  document.addEventListener("mousedown", (e) => isCC(e.target) && ccLong(e.target));
+  document.addEventListener("change", (e) => isCC(e.target) && ccShort(e.target));
+  document.addEventListener("focusout", (e) => isCC(e.target) && ccShort(e.target));
+  new MutationObserver(() => document.querySelectorAll(".phone-in select:not([data-cc])").forEach((x) => { x.dataset.cc = "1"; if (document.activeElement !== x) ccShort(x); }))
+    .observe(document.documentElement, { childList: true, subtree: true });
 }
 export function readPhone(id, root = document) {
   const i = root.querySelector("#" + id), c = root.querySelector("#" + id + "-cc");
@@ -157,12 +169,27 @@ const I = {
 export const ico = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[k] || ""}</svg>`;
 
 /* ---------- shell ---------- */
-export function shell({ brandSub, groups, current, footer }) {
+// Left rail on computers. On phones: a bottom bar with the main pages, an optional big action in the middle,
+// and "More", which opens a sheet with every page.
+export function shell({ brandSub, groups, current, footer, mobile = {} }) {
+  const all = groups.flatMap((g) => g.items), link = ([k, l, i, badge], cls = "nav-link") => (l = cls === "mlink" ? mobile.short?.[k] || l : l, `<a class="${cls}" href="#${k}" ${k === current ? 'aria-current="page"' : ""}>${ico(i)}<span>${esc(l)}</span>${badge ? `<span class="nav-badge num">${badge}</span>` : ""}</a>`);
+  const prim = (mobile.primary || all.filter((x) => x[0] !== "signout").slice(0, 4).map((x) => x[0])).map((k) => all.find((x) => x[0] === k)).filter(Boolean);
+  const half = Math.ceil(prim.length / 2), act = mobile.action ? `<button class="mbar-act" data-a="${esc(mobile.action.a)}" aria-label="${esc(mobile.action.label)}">${ico(mobile.action.icon || "plus")}<span>${esc(mobile.action.label)}</span></button>` : "";
+  const moreBadge = all.filter((x) => !prim.includes(x)).reduce((n, x) => n + (+x[3] || 0), 0);
+  const inMore = !prim.some((x) => x[0] === current);
   return `<div class="brand"><div class="brand-mark"><img src="/assets/img/branditude-mark.svg" alt="" width="26" height="26"></div><div><b>Branditude</b><small>${esc(brandSub)}</small></div></div>` +
-    groups.map((g) => (g.label ? `<div class="rail-group">${esc(g.label)}</div>` : "") +
-      g.items.map(([k, l, i, badge]) => `<a class="nav-link" href="#${k}" ${k === current ? 'aria-current="page"' : ""}>${ico(i)}<span>${esc(l)}</span>${badge ? `<span class="nav-badge num">${badge}</span>` : ""}</a>`).join("")).join("") +
-    `<div class="rail-foot">${footer}</div>`;
+    `<div class="rail-links">${groups.map((g) => (g.label ? `<div class="rail-group">${esc(g.label)}</div>` : "") + g.items.map((x) => link(x)).join("")).join("")}</div>` +
+    `<div class="rail-foot">${footer}</div>` +
+    `<div class="mbar">${prim.slice(0, half).map((x) => link(x, "mlink")).join("")}${act}${prim.slice(half).map((x) => link(x, "mlink")).join("")}
+      <button class="mlink" data-more ${inMore ? 'aria-current="page"' : ""} aria-haspopup="dialog">${ico("grid")}<span>More</span>${moreBadge ? `<span class="nav-badge num">${moreBadge}</span>` : ""}</button></div>` +
+    `<div class="msheet" hidden><div class="msheet-panel" role="dialog" aria-label="All pages"><div class="msheet-head"><b>All pages</b><button class="btn ghost sm" data-more-close>Close</button></div>
+      ${groups.map((g) => `${g.label ? `<div class="rail-group">${esc(g.label)}</div>` : ""}<div class="msheet-grid">${g.items.map((x) => link(x, "mtile")).join("")}</div>`).join("")}<div class="msheet-foot">${footer}</div></div></div>`;
 }
+document.addEventListener("click", (e) => {
+  const sh = document.querySelector(".msheet"); if (!sh) return;
+  if (e.target.closest("[data-more]")) { sh.hidden = false; return; }
+  if (e.target.closest("[data-more-close]") || e.target === sh || e.target.closest(".mtile")) sh.hidden = true;
+});
 
 export function barChart(points, { label = (p) => p.label, value = (p) => p.value, fmt = inr } = {}) {
   const W = 560, H = 180, pad = 26, n = Math.max(points.length, 1), bw = (W - pad * 2) / n;

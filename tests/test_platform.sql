@@ -27,7 +27,7 @@ do $$ declare n int; q jsonb; begin
   raise notice 'lead ok: % total %', q->>'ref', q->>'total';
   -- a salon cannot buy the Zomato product: it is silently excluded from the quote
   q := quote((select id from packages where slug='starter'),'monthly', array[(select id from products where name='Zomato & Swiggy listing optimisation')], null, (select id from categories where slug='salon-spa'));
-  assert (q->>'subtotal')::numeric = 299, 'category filter on products';
+  assert (q->>'subtotal')::numeric = 399, 'category filter on products';
 end $$;
 reset role;
 
@@ -413,7 +413,7 @@ set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-00000000
 do $$ declare b uuid := current_setting('test.glow'); r jsonb; begin
   assert has_module(b,'attendance'), 'add-on switched on after payment';
   r := create_order(b, 'subscription', (select id from packages where slug='starter'), 'monthly');
-  assert (r->>'amount')::numeric = 299 + 199 and r->>'description' like '%add-ons: Staff attendance%', 'renewal includes add-on: ' || r::text;
+  assert (r->>'amount')::numeric = 399 + 199 and r->>'description' like '%add-ons: Staff attendance%', 'renewal includes add-on: ' || r::text;
   r := create_order(b, 'subscription', (select id from packages where slug='pro'), 'yearly');
   assert (r->>'amount')::numeric = 8990, 'pro already has attendance: ' || r::text;
   perform set_config('test.propay', r->>'payment_id', false);
@@ -798,7 +798,7 @@ reset role;
 set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000f2');
 do $$ declare r jsonb; q jsonb; begin
   q := quote((select id from packages where slug='starter'), 'monthly', '{}', current_setting('test.refcode'));
-  assert (q->>'referral')::boolean and (q->>'promo_ok')::boolean and (q->>'subtotal')::numeric = 299, 'referral code: no discount, valid: '||q::text;
+  assert (q->>'referral')::boolean and (q->>'promo_ok')::boolean and (q->>'subtotal')::numeric = 399, 'referral code: no discount, valid: '||q::text;
   r := register_business(jsonb_build_object('name','Referred Gym','phone','9822222222','package_id',(select id from packages where slug='starter'),'promo_code',current_setting('test.refcode')));
   perform set_config('test.rp', r->>'payment_id', false);
 end $$;
@@ -820,6 +820,50 @@ set role service_role;
 do $$ declare b uuid := (select id from businesses where name='Glow Salon'); s uuid; begin
   insert into staff(business_id, name) values (b, 'Tip Test') returning id into s;
   insert into salary_adjustments(business_id, staff_id, month, kind, amount, note, tip_day) values (b, s, date_trunc('month', current_date)::date, 'tip', 150, 'Shared tip', current_date);
+end $$;
+reset role;
+
+-- subscriptions & clean-ups (migration 28)
+set role service_role;
+do $$ declare b uuid := (select id from businesses where name='Glow Salon'); c uuid; n int; r jsonb; begin
+  insert into customers(business_id, name, phone, tags) values (b, 'Tag Test', '919811100099', '{New,VIP}') returning id into c;
+  assert (select tags from customers where id = c) = '{VIP}', 'New tag is not kept';
+  assert not exists (select 1 from customers where 'New' = any(tags)), 'no customer tagged New';
+  -- grace period: open 3 days after the end, then paused by the daily job
+  update businesses set status = 'active', subscription_ends = current_date - 3 where id = b;
+  assert biz_open(b), 'open on the last grace day';
+  update businesses set subscription_ends = current_date - 4 where id = b;
+  assert not biz_open(b), 'locked after the grace period';
+  n := expire_plans(); assert n >= 1 and (select status from businesses where id = b) = 'paused', 'expired plan paused';
+  -- reminders: 7 days before, once
+  update businesses set status = 'active', subscription_ends = current_date + 7, phone = '919800000002' where id = b;
+  r := plan_reminders_due(); assert exists (select 1 from jsonb_array_elements(r) e where (e->>'business_id')::uuid = b and (e->>'days_left')::int = 7), 'reminder due 7 days before: '||r::text;
+  insert into plan_reminder_log(business_id, ends, days_left) values (b, current_date + 7, 7);
+  r := plan_reminders_due(); assert not exists (select 1 from jsonb_array_elements(r) e where (e->>'business_id')::uuid = b), 'not sent twice';
+  update businesses set subscription_ends = current_date + 5 where id = b;
+  r := plan_reminders_due(); assert not exists (select 1 from jsonb_array_elements(r) e where (e->>'business_id')::uuid = b), 'no reminder 5 days before';
+  update businesses set subscription_ends = current_date + 30 where id = b;
+  assert make_ref_code('Drip In Cafe!', 10) = 'DRIPINCA10', 'readable referral code: ' || make_ref_code('Drip In Cafe!', 10);
+  assert (select name from packages where slug = 'starter') = 'Basic', 'Starter renamed Basic';
+end $$;
+reset role;
+-- the owner can cancel an unpaid payment; a Razorpay payment arriving later still counts
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000b1');
+do $$ declare b uuid := (select id from businesses where name='Glow Salon'); r jsonb; begin
+  r := order_wa_credits(b, 10, 0); perform set_config('test.cx', r->>'payment_id', false);
+  perform cancel_payment((r->>'payment_id')::uuid);
+  assert (select status from payments where id = (r->>'payment_id')::uuid) = 'cancelled', 'cancelled';
+end $$;
+reset role;
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000a1');
+do $$ begin perform cancel_payment(current_setting('test.cx')::uuid); assert false, 'other business cannot cancel'; exception when others then
+  if sqlerrm like 'assert%' then raise; end if; end $$;
+reset role;
+set role service_role;
+do $$ declare v uuid := current_setting('test.cx')::uuid; t numeric; begin
+  update payments set meta = meta || '{"rzp_order":"order_X"}' where id = v; select total into t from payments where id = v;
+  perform razorpay_paid(v, 'order_X', 'pay_X', round(t*100)::bigint);
+  assert (select status from payments where id = v) = 'confirmed', 'late Razorpay payment applied';
 end $$;
 reset role;
 \echo 'ALL TESTS PASSED'
