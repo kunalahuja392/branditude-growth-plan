@@ -4,7 +4,7 @@ import { $, esc, inr, fmtDate, fmtDT, toast, openModal, closeModal, ico, shell, 
 import { mountReviewHelper } from "./review-helper.js";
 
 let C, D = {};
-const ROUTES = [{ label: "", items: [["cards", "My cards", "card"], ["offers", "Offers", "tag"], ["visits", "My visits", "chart"], ["me", "My profile", "users"], ["signout", "Sign out", "out"]] }];
+const ROUTES = [{ label: "", items: [["cards", "My cards", "card"], ["members", "Memberships", "clock"], ["offers", "Offers", "tag"], ["visits", "My visits", "chart"], ["me", "My profile", "users"], ["signout", "Sign out", "out"]] }];
 const route = () => { const h = location.hash.slice(1); return ROUTES[0].items.some((r) => r[0] === h) ? h : "cards"; };
 
 export async function mount(ctx) {
@@ -14,7 +14,8 @@ export async function mount(ctx) {
     q(sb.rpc("my_businesses")), q(sb.from("customers").select("*")), q(sb.from("loyalty_programs").select("*")),
     q(sb.from("loyalty_rewards").select("*").order("visit_no")), q(sb.from("visits").select("*").order("created_at", { ascending: false }).limit(200)), q(sb.from("coupons").select("*")),
   ]);
-  Object.assign(D, { biz, me, progs, rewards, visits, coupons });
+  const members = await q(sb.rpc("my_gc_memberships")).catch(() => []);
+  Object.assign(D, { biz, me, progs, rewards, visits, coupons, members: members || [] });
   render();
 }
 function render() {
@@ -33,6 +34,16 @@ const VIEWS = {
         <div style="width:100%" class="small muted">${esc(b.icon || "")} ${esc(b.category || "")}${b.city ? " · " + esc(b.city) : ""} · ${me?.visits || 0} visits</div>
         ${rw.length ? `<details style="width:100%"><summary class="small" style="cursor:pointer;font-weight:600">All rewards on this card</summary><div class="list">${rw.map((r) => `<div class="item small"><span class="grow">Visit ${r.visit_no}</span><b>${esc(rwLabel(r))}</b></div>`).join("")}</div></details>` : ""}
         <div class="row" style="width:100%"><button class="btn sm" data-c="rate" data-id="${b.id}">${ico("smile")} Rate your last visit</button>${b.google_review_link ? `<a class="btn sm" href="${esc(b.google_review_link)}" target="_blank" rel="noopener">${ico("star")} Review on Google</a>` : ""}</div></div>`; }).join("")}</div>`;
+  },
+  members() {
+    const hrs = (m) => { const h = Math.floor(m / 60), r = Math.round(m % 60); return h && r ? `${h}h ${r}m` : h ? `${h} hr${h === 1 ? "" : "s"}` : `${r} min`; };
+    if (!D.members.length) return head("My memberships") + `<div class="card empty" style="padding:40px 20px"><p style="font-size:40px">🎮</p><p><b>No memberships yet.</b></p><p>When you buy a membership at a gaming club that uses Branditude, your hours left and expiry date show up here.</p></div>`;
+    return head("My memberships", "Hours left and the last day you can use them.") + `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">${D.members.map((x) => {
+      const state = x.status === "cancelled" ? ["Cancelled", "bad"] : !x.active ? ["Expired", "bad"] : x.days_left <= 7 ? [`${x.days_left} day${x.days_left === 1 ? "" : "s"} left`, "warn"] : ["Active", "good"];
+      return `<div class="card"><div class="card-head"><div><b>${esc(x.business_name)}</b><div class="muted small">${esc(x.plan_name)}</div></div><span class="pill ${state[1]}">${state[0]}</span></div>
+        <div style="font-size:28px;font-weight:800" class="num">${hrs(x.minutes_left)}</div><div class="muted small">left in total · valid till <b>${fmtDate(x.expires_on)}</b></div>
+        <div class="list" style="margin-top:10px">${x.buckets.map((b) => `<div class="item small"><div class="grow"><b>${esc(b.name)}</b><span class="muted">${b.stations.length ? esc(b.stations.join(" or ")) : "Any station"}</span></div><span class="num"><b>${hrs(b.left)}</b> of ${hrs(b.minutes)}</span></div>`).join("")}</div>
+        ${x.uses.length ? `<details style="margin-top:8px"><summary class="small" style="cursor:pointer;font-weight:600">Recent use</summary><div class="list">${x.uses.map((u) => `<div class="item small"><span class="grow">${fmtDT(u.at)}${u.station ? " · " + esc(u.station) : ""}</span><b>${hrs(u.minutes)}</b></div>`).join("")}</div></details>` : ""}</div>`; }).join("")}</div>`;
   },
   offers() {
     const live = D.coupons.filter((k) => k.active && (!k.expiry || k.expiry >= new Date().toISOString().slice(0, 10)) && (!k.usage_limit || k.used < k.usage_limit));

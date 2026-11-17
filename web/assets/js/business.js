@@ -24,7 +24,7 @@ const waOn = () => !!D.biz?.wa_enabled;
 
 // Which module each page belongs to. Pages without an entry are in every plan.
 const ROUTE_MOD = { offers: "loyalty", loyalty: "loyalty", templates: "bulk_whatsapp", alerts: "campaigns", seo: "seo", replies: "google_replies", orders: "menu", menu: "menu", staff: "attendance", salary: "attendance", accounts: "accounting",
-  gboard: "gaming", gbookings: "gaming", gbills: "gaming", gstock: "gaming", greports: "gaming", gsetup: "gaming" };
+  gboard: "gaming", gbookings: "gaming", gbills: "gaming", gstock: "gaming", gmembers: "gaming", greports: "gaming", gsetup: "gaming" };
 // What this login may do: owner and admin everything, staff only the areas the owner ticked. The database checks the same.
 const can = (area) => ["owner", "admin"].includes(D.me?.role) || (D.me?.perms || []).includes(area);
 const allowed = (r) => r === "signout" || can(AREA_OF[r] || "customers");
@@ -33,7 +33,7 @@ const item = (r, label, icon, badge = "") => [r, label, icon, lockBadge(r, badge
 const ROUTES = () => [
   // Gaming clubs: station timers, LP bills, bookings (business type "Gaming Club" only)
   ...((modInfo("gaming")?.categories || []).includes(D.biz?.categories?.slug) ? [{ label: "Gaming", items: [item("gboard", "Live board", "grid"), item("gbookings", "Bookings", "clock"), item("gbills", "Bills", "receipt"),
-    item("gstock", "Snacks & stock", "box"), item("greports", "Gaming reports", "chart"), item("gsetup", "Stations & pricing", "cog")] }] : []),
+    item("gstock", "Snacks & stock", "box"), item("gmembers", "Memberships", "card"), item("greports", "Gaming reports", "chart"), item("gsetup", "Stations & pricing", "cog")] }] : []),
   { label: "Daily", items: [item("dashboard", "Dashboard", "dash"), item("customers", "Customers", "users"), item("feedback", "Reviews & feedback", "star", openComplaints() || ""), item("alerts", "Alerts", "bell", hasMod("campaigns") ? alerts().length || "" : ""),
     ...(fitsBiz("menu") ? [item("orders", "Orders", "receipt", hasMod("menu") ? D.newOrders || "" : ""), item("menu", "QR menu", "food")] : []), item("staff", "Staff & attendance", "clock")] },
   { label: "Grow", items: [item("offers", "Offers & coupons", "tag"), item("loyalty", "Loyalty card", "card"), item("whatsapp", "WhatsApp", "wa"), item("seo", "Keywords & SEO", "spark")] },
@@ -667,6 +667,8 @@ async function payModal(paymentId) {
     <p class="muted small">${esc(p.description)}${+p.gst ? ` · ${inr2(p.amount)} + GST ${inr2(p.gst)}` : ""}</p>
     <div class="rzp-box"><button class="btn primary" id="rzp-go" style="width:100%;justify-content:center">Pay ${inr2(p.total)}</button>
     <p class="small muted" style="margin-top:8px;text-align:center">UPI, cards, netbanking or wallets. It switches on as soon as you pay.</p></div>
+    ${p.kind === "subscription" && !p.meta?.promo_code ? `<details style="margin-top:12px"><summary class="muted small">Have a coupon code?</summary><div class="row" style="margin-top:8px;flex-wrap:nowrap"><input id="pay-promo" placeholder="Coupon code" style="flex:1;text-transform:uppercase"><button class="btn" id="pay-apply">Apply</button></div><p class="err small" id="pay-perr"></p></details>`
+      : p.meta?.promo_code ? `<p class="small" style="margin-top:10px"><span class="pill good">Coupon ${esc(p.meta.promo_code)} applied</span></p>` : ""}
     <div class="modal-foot"><button class="btn ghost" id="pay-cancel">Cancel this payment</button><button class="btn" data-close>Later</button></div>`);
   const rz = m.querySelector("#rzp-go");
   rz.onclick = async () => {
@@ -677,6 +679,10 @@ async function payModal(paymentId) {
     rz.disabled = false; rz.textContent = `Pay ${inr2(p.total)}`;
   };
   m.querySelector("#pay-cancel").onclick = () => cancelPay(p.id);
+  const ap = m.querySelector("#pay-apply");
+  if (ap) ap.onclick = async () => { const code = m.querySelector("#pay-promo").value.trim(); if (!code) return;
+    ap.disabled = true; try { await q(sb.rpc("apply_promo", { p_payment: p.id, p_code: code })); D.pays = null; toast("Coupon applied"); payModal(p.id); }
+    catch (e) { m.querySelector("#pay-perr").textContent = e.message; ap.disabled = false; } };
 }
 async function cancelPay(id) {
   if (!(await confirmBox("Cancel this payment?", "Nothing has been charged. You can start it again any time.", "Cancel payment"))) return;

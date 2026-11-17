@@ -338,7 +338,7 @@ async function snackModal(sid) {
 function totals(sub, disc) {
   const cf = G.board?.settings || { tax_percent: 18, tax_inclusive: false }, t = +cf.tax_percent || 0, taxable = Math.max(0, sub - disc);
   let tax, total; if (cf.tax_inclusive) { total = taxable; tax = total - total / (1 + t / 100); } else { tax = (taxable * t) / 100; total = taxable + tax; }
-  const r = Math.round(total); return { tax, round: r - total, total: r, t, incl: cf.tax_inclusive };
+  const to = +cf.round_to || 1, r = to > 1 ? Math.ceil(+total.toFixed(2) / to) * to : Math.round(total); return { tax, round: r - total, total: r, t, incl: cf.tax_inclusive };
 }
 function payBox(m, { players = [], total, shares }) {
   const box = $("#g-pays", m);
@@ -360,13 +360,20 @@ function payBox(m, { players = [], total, shares }) {
 async function checkout(sid, btn) {
   const s = await guard(btn, async () => { let x = await rpc("gc_session", { p_session: sid }); if (["running", "paused"].includes(x.status)) x = await rpc("gc_action", { p_session: sid, p_action: "stop", p: {} }); return x; });
   if (!s) return; refresh().catch(() => {});
-  const c = s.calc, pl = s.lp_players || [], needTail = s.is_lp && c.tail && c.tail.minutes >= 1;
+  let c = s.calc; const pl = s.lp_players || [], needTail = s.is_lp && c.tail && c.tail.minutes >= 1, mem = { id: null, bucket: 0, opts: [] };
+  const headLine = () => `${esc(s.customer_name || "Walk-in")} · ${tm(s.start_at)}–${tm(s.end_at)} · played ${mins(c.active_minutes)} · charging <b>${c.charged_minutes} min</b>`;
+  const gameRow = () => `<td>🎮 ${esc(c.station.name)} · ${c.charged_minutes} min ${c.by_rule.length > 1 || c.by_rule[0]?.rule !== "Standard" ? c.by_rule.map((r) => `<span class="pill ${r.rule === "Standard" ? "" : "warn"}">${esc(r.rule)} ${mins(r.minutes)}</span>`).join(" ") : ""}</td><td class="num"><b>${inr2(c.amount)}</b></td>`;
+  const modeOf = () => c.bill_mode === "custom" ? "custom" : c.bill_mode === "played" ? "played" : c.bill_mode === "booked" ? "booked" : (c.charged_minutes > c.played_minutes && s.booked_minutes && c.charged_minutes === Math.max(s.booked_minutes, c.played_minutes) ? "booked" : "played");
+  const memCover = () => { const o = mem.opts.find((x) => x.id === mem.id), b = o?.buckets[mem.bucket]; if (!b || !c.charged_minutes) return { min: 0, amt: 0 }; const min = Math.min(b.left, c.charged_minutes); return { min, amt: +(c.amount * min / c.charged_minutes).toFixed(2) }; };
   const m = openModal(`<div class="modal-head"><h2>🧾 Bill · ${esc(c.station.name)}</h2><button class="btn ghost" data-close>Close</button></div>
-    <p class="muted" style="margin:0">${esc(s.customer_name || "Walk-in")} · ${tm(s.start_at)}–${tm(s.end_at)} · played ${mins(c.active_minutes)} · charged <b>${c.charged_minutes} min</b>${s.booked_minutes && c.charged_minutes > Math.ceil(c.active_minutes) ? ` (booked ${mins(s.booked_minutes)})` : ""}</p>
+    <p class="muted" style="margin:0" id="g-hd">${headLine()}</p>
+    <div class="field" style="margin-top:10px"><label>Charge for</label><div class="row" style="gap:8px;flex-wrap:wrap"><div class="chips" id="g-bt">${chips([["played", `Time played (${c.played_minutes} min)`], ...(s.booked_minutes ? [["booked", `Full booking (${mins(s.booked_minutes)})`]] : []), ["custom", "Other"]], [modeOf()])}</div>
+      <span id="g-btc" ${c.bill_mode === "custom" ? "" : "hidden"}><input id="g-btm" type="number" min="0" max="1440" value="${c.bill_minutes ?? c.charged_minutes}" style="width:80px"> min <button class="btn sm" id="g-bts">Apply</button></span></div></div>
+    ${s.is_lp ? "" : `<div id="g-mem"></div>`}
     ${needTail ? `<div class="gc-lp" style="margin-top:12px;font-size:14px"><b>🏆 Last LP game (${mins(c.tail.minutes)} · ${inr(c.tail.amount)}): who won and who pays?</b>
       <div class="chips" id="g-tw" style="margin-top:8px">${chips([...pl.map((p) => [p, p]), ["Draw", "Draw"]])}</div><div class="muted small" style="margin-top:8px">Put this time on:</div><div class="chips" id="g-tp">${chips(pl.map((p) => [p, p]))}</div></div>` : ""}
     <div class="table-wrap" style="margin-top:12px"><table><tbody>
-      <tr><td>🎮 ${esc(c.station.name)} · ${c.charged_minutes} min ${c.by_rule.length > 1 || c.by_rule[0]?.rule !== "Standard" ? c.by_rule.map((r) => `<span class="pill ${r.rule === "Standard" ? "" : "warn"}">${esc(r.rule)} ${mins(r.minutes)}</span>`).join(" ") : ""}</td><td class="num"><b>${inr2(c.amount)}</b></td></tr>
+      <tr id="g-gr">${gameRow()}</tr><tr id="g-mr" hidden></tr>
       ${c.items.map((i) => `<tr><td>🍿 ${+i.qty}× ${esc(i.name)} ${i.assigned_to ? `<span class="pill acc">${esc(i.assigned_to)}</span>` : ""}</td><td class="num">${inr2(i.qty * i.price)}</td></tr>`).join("")}</tbody></table></div>
     ${s.is_lp ? `<h3 style="margin-top:14px">Who pays what</h3><div id="g-lpb"></div>` : ""}
     <div class="fields" style="margin-top:10px"><div class="field"><label>Customer name</label><input id="g-cname" value="${esc(s.customer_name || "")}"></div>
@@ -378,7 +385,7 @@ async function checkout(sid, btn) {
     <label class="check" style="margin-top:10px"><input type="checkbox" id="g-sendwa" ${G.board?.settings?.wa_bill !== false ? "checked" : ""}> Send the bill and feedback link on WhatsApp${hasWA() ? " (1 credit, from the Branditude number)" : ""}</label>
     <div class="modal-foot"><button class="btn" id="g-res">↺ Resume timer</button><button class="btn primary" id="g-go">✓ Create bill</button></div>`, { wide: true });
   const tail = { winner: null, payers: [] };
-  const sub = () => +(c.amount + c.items_total).toFixed(2);
+  const sub = () => +(c.amount - memCover().amt + c.items_total).toFixed(2);
   const disc = () => { const v = +($("#g-disc", m).value || 0); return Math.min(sub(), $("#g-dt", m).value === "pct" ? (sub() * v) / 100 : v); };
   const shares = () => {
     const pp = { ...c.per_player }; if (needTail) tail.payers.forEach((p) => (pp[p] = (pp[p] || 0) + c.tail.amount / tail.payers.length));
@@ -387,12 +394,25 @@ async function checkout(sid, btn) {
     const T = totals(sub(), disc()).total; let acc = 0;
     rows.forEach((r, i) => { r.amount = i === rows.length - 1 ? T - acc : sub() > 0 ? Math.round((T * (r.game + r.items)) / sub()) : 0; acc += r.amount; }); return rows;
   };
-  const draw = () => { const t = totals(sub(), disc());
+  const draw = () => { const t = totals(sub(), disc()), mc = memCover(), mr = $("#g-mr", m);
+    if (mr) { mr.hidden = !mc.min; mr.innerHTML = mc.min ? `<td>🎟️ Membership hours: ${mc.min} min used</td><td class="num">−${inr2(mc.amt)}</td>` : ""; }
     $("#g-tots", m).innerHTML = `<tr><td>Subtotal</td><td class="num">${inr2(sub())}</td></tr>${disc() ? `<tr><td>Discount</td><td class="num">−${inr2(disc())}</td></tr>` : ""}${t.t ? `<tr><td>GST ${t.t}%${t.incl ? " (included)" : ""}</td><td class="num">${inr2(t.tax)}</td></tr>` : ""}${Math.abs(t.round) >= 0.01 ? `<tr><td>Round off</td><td class="num">${inr2(t.round)}</td></tr>` : ""}<tr class="g"><td>Total</td><td class="num">${inr(t.total)}</td></tr>`;
     if (s.is_lp) $("#g-lpb", m).innerHTML = `<div class="table-wrap"><table><thead><tr><th>Player</th><th class="num">Game time</th><th class="num">Snacks</th><th class="num">Pays</th></tr></thead><tbody>${shares().map((r) => `<tr><td>${esc(r.player)}</td><td class="num">${inr2(r.game)}</td><td class="num">${inr2(r.items)}</td><td class="num"><b>${inr(r.amount)}</b></td></tr>`).join("")}</tbody></table></div>${needTail && !tail.payers.length ? `<p class="small" style="color:var(--warn)">Pick who pays for the last game above.</p>` : ""}`;
     m.syncPay && m.syncPay(); };
   const getPays = payBox(m, { players: pl, total: () => totals(sub(), disc()).total, shares });
   draw(); ["#g-disc", "#g-dt"].forEach((x) => $(x, m).addEventListener("input", draw));
+  // charge for: time played, the full booking, or other minutes
+  const setTime = (mode, minutes) => guard(null, async () => { const v = await rpc("gc_bill_time", { p_session: sid, p_mode: mode, p_minutes: minutes ?? null }); c = v.calc;
+    $("#g-hd", m).innerHTML = headLine(); $("#g-gr", m).innerHTML = gameRow(); drawMem(); draw(); });
+  pick($("#g-bt", m), { onChange: (v) => { $("#g-btc", m).hidden = v[0] !== "custom"; if (v[0] === "custom") $("#g-btm", m).focus(); else setTime(v[0]); } });
+  $("#g-bts", m).onclick = () => setTime("custom", Math.max(0, Math.round(+$("#g-btm", m).value || 0)));
+  $("#g-btm", m).onkeydown = (e) => { if (e.key === "Enter") $("#g-bts", m).click(); };
+  // membership hours
+  const drawMem = () => { const el = $("#g-mem", m); if (!el) return; if (!mem.opts.length) { el.innerHTML = ""; return; }
+    el.innerHTML = `<div class="card" style="margin-top:10px;padding:10px 12px"><b>🎟️ Use membership hours</b><div class="chips" id="g-mo" style="margin-top:8px">${chips([["", "Don't use"], ...mem.opts.flatMap((o) => o.buckets.filter((b) => b.left > 0 && (!b.station_ids.length || b.station_ids.includes(c.station.id))).map((b) => [`${o.id}|${b.idx}`, `${o.plan_name} · ${b.name}: ${mins(b.left)} left (till ${o.expires_on.slice(8, 10)}/${o.expires_on.slice(5, 7)})`]))], [mem.id ? `${mem.id}|${mem.bucket}` : ""])}</div></div>`;
+    pick($("#g-mo", el), { onChange: (v) => { const [id, b] = (v[0] || "").split("|"); mem.id = id || null; mem.bucket = +b || 0; draw(); } }); };
+  const loadMem = (phone) => rpc("gc_member_options", { p_session: sid, p_phone: phone || null }).then((o) => { mem.opts = o || []; if (!mem.opts.some((x) => x.id === mem.id)) mem.id = null; drawMem(); draw(); }).catch(() => {});
+  if (!s.is_lp) { loadMem(); $("#g-cph", m)?.addEventListener("change", () => loadMem(readPhone("g-cph", m))); }
   if (needTail) {
     pick($("#g-tw", m), { onChange: (w) => { tail.winner = w[0]; $$("#g-tp button", m).forEach((b) => b.setAttribute("aria-pressed", !!w[0] && w[0] !== "Draw" && b.dataset.v !== w[0])); tail.payers = picked($("#g-tp", m)); draw(); } });
     pick($("#g-tp", m), { multi: true, onChange: (p) => { tail.payers = p; draw(); } });
@@ -407,7 +427,7 @@ async function checkout(sid, btn) {
   $("#g-go", m).onclick = () => guard($("#g-go", m), async () => {
     if (needTail && !tail.payers.length) throw new Error("Pick who pays for the last LP game");
     const bl = await rpc("gc_checkout", { p_session: sid, p: { customer_name: $("#g-cname", m).value.trim(), customer_phone: readPhone("g-cph", m) || "", discount: +disc().toFixed(2), payments: getPays(),
-      lp_final: needTail ? { winner: tail.winner, payers: tail.payers } : null } });
+      lp_final: needTail ? { winner: tail.winner, payers: tail.payers } : null, membership: mem.id ? { id: mem.id, bucket: mem.bucket } : null } });
     const wa = $("#g-sendwa", m).checked; closeModal(); billDone(bl, wa); refresh().catch(() => {});
   });
 }
@@ -611,8 +631,127 @@ async function drawStock() {
 }
 
 // =====================================================================================
+//  Memberships: hour packs per station or shared across stations, with an expiry date
+// =====================================================================================
+const fmtDay = (d) => (d ? new Date(d + "T12:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "");
+const hrs = (m) => { const h = Math.floor(m / 60), r = Math.round(m % 60); return h && r ? `${h}h ${r}m` : h ? `${h} hr${h === 1 ? "" : "s"}` : `${r} min`; };
+const memState = (x) => { const today = new Date().toISOString().slice(0, 10), left = (x.buckets || []).reduce((t, b) => t + Math.max(0, b.minutes - (b.used || 0)), 0);
+  if (x.status === "cancelled") return ["Cancelled", "bad"]; if (x.expires_on < today) return ["Expired", "bad"]; if (x.starts_on > today) return ["Starts " + fmtDay(x.starts_on), "info"];
+  if (!left) return ["No hours left", "warn"]; const d = Math.round((new Date(x.expires_on + "T12:00:00") - new Date(today + "T12:00:00")) / 864e5) + 1; return [d <= 7 ? `${d} day${d === 1 ? "" : "s"} left` : "Active", d <= 7 ? "warn" : "good"]; };
+const bucketLine = (b, st) => `${esc(b.name)}: <b>${hrs(Math.max(0, b.minutes - (b.used || 0)))}</b> of ${hrs(b.minutes)} left <span class="muted small">· ${b.station_ids?.length ? b.station_ids.map((id) => esc(st.find((x) => x.id === id)?.name || "?")).join(" or ") : "any station"}</span>`;
+async function drawMembers() {
+  const el = $("#gm-view"); if (!el) return; G.memTab = G.memTab || "members";
+  const [plans, list, st] = await Promise.all([q(sb.from("gc_membership_plans").select("*").eq("business_id", BID()).order("price")),
+    q(sb.from("gc_memberships").select("*").eq("business_id", BID()).order("created_at", { ascending: false }).limit(1000)), q(sb.from("gc_stations").select("id,name,type,sort").eq("business_id", BID()).order("sort").order("name"))]);
+  const tabs = [["members", `Members (${list.filter((x) => memState(x)[1] !== "bad").length})`], ...(owner() ? [["plans", `Plans (${plans.length})`]] : [])];
+  el.innerHTML = `<div class="row" style="justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px"><div class="tabs">${tabs.map(([k, l]) => `<button class="chip" data-mt="${k}" aria-pressed="${G.memTab === k}">${l}</button>`).join(" ")}</div>
+    <div class="row">${ctx().canWrite ? `<button class="btn primary" id="gm-sell">＋ Sell membership</button>` : ""}${owner() ? `<button class="btn" id="gm-newplan">＋ Plan</button>` : ""}</div></div><div id="gm-body"></div>`;
+  $$("[data-mt]", el).forEach((b) => (b.onclick = () => { G.memTab = b.dataset.mt; drawMembers(); }));
+  const body = $("#gm-body", el);
+  const planForm = (p = {}) => planModal(p, st);
+  if ($("#gm-newplan", el)) $("#gm-newplan", el).onclick = () => planForm();
+  if ($("#gm-sell", el)) $("#gm-sell", el).onclick = () => (plans.some((x) => x.active) ? sellModal(plans.filter((x) => x.active), st) : owner() ? planForm() : toast("Ask the owner to create a membership plan first", "error"));
+  if (G.memTab === "plans") {
+    body.innerHTML = plans.length ? `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr))">${plans.map((p) => `<div class="card"><div class="card-head"><h3 style="margin:0">${esc(p.name)}</h3>${p.active ? '<span class="pill good">on sale</span>' : '<span class="pill">hidden</span>'}</div>
+      <div class="gc-big" style="font-size:26px">${inr(p.price)}</div><p class="muted small" style="margin:2px 0 8px">Valid ${p.validity_days} days from the start date</p>
+      ${p.buckets.map((b) => `<div class="small" style="margin:4px 0">⏱️ <b>${hrs(b.minutes)}</b> ${esc(b.name)} <span class="muted">· ${b.station_ids.length ? b.station_ids.map((id) => esc(st.find((x) => x.id === id)?.name || "?")).join(" or ") : "any station"}</span></div>`).join("")}
+      ${p.notes ? `<p class="muted small">${esc(p.notes)}</p>` : ""}<div class="row" style="margin-top:10px"><button class="btn sm" data-pe="${p.id}">✎ Edit</button></div></div>`).join("")}</div>`
+      : `<div class="card empty"><p><b>No membership plans yet.</b></p><p>Make hour packs customers pay for up front. For example: <b>Gold, ₹2,000 for 30 days</b> with 10 hours on PS5 #1 or PS5 #2, plus 5 hours on the pool table.</p><button class="btn primary" id="gm-first">＋ Create a plan</button></div>`;
+    const f = $("#gm-first", body); if (f) f.onclick = () => planForm();
+    body.onclick = (e) => { const b = e.target.closest("[data-pe]"); if (b) planForm(plans.find((x) => x.id === b.dataset.pe)); };
+    return;
+  }
+  G.memQ = G.memQ ?? ""; G.memF = G.memF || "active";
+  const flt = (x) => { const k = memState(x)[1]; return G.memF === "all" || (G.memF === "active" ? k !== "bad" : G.memF === "ending" ? k === "warn" : k === "bad"); };
+  const rows = list.filter((x) => flt(x) && (!G.memQ || `${x.customer_name} ${x.customer_phone} ${x.plan_name}`.toLowerCase().includes(G.memQ.toLowerCase())));
+  body.innerHTML = `<div class="row" style="gap:8px;margin-bottom:10px;flex-wrap:wrap"><input id="gm-q" placeholder="Search name, mobile or plan" value="${esc(G.memQ)}" style="flex:1;min-width:200px"><div class="chips" id="gm-f">${chips([["active", "Active"], ["ending", "Ending soon / low"], ["ended", "Expired / cancelled"], ["all", "All"]], [G.memF])}</div></div>
+    ${rows.length ? `<div class="table-wrap"><table><thead><tr><th>Customer</th><th>Plan</th><th>Hours left</th><th>Valid till</th><th></th></tr></thead><tbody>${rows.map((x) => { const [lab, k] = memState(x);
+      return `<tr><td><b>${esc(x.customer_name || "Customer")}</b><br><span class="muted small">${esc(prettyPhone(x.customer_phone || ""))}</span></td><td>${esc(x.plan_name)}</td>
+      <td class="small">${x.buckets.map((b) => `${esc(b.name)}: <b>${hrs(Math.max(0, b.minutes - (b.used || 0)))}</b>`).join("<br>")}</td><td>${fmtDay(x.expires_on)}<br><span class="pill ${k}">${lab}</span></td>
+      <td style="text-align:right"><button class="btn sm" data-mv="${x.id}">View</button></td></tr>`; }).join("")}</tbody></table></div>`
+      : `<div class="card empty">${list.length ? "No memberships match." : `No members yet.${plans.length ? " Tap <b>Sell membership</b> to add one." : owner() ? " Create a plan first, then sell it." : ""}`}</div>`}`;
+  $("#gm-q", body).oninput = (e) => { G.memQ = e.target.value; clearTimeout(G.memT); G.memT = setTimeout(() => { drawMembers().then(() => { const i = $("#gm-q"); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }); }, 300); };
+  pick($("#gm-f", body), { onChange: (v) => { G.memF = v[0] || "active"; drawMembers(); } });
+  body.onclick = (e) => { const b = e.target.closest("[data-mv]"); if (b) memberModal(list.find((x) => x.id === b.dataset.mv), st); };
+}
+function planModal(p, st) {
+  let bk = (p.buckets || []).map((b) => ({ ...b })); if (!bk.length) bk = [{ name: "Gaming hours", minutes: 600, station_ids: [] }];
+  const m = openModal(`<div class="modal-head"><h2>${p.id ? "Edit plan" : "New membership plan"}</h2><button class="btn ghost" data-close>Close</button></div>
+    <div class="fields"><div class="field"><label>Plan name</label><input id="mp-n" value="${esc(p.name || "")}" placeholder="Gold monthly"></div><div class="field"><label>Price (₹)</label><input id="mp-p" type="number" min="0" step="0.01" value="${p.price ?? ""}"></div>
+      <div class="field"><label>Valid for (days)</label><input id="mp-d" type="number" min="1" value="${p.validity_days ?? 30}"></div><label class="check" style="align-self:end"><input type="checkbox" id="mp-a" ${p.active === false ? "" : "checked"}> On sale</label>
+      <div class="field" style="grid-column:1/-1"><label>Note on the plan (optional)</label><input id="mp-x" value="${esc(p.notes || "")}" placeholder="Weekdays only, not on tournaments"></div></div>
+    <h3 style="margin:14px 0 4px">Hours in this plan</h3><p class="muted small" style="margin:0">Pick one station for hours on that station only, or several to share the hours between them (e.g. 2 hrs on A or B). Pick none for any station.</p>
+    <div id="mp-b"></div><button class="btn" id="mp-add" style="margin-top:8px">＋ Add more hours</button><p class="err" id="mp-err"></p>
+    <div class="modal-foot">${p.id ? `<button class="btn ghost danger" id="mp-del" style="margin-right:auto">Delete plan</button>` : ""}<button class="btn" data-close>Cancel</button><button class="btn primary" id="mp-save">Save plan</button></div>`, { wide: true });
+  const draw = () => { $("#mp-b", m).innerHTML = bk.map((b, i) => `<div class="card" style="padding:10px;margin-top:8px" data-bi="${i}"><div class="row" style="gap:8px;align-items:flex-end;flex-wrap:wrap">
+      <div class="field" style="flex:1;min-width:140px"><label>Name</label><input data-k="name" value="${esc(b.name || "")}" placeholder="PS5 hours"></div><div class="field" style="width:110px"><label>Hours</label><input data-k="hours" type="number" min="0.25" step="0.25" value="${+(b.minutes / 60).toFixed(2)}"></div>
+      ${bk.length > 1 ? `<button class="btn sm danger" data-bd="${i}">✕</button>` : ""}</div>
+      <div class="chips" style="margin-top:8px" data-bs="${i}">${st.length ? st.map((x) => `<button type="button" class="chip" data-sid="${x.id}" aria-pressed="${(b.station_ids || []).includes(x.id)}">${esc(x.name)}</button>`).join("") : `<span class="muted small">Add stations first in Stations & pricing.</span>`}</div>
+      <p class="muted small" style="margin:6px 0 0">${(b.station_ids || []).length ? `Usable on ${(b.station_ids || []).map((id) => esc(st.find((x) => x.id === id)?.name || "")).join(" or ")}` : "Usable on any station"}</p></div>`).join(""); };
+  const read = () => $$("[data-bi]", m).forEach((el) => { const b = bk[+el.dataset.bi]; b.name = $("[data-k=name]", el).value.trim(); b.minutes = Math.round(+$("[data-k=hours]", el).value * 60); });
+  draw();
+  $("#mp-add", m).onclick = () => { read(); bk.push({ name: "", minutes: 120, station_ids: [] }); draw(); };
+  $("#mp-b", m).onclick = (e) => { const d = e.target.closest("[data-bd]"), c = e.target.closest("[data-sid]");
+    if (d) { read(); bk.splice(+d.dataset.bd, 1); draw(); }
+    if (c) { read(); const b = bk[+c.closest("[data-bs]").dataset.bs], id = c.dataset.sid; b.station_ids = (b.station_ids || []).includes(id) ? b.station_ids.filter((x) => x !== id) : [...(b.station_ids || []), id]; draw(); } };
+  $("#mp-save", m).onclick = () => guard($("#mp-save", m), async () => { read(); $("#mp-err", m).textContent = "";
+    const row = { name: $("#mp-n", m).value.trim(), price: +$("#mp-p", m).value || 0, validity_days: Math.max(1, Math.round(+$("#mp-d", m).value || 30)), active: $("#mp-a", m).checked, notes: $("#mp-x", m).value.trim(),
+      buckets: bk.map((b, i) => ({ name: b.name || `Hours ${i + 1}`, minutes: b.minutes, station_ids: b.station_ids || [] })) };
+    if (!row.name) throw new Error("Give the plan a name"); if (bk.some((b) => !(b.minutes > 0))) throw new Error("Enter the hours for each line");
+    if (p.id) await q(sb.from("gc_membership_plans").update(row).eq("id", p.id)); else await q(sb.from("gc_membership_plans").insert({ ...row, business_id: BID() }));
+    closeModal(); toast("Plan saved"); G.memTab = "plans"; drawMembers(); });
+  const del = $("#mp-del", m); if (del) del.onclick = async () => { if (await confirmBox(`Delete ${p.name}?`, "Members who already bought it keep their hours. You can also just hide it from sale.", "Delete", { danger: true }))
+    guard(null, async () => { await q(sb.from("gc_membership_plans").delete().eq("id", p.id)); toast("Plan deleted"); drawMembers(); }); else planModal(p, st); };
+}
+function sellModal(plans, st) {
+  let pl = plans[0];
+  const m = openModal(`<div class="modal-head"><h2>🎟️ Sell membership</h2><button class="btn ghost" data-close>Close</button></div>
+    <div class="chips" id="ms-p">${chips(plans.map((p) => [p.id, `${p.name} · ${inr(p.price)}`]), [pl.id])}</div><div id="ms-sum" class="card" style="margin-top:10px;padding:10px 12px"></div>
+    <div class="fields" style="margin-top:10px"><div class="field"><label>Customer name</label><input id="g-cname"></div><div class="field"><label>WhatsApp number</label>${phoneInput("g-cph", { required: true })}</div>
+      <div class="field"><label>Starts on</label><input id="ms-d" type="date" value="${todayISO()}"></div><div class="field"><label>Discount (₹)</label><input id="g-disc" type="number" min="0" value="0"></div></div>
+    <table class="gc-tot" style="width:100%;margin-top:8px"><tbody id="g-tots"></tbody></table><div id="g-pays"></div>
+    <div class="modal-foot"><button class="btn" data-close>Cancel</button><button class="btn primary" id="ms-go">✓ Sell & make bill</button></div>`, { wide: true });
+  const tot = () => totals(+pl.price, Math.min(+pl.price, +($("#g-disc", m).value || 0)));
+  const draw = () => { const t = tot(), end = new Date($("#ms-d", m).value + "T12:00:00"); end.setDate(end.getDate() + pl.validity_days - 1);
+    $("#ms-sum", m).innerHTML = `${pl.buckets.map((b) => `<div class="small">⏱️ <b>${hrs(b.minutes)}</b> ${esc(b.name)} <span class="muted">· ${b.station_ids.length ? b.station_ids.map((id) => esc(st.find((x) => x.id === id)?.name || "?")).join(" or ") : "any station"}</span></div>`).join("")}<div class="small" style="margin-top:4px">Valid till <b>${fmtDay(end.toISOString().slice(0, 10))}</b></div>`;
+    $("#g-tots", m).innerHTML = `<tr><td>Price</td><td class="num">${inr2(pl.price)}</td></tr>${t.t ? `<tr><td>GST ${t.t}%${t.incl ? " (included)" : ""}</td><td class="num">${inr2(t.tax)}</td></tr>` : ""}<tr class="g"><td>Total</td><td class="num">${inr(t.total)}</td></tr>`; m.syncPay && m.syncPay(); };
+  const getPays = payBox(m, { total: () => tot().total }); draw();
+  pick($("#ms-p", m), { onChange: (v) => { pl = plans.find((x) => x.id === v[0]) || pl; draw(); } });
+  ["#g-disc", "#ms-d"].forEach((x) => $(x, m).addEventListener("input", draw));
+  $("#ms-go", m).onclick = () => guard($("#ms-go", m), async () => { const ph = readPhone("g-cph", m); if (!ph) throw new Error("Add the customer's mobile number");
+    const r = await rpc("gc_membership_sell", { p_business: BID(), p: { plan_id: pl.id, customer_name: $("#g-cname", m).value.trim(), customer_phone: ph, starts_on: $("#ms-d", m).value, discount: +($("#g-disc", m).value || 0), payments: getPays() } });
+    closeModal(); G.memTab = "members"; drawMembers(); billDone(r.bill, false); });
+}
+async function memberModal(x, st) {
+  const uses = await q(sb.from("gc_membership_uses").select("*").eq("membership_id", x.id).order("created_at", { ascending: false }).limit(50)).catch(() => []);
+  const [lab, k] = memState(x);
+  const m = openModal(`<div class="modal-head"><h2>🎟️ ${esc(x.customer_name || "Member")}</h2><button class="btn ghost" data-close>Close</button></div>
+    <p style="margin:0">${esc(x.plan_name)} · <span class="pill ${k}">${lab}</span></p><p class="muted small" style="margin:4px 0 10px">${esc(prettyPhone(x.customer_phone || ""))} · ${fmtDay(x.starts_on)} to <b>${fmtDay(x.expires_on)}</b> · paid ${inr(x.price)}</p>
+    <div class="card" style="padding:10px 12px">${x.buckets.map((b) => `<div style="margin:4px 0">${bucketLine(b, st)}</div>`).join("")}</div>
+    <h3 style="margin-top:14px">Hours used</h3>${uses.length ? `<div class="table-wrap"><table><tbody>${uses.map((u) => `<tr><td>${new Date(u.created_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</td><td>${esc(u.station_name || "")}</td><td>${esc(x.buckets[u.bucket]?.name || "")}</td><td class="num">${hrs(u.minutes)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">Not used yet. At billing, staff pick <b>Use membership hours</b>.</p>`}
+    ${x.notes ? `<p class="muted small">${esc(x.notes)}</p>` : ""}
+    <div class="modal-foot">${owner() && x.status === "active" ? `<button class="btn ghost danger" id="mm-c" style="margin-right:auto">Cancel membership</button><button class="btn" id="mm-a">Adjust hours</button><button class="btn" id="mm-e">Extend</button>` : owner() ? `<button class="btn" id="mm-e">Extend / restart</button>` : ""}<button class="btn primary" data-close>Done</button></div>`, { wide: true });
+  const act = (a, p) => guard(null, async () => { const v = await rpc("gc_membership_update", { p_id: x.id, p_action: a, p }); toast("Saved"); drawMembers(); memberModal(v, st); });
+  const e = $("#mm-e", m); if (e) e.onclick = () => formModal({ title: "Extend membership", submitLabel: "Extend", fields: [{ key: "days", label: "Add days", type: "number", required: true }], values: { days: 30 }, onSave: (v) => act("extend", { days: v.days }) });
+  const c = $("#mm-c", m); if (c) c.onclick = () => formModal({ title: "Cancel membership", submitLabel: "Cancel membership", fields: [{ key: "reason", label: "Reason", required: true }], onSave: (v) => act("cancel", { reason: v.reason }) });
+  const a = $("#mm-a", m); if (a) a.onclick = () => formModal({ title: "Adjust hours left", submitLabel: "Save",
+    fields: x.buckets.map((b, i) => ({ key: "b" + i, label: `${b.name}: hours left (of ${+(b.minutes / 60).toFixed(2)})`, type: "number", step: "0.25" })),
+    values: Object.fromEntries(x.buckets.map((b, i) => ["b" + i, +((b.minutes - (b.used || 0)) / 60).toFixed(2)])),
+    onSave: (v) => act("adjust", { buckets: x.buckets.map((b, i) => { const left = Math.max(0, Math.round((+v["b" + i] || 0) * 60)), total = Math.max(b.minutes, left); return { ...b, minutes: total, used: total - left }; }) }) });
+}
+
+// =====================================================================================
 //  Reports (owner)
 // =====================================================================================
+function stationTable(r) {
+  const rows = r.by_station, T = (k) => rows.reduce((t, x) => t + +x[k], 0), top = Math.max(1, ...rows.map((x) => +x.total));
+  if (!rows.length) return `<p class="muted">No stations yet.</p>`;
+  return `<div class="table-wrap" style="border:0"><table><thead><tr><th>Station</th><th class="num">Sessions</th><th class="num">Hours played</th><th class="num">Busy</th><th class="num">Gaming</th><th class="num">Snacks</th><th class="num">Total sales</th><th class="num">Avg per session</th>${T("member_minutes") ? `<th class="num">Membership hrs</th>` : ""}</tr></thead><tbody>
+    ${rows.map((x) => `<tr><td><b>${esc(x.name)}</b> <span class="muted small">${esc(x.type)}</span><div class="gc-bar" style="height:6px;margin-top:4px;max-width:180px"><i style="width:${(+x.total / top) * 100}%"></i></div></td><td class="num">${x.sessions}</td><td class="num">${x.hours}</td><td class="num">${Math.round((x.hours / (r.range_hours || 1)) * 100)}%</td>
+      <td class="num">${inr(x.gaming)}</td><td class="num">${inr(x.items)}</td><td class="num"><b>${inr(x.total)}</b></td><td class="num">${inr(x.avg_bill)}</td>${T("member_minutes") ? `<td class="num">${+(x.member_minutes / 60).toFixed(1)}</td>` : ""}</tr>`).join("")}
+    <tr style="font-weight:700"><td>All stations</td><td class="num">${T("sessions")}</td><td class="num">${T("hours").toFixed(2)}</td><td></td><td class="num">${inr(T("gaming"))}</td><td class="num">${inr(T("items"))}</td><td class="num">${inr(T("total"))}</td><td class="num">${T("sessions") ? inr(T("total") / T("sessions")) : "–"}</td>${T("member_minutes") ? `<td class="num">${+(T("member_minutes") / 60).toFixed(1)}</td>` : ""}</tr></tbody></table></div>
+    <p class="muted small" style="margin:6px 0 0">Gaming is after membership hours used. Counter sales without a station aren't in this table${r.memberships?.sold ? `; ${r.memberships.sold} membership${r.memberships.sold === 1 ? "" : "s"} sold for ${inr(r.memberships.amount)}` : ""}.</p>`;
+}
 async function drawReports() {
   const el = $("#gr-view"); if (!el) return;
   G.repFrom = $("#gr-f")?.value || G.repFrom || new Date(Date.now() - 6 * 864e5).toISOString().slice(0, 10); G.repTo = $("#gr-t")?.value || G.repTo || todayISO();
@@ -628,15 +767,46 @@ async function drawReports() {
       <div class="card"><h3>Busy hours</h3><div class="gc-bars">${peak.map((v, h) => `<i style="height:${(v / mp) * 100}%;background:var(--good)" title="${h}:00 · ${v} sessions"></i>`).join("")}</div><div class="row muted small" style="justify-content:space-between"><span>12 am</span><span>12 pm</span><span>11 pm</span></div></div>
       <div class="card"><h3>Cash, UPI, card</h3>${hb(r.by_mode.map((x) => ({ ...x, mode: x.mode.toUpperCase() })), "mode", "amount")}</div>
       <div class="card"><h3>By game type</h3>${hb(r.by_type, "type", "amount")}</div>
-      <div class="card"><h3>Stations</h3><div class="table-wrap" style="border:0"><table><thead><tr><th>Station</th><th class="num">Sessions</th><th class="num">Hours</th><th class="num">Busy</th><th class="num">Revenue</th></tr></thead><tbody>${r.by_station.map((x) => `<tr><td>${esc(x.name)}</td><td class="num">${x.sessions}</td><td class="num">${x.hours}</td><td class="num">${Math.round((x.hours / (r.range_hours || 1)) * 100)}%</td><td class="num">${inr(x.revenue)}</td></tr>`).join("")}</tbody></table></div></div>
+      <div class="card" style="grid-column:1/-1"><div class="card-head"><h3 style="margin:0">Sales per station</h3><button class="btn sm" id="gr-csv">⬇︎ CSV</button></div>${stationTable(r)}</div>
       <div class="card"><h3>Top snacks</h3>${hb(r.items, "name", "revenue")}</div></div>
     <p class="muted small" style="margin-top:12px">Expenses, profit & loss and GST returns are in <a href="#accounts">Accounts & GST</a>${A.hasMod("accounting") ? "" : " (add-on)"}.</p>`;
   $("#gr-f").onchange = drawReports; $("#gr-t").onchange = drawReports;
+  $("#gr-csv").onclick = () => { const head = ["Station", "Type", "Sessions", "Hours", "Gaming", "Snacks", "Total", "Avg per session", "Membership minutes"];
+    const csv = [head, ...r.by_station.map((x) => [x.name, x.type, x.sessions, x.hours, x.gaming, x.items, x.total, x.avg_bill, x.member_minutes])].map((l) => l.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = `station-sales-${G.repFrom}-to-${G.repTo}.csv`; a.click(); };
 }
 
 // =====================================================================================
 //  Set-up (owner): stations, pricing rules, bills, WhatsApp add-on
 // =====================================================================================
+// ---------- station prices by time of day ----------
+const t12 = (t) => { const [h, m] = String(t || "00:00").split(":").map(Number), hh = h % 12 || 12; return `${hh}${m ? ":" + String(m).padStart(2, "0") : ""}${h < 12 || h === 24 ? "am" : "pm"}`; };
+const dayText = (d) => { const s = [...(d || [])].map(Number).sort().join(""); return !d?.length || s === "0123456" ? "" : s === "12345" ? " Mon–Fri" : s === "06" ? " Sat–Sun" : " " + d.map((x) => DAYS[x]).join(", "); };
+const bandText = (st) => (st.time_rates || []).length ? st.time_rates.map((b) => `${esc(b.name ? b.name + " " : "")}${t12(b.from)}–${t12(b.to)}${dayText(b.days)} <b>${inr(b.rate)}</b>`).join("<br>") : `<span class="muted">Same all day</span>`;
+function bandModal(st) {
+  let rows = (st.time_rates || []).map((b) => ({ ...b, days: (b.days?.length ? b.days : [0, 1, 2, 3, 4, 5, 6]).map(Number) }));
+  const m = openModal(`<div class="modal-head"><h2>⏰ ${esc(st.name)}: prices by time of day</h2><button class="btn ghost" data-close>Close</button></div>
+    <p class="muted small" style="margin-top:-4px">Optional. Example: 5am–12pm ₹80/hr, 12pm–6pm ₹100/hr, 6pm–2am ₹150/hr. Outside these times the normal price (${inr(st.rate)}/hr) applies. A session that crosses times is billed minute by minute at each price. Happy-hour rules still apply on top.</p>
+    <div id="gb-rows"></div><button class="btn" id="gb-add" style="margin-top:8px">＋ Add a time</button><p class="err" id="gb-err"></p>
+    <div class="modal-foot"><button class="btn" data-close>Cancel</button><button class="btn primary" id="gb-save">Save prices</button></div>`, { wide: true });
+  const draw = () => { $("#gb-rows", m).innerHTML = rows.map((b, i) => `<div class="card" style="padding:10px;margin-top:8px" data-i="${i}"><div class="row" style="flex-wrap:wrap;gap:8px;align-items:flex-end">
+      <div class="field" style="flex:1;min-width:120px"><label>Name (optional)</label><input data-k="name" value="${esc(b.name || "")}" placeholder="Morning"></div>
+      <div class="field"><label>From</label><input type="time" data-k="from" value="${esc(b.from || "05:00")}"></div><div class="field"><label>To</label><input type="time" data-k="to" value="${esc(b.to === "24:00" ? "00:00" : b.to || "12:00")}"></div>
+      <div class="field" style="width:110px"><label>₹ per hour</label><input type="number" min="0" step="0.01" data-k="rate" value="${b.rate ?? ""}"></div>
+      <button class="btn sm danger" data-del="${i}" title="Remove">✕</button></div>
+      <div class="chips" style="margin-top:8px" data-days="${i}">${DAYS.map((d, k) => `<button type="button" class="chip" data-d="${k}" aria-pressed="${b.days.includes(k)}">${d}</button>`).join("")}</div></div>`).join("") || `<p class="muted">Same price all day. Add a time to change that.</p>`; };
+  const read = () => $$("[data-i]", m).forEach((el) => { const b = rows[+el.dataset.i]; $$("[data-k]", el).forEach((x) => (b[x.dataset.k] = x.dataset.k === "rate" ? (x.value === "" ? null : +x.value) : x.value)); });
+  draw();
+  $("#gb-add", m).onclick = () => { read(); const last = rows.at(-1); rows.push({ name: "", from: last?.to && last.to !== "24:00" ? last.to : "05:00", to: "12:00", rate: st.rate, days: [0, 1, 2, 3, 4, 5, 6] }); draw(); };
+  $("#gb-rows", m).onclick = (e) => { const d = e.target.closest("[data-del]"), c = e.target.closest("[data-d]");
+    if (d) { read(); rows.splice(+d.dataset.del, 1); draw(); }
+    if (c) { read(); const b = rows[+c.closest("[data-days]").dataset.days], k = +c.dataset.d; b.days = b.days.includes(k) ? b.days.filter((x) => x !== k) : [...b.days, k].sort(); c.setAttribute("aria-pressed", b.days.includes(k)); } };
+  $("#gb-save", m).onclick = () => guard($("#gb-save", m), async () => { read();
+    for (const b of rows) { if (b.rate == null || b.rate < 0) throw new Error("Enter a price for every time"); if (!b.days.length) throw new Error("Pick at least one day for every time"); if (b.from === b.to) throw new Error("From and To can't be the same"); }
+    const out = rows.map((b) => ({ name: (b.name || "").trim(), from: b.from, to: b.to === "00:00" ? "24:00" : b.to, rate: +b.rate, days: b.days }));
+    await q(sb.from("gc_stations").update({ time_rates: out }).eq("id", st.id)); closeModal(); toast("Prices saved"); G.board = null; drawSetup(); });
+}
+
 async function drawSetup() {
   const el = $("#gu-view"); if (!el) return;
   if (location.hash.includes("?wa")) G.setupTab = "wa";
@@ -647,16 +817,16 @@ async function drawSetup() {
   const body = $("#gu-body");
   if (G.setupTab === "stations") {
     const rows = await q(sb.from("gc_stations").select("*").eq("business_id", BID()).order("sort").order("name"));
-    body.innerHTML = `<div class="row" style="justify-content:space-between;margin-bottom:10px"><p class="muted" style="margin:0">Base price per hour. Happy hours and day prices go in <b>Pricing rules</b>.</p><button class="btn primary" id="gu-new">＋ Station</button></div>
-      <div class="table-wrap"><table><thead><tr><th>Station</th><th>Type</th><th class="num">Per hour</th><th class="num">Players included</th><th class="num">Extra player /hr</th><th></th><th></th></tr></thead><tbody>
-      ${rows.map((s) => `<tr><td><b>${esc(s.name)}</b></td><td>${esc(s.type)}</td><td class="num">${inr(s.rate)}</td><td class="num">${s.included_players}</td><td class="num">${inr(s.extra_player_rate)}</td><td>${s.active ? '<span class="pill good">on</span>' : '<span class="pill">off</span>'}</td><td style="text-align:right"><button class="btn sm" data-e="${s.id}">✎ Edit</button></td></tr>`).join("") || `<tr><td colspan="7" class="muted">No stations yet</td></tr>`}</tbody></table></div>`;
+    body.innerHTML = `<div class="row" style="justify-content:space-between;margin-bottom:10px"><p class="muted" style="margin:0">Price per hour. Tap ⏰ to set different prices by time of day (optional). Happy hours and day offers go in <b>Pricing rules</b>.</p><button class="btn primary" id="gu-new">＋ Station</button></div>
+      <div class="table-wrap"><table><thead><tr><th>Station</th><th>Type</th><th class="num">Per hour</th><th>By time of day</th><th class="num">Players included</th><th class="num">Extra player /hr</th><th></th><th></th></tr></thead><tbody>
+      ${rows.map((s) => `<tr><td><b>${esc(s.name)}</b></td><td>${esc(s.type)}</td><td class="num">${inr(s.rate)}</td><td class="small">${bandText(s)}</td><td class="num">${s.included_players}</td><td class="num">${inr(s.extra_player_rate)}</td><td>${s.active ? '<span class="pill good">on</span>' : '<span class="pill">off</span>'}</td><td style="text-align:right;white-space:nowrap"><button class="btn sm" data-tp="${s.id}" title="Prices by time of day">⏰ Time prices</button> <button class="btn sm" data-e="${s.id}">✎ Edit</button></td></tr>`).join("") || `<tr><td colspan="8" class="muted">No stations yet</td></tr>`}</tbody></table></div>`;
     const ed = (s = {}) => formModal({ title: s.id ? "Edit station" : "New station", submitLabel: "Save",
       fields: [{ key: "name", label: "Name", required: true, placeholder: "PS5 #1" }, { key: "type", label: "Type", type: "select", options: TYPES.includes(s.type) || !s.type ? TYPES : [s.type, ...TYPES] },
         { key: "rate", label: "Price per hour (₹)", type: "number", required: true, step: "0.01" }, { key: "included_players", label: "Players included in the price", type: "number", min: 1 },
         { key: "extra_player_rate", label: "Each extra player, per hour (₹)", type: "number", step: "0.01" }, { key: "sort", label: "Order on the board", type: "number" }, { key: "active", label: "Show on the board", type: "checkbox" }],
       values: { type: "PS5", rate: 100, included_players: 1, extra_player_rate: 0, sort: rows.length + 1, active: true, ...s },
       onSave: async (v) => { if (s.id) await q(sb.from("gc_stations").update(v).eq("id", s.id)); else await q(sb.from("gc_stations").insert({ ...v, business_id: BID() })); drawSetup(); } });
-    $("#gu-new").onclick = () => ed(); body.onclick = (e) => { const b = e.target.closest("[data-e]"); if (b) ed(rows.find((x) => x.id === b.dataset.e)); };
+    $("#gu-new").onclick = () => ed(); body.onclick = (e) => { const b = e.target.closest("[data-e]"), tp = e.target.closest("[data-tp]"); if (b) ed(rows.find((x) => x.id === b.dataset.e)); if (tp) bandModal(rows.find((x) => x.id === tp.dataset.tp)); };
   }
   if (G.setupTab === "rules") {
     const [rows, st] = await Promise.all([q(sb.from("gc_rules").select("*").eq("business_id", BID()).order("priority", { ascending: false })), q(sb.from("gc_stations").select("id,name,type").eq("business_id", BID()))]);
@@ -690,12 +860,13 @@ async function drawSetup() {
       <div class="field"><label>Bill number prefix</label><input id="u-pre" value="${esc(cf.bill_prefix)}"></div><div class="field"><label>UPI ID (pay link on bills)</label><input id="u-upi" value="${esc(cf.upi_id)}" placeholder="club@upi"></div>
       <div class="field" style="grid-column:1/-1"><label>Bill footer</label><input id="u-foot" value="${esc(cf.bill_footer)}"></div>
       <div class="field"><label>Round up time to every (min)</label><input id="u-round" type="number" min="1" max="60" value="${cf.round_minutes}"></div><div class="field"><label>Minimum charge (min)</label><input id="u-min" type="number" min="0" value="${cf.min_minutes}"></div>
-      <div class="field"><label>"Time up" popup, minutes before the end</label><input id="u-rem" type="number" min="1" max="60" value="${cf.reminder_minutes}"></div><div></div>
-      <label class="check" style="grid-column:1/-1"><input type="checkbox" id="u-book" ${cf.charge_booked ? "checked" : ""}> Charge the full booked time even if they stop early</label></div>
+      <div class="field"><label>"Time up" popup, minutes before the end</label><input id="u-rem" type="number" min="1" max="60" value="${cf.reminder_minutes}"></div>
+      <div class="field"><label>Round the bill total up to</label><select id="u-rto">${[[1, "Nearest ₹1"], [2, "Next ₹2"], [5, "Next ₹5 (₹32 → ₹35)"], [10, "Next ₹10 (₹32 → ₹40)"]].map(([v, l]) => `<option value="${v}" ${+cf.round_to === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+      <label class="check" style="grid-column:1/-1"><input type="checkbox" id="u-book" ${cf.charge_booked ? "checked" : ""}> Charge the full booked time even if they stop early (the biller can still change it on each bill)</label></div>
       <p class="err" id="u-err"></p><div class="modal-foot"><button class="btn primary">Save</button></div></form></div>`;
     $("#gu-f").onsubmit = (e) => { e.preventDefault(); guard($("#gu-f button"), async () => {
       await q(sb.from("gc_settings").update({ tax_percent: +$("#u-tax").value, gstin: $("#u-gstin").value.trim(), tax_inclusive: $("#u-incl").checked, bill_prefix: $("#u-pre").value.trim() || "GC", upi_id: $("#u-upi").value.trim(),
-        bill_footer: $("#u-foot").value, round_minutes: +$("#u-round").value, min_minutes: +$("#u-min").value, reminder_minutes: +$("#u-rem").value, charge_booked: $("#u-book").checked, updated_at: new Date().toISOString() }).eq("business_id", BID()));
+        bill_footer: $("#u-foot").value, round_minutes: +$("#u-round").value, min_minutes: +$("#u-min").value, reminder_minutes: +$("#u-rem").value, charge_booked: $("#u-book").checked, round_to: +$("#u-rto").value, updated_at: new Date().toISOString() }).eq("business_id", BID()));
       toast("Saved"); G.board = null; }); };
   }
   if (G.setupTab === "wa") {
@@ -747,6 +918,8 @@ export function registerGaming(api) {
   api.after.gstock = wrap("gs-view", drawStock);
   api.VIEWS.greports = () => api.head("Gaming reports", "Sales, stations, busy hours and snacks") + `<div id="gr-view">${spin}</div>`;
   api.after.greports = wrap("gr-view", drawReports);
+  api.VIEWS.gmembers = () => api.head("Memberships", "Hour packs customers pay for up front, with an expiry date") + `<div id="gm-view">${spin}</div>`;
+  api.after.gmembers = wrap("gm-view", async () => { if (!G.board) await loadBoard().catch(() => {}); await drawMembers(); });
   api.VIEWS.gsetup = () => api.head("Stations & pricing", "Stations, happy hours, bill settings and WhatsApp bills") + `<div id="gu-view">${spin}</div>`;
   api.after.gsetup = wrap("gu-view", drawSetup);
 }

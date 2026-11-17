@@ -22,12 +22,12 @@ do $$ declare n int; q jsonb; begin
   select count(*) into n from leads; assert n=0, 'anon cannot read leads';
   q := submit_lead(jsonb_build_object('business_name','Chai Point','phone','98765 11111','package_id',(select id from packages where slug='growth'),'billing','monthly','promo_code','launch20',
         'category_id',(select id from categories where slug='cafe-restaurant'),'product_ids',jsonb_build_array((select id from products where name='Zomato & Swiggy listing optimisation'))));
-  assert (q->>'subtotal')::numeric = 599*0.8 + 4999, 'quote: growth -20% + zomato = '||(q->>'subtotal');
-  assert (q->>'gst')::numeric = round((599*0.8+4999)*0.18,2), 'gst 18%';
+  assert (q->>'subtotal')::numeric = 2400*0.8 + 4999, 'quote: growth -20% + zomato = '||(q->>'subtotal');
+  assert (q->>'gst')::numeric = round((2400*0.8+4999)*0.18,2), 'gst 18%';
   raise notice 'lead ok: % total %', q->>'ref', q->>'total';
   -- a salon cannot buy the Zomato product: it is silently excluded from the quote
   q := quote((select id from packages where slug='starter'),'monthly', array[(select id from products where name='Zomato & Swiggy listing optimisation')], null, (select id from categories where slug='salon-spa'));
-  assert (q->>'subtotal')::numeric = 399, 'category filter on products';
+  assert (q->>'subtotal')::numeric = 1600, 'category filter on products';
 end $$;
 reset role;
 
@@ -413,9 +413,9 @@ set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-00000000
 do $$ declare b uuid := current_setting('test.glow'); r jsonb; begin
   assert has_module(b,'attendance'), 'add-on switched on after payment';
   r := create_order(b, 'subscription', (select id from packages where slug='starter'), 'monthly');
-  assert (r->>'amount')::numeric = 399 + 199 and r->>'description' like '%add-ons: Staff attendance%', 'renewal includes add-on: ' || r::text;
+  assert (r->>'amount')::numeric = 1600 + 199 and r->>'description' like '%add-ons: Staff attendance%', 'renewal includes add-on: ' || r::text;
   r := create_order(b, 'subscription', (select id from packages where slug='pro'), 'yearly');
-  assert (r->>'amount')::numeric = 8990, 'pro already has attendance: ' || r::text;
+  assert (r->>'amount')::numeric = 36000, 'pro already has attendance: ' || r::text;
   perform set_config('test.propay', r->>'payment_id', false);
 end $$;
 reset role;
@@ -798,7 +798,7 @@ reset role;
 set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000000f2');
 do $$ declare r jsonb; q jsonb; begin
   q := quote((select id from packages where slug='starter'), 'monthly', '{}', current_setting('test.refcode'));
-  assert (q->>'referral')::boolean and (q->>'promo_ok')::boolean and (q->>'subtotal')::numeric = 399, 'referral code: no discount, valid: '||q::text;
+  assert (q->>'referral')::boolean and (q->>'promo_ok')::boolean and (q->>'subtotal')::numeric = 1600, 'referral code: no discount, valid: '||q::text;
   r := register_business(jsonb_build_object('name','Referred Gym','phone','9822222222','package_id',(select id from packages where slug='starter'),'promo_code',current_setting('test.refcode')));
   perform set_config('test.rp', r->>'payment_id', false);
 end $$;
