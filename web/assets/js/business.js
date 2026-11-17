@@ -8,6 +8,7 @@ import { registerMenu, newOrderCount } from "./menu-admin.js";
 import { rzpOn, payOnline } from "./razorpay.js";
 import { registerTeam, AREA_OF } from "./team.js";
 import { registerAccounts } from "./accounts.js";
+import { registerGaming } from "./gaming.js";
 import { scanCard } from "./card-scan.js";
 
 let C, D = {}, BID;
@@ -22,13 +23,17 @@ const canWrite = () => activeOpen() || trialOpen() || (["trial", "pending_paymen
 const waOn = () => !!D.biz?.wa_enabled;
 
 // Which module each page belongs to. Pages without an entry are in every plan.
-const ROUTE_MOD = { offers: "loyalty", loyalty: "loyalty", templates: "bulk_whatsapp", alerts: "campaigns", seo: "seo", replies: "google_replies", orders: "menu", menu: "menu", staff: "attendance", salary: "attendance", accounts: "accounting" };
+const ROUTE_MOD = { offers: "loyalty", loyalty: "loyalty", templates: "bulk_whatsapp", alerts: "campaigns", seo: "seo", replies: "google_replies", orders: "menu", menu: "menu", staff: "attendance", salary: "attendance", accounts: "accounting",
+  gboard: "gaming", gbookings: "gaming", gbills: "gaming", gstock: "gaming", greports: "gaming", gsetup: "gaming" };
 // What this login may do: owner and admin everything, staff only the areas the owner ticked. The database checks the same.
 const can = (area) => ["owner", "admin"].includes(D.me?.role) || (D.me?.perms || []).includes(area);
 const allowed = (r) => r === "signout" || can(AREA_OF[r] || "customers");
 const lockBadge = (r, badge) => (ROUTE_MOD[r] && !hasMod(ROUTE_MOD[r]) ? "🔒" : badge);
 const item = (r, label, icon, badge = "") => [r, label, icon, lockBadge(r, badge)];
 const ROUTES = () => [
+  // Gaming clubs: station timers, LP bills, bookings (business type "Gaming Club" only)
+  ...((modInfo("gaming")?.categories || []).includes(D.biz?.categories?.slug) ? [{ label: "Gaming", items: [item("gboard", "Live board", "grid"), item("gbookings", "Bookings", "clock"), item("gbills", "Bills", "receipt"),
+    item("gstock", "Snacks & stock", "box"), item("greports", "Gaming reports", "chart"), item("gsetup", "Stations & pricing", "cog")] }] : []),
   { label: "Daily", items: [item("dashboard", "Dashboard", "dash"), item("customers", "Customers", "users"), item("feedback", "Reviews & feedback", "star", openComplaints() || ""), item("alerts", "Alerts", "bell", hasMod("campaigns") ? alerts().length || "" : ""),
     ...(fitsBiz("menu") ? [item("orders", "Orders", "receipt", hasMod("menu") ? D.newOrders || "" : ""), item("menu", "QR menu", "food")] : []), item("staff", "Staff & attendance", "clock")] },
   { label: "Grow", items: [item("offers", "Offers & coupons", "tag"), item("loyalty", "Loyalty card", "card"), item("whatsapp", "WhatsApp", "wa"), item("seo", "Keywords & SEO", "spark")] },
@@ -40,7 +45,7 @@ const hasMod = (m) => D.biz?.status === "trial" || !!(D.mods || []).find((x) => 
 const modInfo = (k) => (D.mods || []).find((x) => x.key === k);
 // Hide features that don't fit this kind of business (e.g. table ordering for a salon). Set per module in modules.categories.
 const fitsBiz = (k) => { const m = modInfo(k), slug = D.biz?.categories?.slug; return !m?.categories || !slug || m.categories.includes(slug); };
-const route = () => { const h = location.hash.slice(1).split("?")[0], all = ROUTES().flatMap((g) => g.items).map((r) => r[0]); return all.includes(h) ? h : all.includes("dashboard") ? "dashboard" : all[0]; };
+const route = () => { const h = location.hash.slice(1).split("?")[0], all = ROUTES().flatMap((g) => g.items).map((r) => r[0]); return all.includes(h) ? h : all.includes("gboard") ? "gboard" : all.includes("dashboard") ? "dashboard" : all[0]; };
 
 export async function mount(ctx) {
   C = ctx;
@@ -147,7 +152,8 @@ function alerts() {
 function nav() {
   const g = ROUTES(), has = (k) => g.some((x) => x.items.some((i) => i[0] === k));
   $("#nav").innerHTML = shell({ brandSub: "Growth Plan", groups: g, current: route(),
-    mobile: { primary: ["dashboard", "customers", "feedback"].filter(has), short: { dashboard: "Home", feedback: "Reviews", customers: "Customers" }, action: can("customers") && canWrite() ? { a: "visit", label: "Log visit", icon: "plus" } : null },
+    mobile: has("gboard") ? { primary: ["gboard", "gbills", "customers"].filter(has), short: { gboard: "Board", gbills: "Bills", customers: "Customers" }, action: null }
+      : { primary: ["dashboard", "customers", "feedback"].filter(has), short: { dashboard: "Home", feedback: "Reviews", customers: "Customers" }, action: can("customers") && canWrite() ? { a: "visit", label: "Log visit", icon: "plus" } : null },
     footer: `<div class="who-box"><b>${esc(D.biz.name)}</b><span>${esc(D.biz.packages?.name || "")} plan · ${esc(D.biz.status.replace("_", " "))}</span></div>` });
 }
 let pendingRender = false;
@@ -603,7 +609,7 @@ after.alerts = () => { $("#rem-form").onsubmit = async (e) => { e.preventDefault
 VIEWS.plan = () => `<div id="plan-view"><div class="loading"><span class="spinner"></span></div></div>`;
 after.plan = async () => {
   const [pkgs, prods, pays] = await Promise.all([
-    q(sb.from("packages").select("*").eq("active", true).order("sort")),
+    q(sb.from("packages").select("*").eq("active", true).order("sort")).then(plansForBiz),
     q(sb.from("products").select("*, product_categories(category_id)").eq("active", true).order("sort")),
     q(sb.from("payments").select("*").eq("business_id", BID).order("created_at", { ascending: false })),
   ]);
@@ -692,10 +698,13 @@ async function order(kind, ref, billing) {
 
 /* ---------- Locked feature: explain it and offer the add-on or the plan that has it ---------- */
 let PKGS_CACHE = null;
+// Plans offered to this business: a type with its own plans (e.g. Gaming Club) sees only those; others see the general plans
+const plansForBiz = (list) => { const sl = D.biz?.categories?.slug, own = sl && list.some((p) => (p.categories || []).includes(sl));
+  return list.filter((p) => (own ? (p.categories || []).includes(sl) : !p.categories || (p.categories || []).includes(sl))); };
 function lockedView(key) {
   const md = modInfo(key) || { name: "This feature", blurb: "", icon: "🔒" };
   setTimeout(async () => {
-    PKGS_CACHE = PKGS_CACHE || (await q(sb.from("packages").select("*").eq("active", true).order("sort")).catch(() => []));
+    PKGS_CACHE = PKGS_CACHE || plansForBiz(await q(sb.from("packages").select("*").eq("active", true).order("sort")).catch(() => []));
     const plan = PKGS_CACHE.find((p) => (p.modules || []).includes(key)), el = $("#lock-plan");
     if (el && plan) el.innerHTML = `<button class="btn ${md.addon_price == null ? "primary" : ""}" data-a="renew" data-id="${plan.id}" data-bill="${esc(D.biz.billing || "monthly")}">Upgrade to ${esc(plan.name)} · ${inr(plan.monthly_price)}/month</button>`;
   });
@@ -1175,7 +1184,7 @@ document.addEventListener("click", async (e) => {
       case "buy-module": {
         const m = (D.mods || []).find((x) => x.id === id); if (!m) break;
         const want = [...new Set([...(D.biz.addon_modules || []), m.key])];
-        PKGS_CACHE = PKGS_CACHE || (await q(sb.from("packages").select("*").eq("active", true).order("sort")).catch(() => []));
+        PKGS_CACHE = PKGS_CACHE || plansForBiz(await q(sb.from("packages").select("*").eq("active", true).order("sort")).catch(() => []));
         const cost = (D.biz.packages?.monthly_price || 0) + want.reduce((t, k) => t + (+(modInfo(k)?.addon_price) || 0), 0);
         const better = PKGS_CACHE.find((p) => p.id !== D.biz.package_id && want.every((k) => (p.modules || []).includes(k)) && +p.monthly_price <= cost);
         const msg = better ? `The ${better.name} plan (${inr(better.monthly_price)}/month) already includes ${m.name}${want.length > 1 ? " and your other add-ons" : ""}, for the same or less than adding them one by one.` : m.blurb;
@@ -1183,7 +1192,7 @@ document.addEventListener("click", async (e) => {
         if (await confirmBox(`Add ${m.name}?`, better ? "We'll create a payment for the add-on only." : msg, "Continue to payment")) await order("module", id);
         break; }
       case "renew": await order("subscription", id, el.dataset.bill); break;
-      case "upgrade-to": { PKGS_CACHE = PKGS_CACHE || (await q(sb.from("packages").select("*").eq("active", true).order("sort")));
+      case "upgrade-to": { PKGS_CACHE = PKGS_CACHE || plansForBiz(await q(sb.from("packages").select("*").eq("active", true).order("sort")));
         const pl = PKGS_CACHE.find((p) => (p.modules || []).includes(id));
         if (pl && await confirmBox(`Upgrade to ${pl.name}?`, `${pl.name} is ${inr(pl.monthly_price)}/month and includes ${modInfo(id)?.name || "this"}. Your current plan's paid days carry on until you pay.`, `Continue to payment`)) await order("subscription", pl.id, D.biz.billing || "monthly");
         break; }
@@ -1221,3 +1230,4 @@ registerStaff(moduleApi);
 registerMenu(moduleApi);
 registerTeam(moduleApi);
 registerAccounts(moduleApi);
+registerGaming(moduleApi);

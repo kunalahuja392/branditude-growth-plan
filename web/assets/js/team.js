@@ -8,6 +8,7 @@ export const AREA_OF = {
   reviews: "reviews", seo: "reviews", replies: "reviews", whatsapp: "whatsapp", templates: "whatsapp",
   orders: "menu", menu: "menu", staff: "attendance", salary: "attendance", accounts: "accounts",
   plan: "settings", profile: "settings", team: "settings",
+  gboard: "gaming", gbookings: "gaming", gbills: "gaming", gstock: "gaming", greports: "settings", gsetup: "settings",
 };
 export const AREAS = [
   ["customers", "Customers & visits", "Log visits, scan loyalty cards, customers, offers, feedback"],
@@ -17,6 +18,7 @@ export const AREAS = [
   ["attendance", "Staff & salary", "Attendance, salaries and advances (sees pay)"],
   ["accounts", "Accounts", "Income, expenses, P&L, GST reports"],
   ["settings", "Business settings", "Business profile, plan and billing"],
+  ["gaming", "Gaming front desk", "Start sessions, LP splits, snacks, bills and bookings"],
 ];
 const ROLE = { owner: ["Owner", "acc"], admin: ["Admin", "good"], staff: ["Staff", ""] };
 

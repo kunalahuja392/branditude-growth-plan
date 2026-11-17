@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="/assets/icons/favicon-64.png">
+<title>Book a slot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/app.css">
+<style>body{min-height:100%}.wrap{max-width:640px;margin:0 auto;padding:20px}.card{margin-bottom:14px}.rowb{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)}</style>
+</head>
+<body>
+<div class="wrap" id="p"><div class="loading"><span class="spinner"></span></div></div>
+<script type="module">
+// Public page for a gaming club: play.html?b=<business-slug> — stations, prices, offers, online booking request.
+import { sb, friendly } from "./assets/js/sb.js";
+import { $, esc, inr, phoneInput, readPhone, todayISO } from "./assets/js/ui.js";
+const slug = new URLSearchParams(location.search).get("b") || "";
+const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const { data: c, error } = await sb.rpc("gc_public_club", { p_slug: slug });
+if (error || !c) $("#p").innerHTML = `<div class="card empty">${esc(error ? friendly(error) : "Club not found.")}</div>`;
+else {
+  document.title = `${c.name} · Book a slot`;
+  const offer = (o) => `${o.mode === "fixed" ? inr(o.value) + "/hr" : o.mode === "percent" ? +o.value + "% off" : "+" + inr(o.value) + "/hr"} · ${o.days.length === 7 ? "every day" : o.days.map((d) => DAYS[d]).join(", ")} ${o.start}–${o.end}${o.station_type !== "*" ? " · " + esc(o.station_type) : ""}`;
+  $("#p").innerHTML = `<div class="card"><h1 style="margin:0">🎮 ${esc(c.name)}</h1><p class="muted" style="margin:4px 0 0">${esc([c.address, c.city].filter(Boolean).join(", "))}</p>
+      <div class="row" style="margin-top:10px">${c.phone ? `<a class="btn wa sm" href="https://wa.me/${esc(c.phone)}" target="_blank" rel="noopener">💬 WhatsApp</a><a class="btn sm" href="tel:+${esc(c.phone)}">📞 Call</a>` : ""}
+        ${c.google_review_link ? `<a class="btn sm" href="${esc(c.google_review_link)}" target="_blank" rel="noopener">⭐ Google reviews</a>` : ""}<a class="btn sm" href="f.html?b=${esc(c.slug)}">✍️ Feedback</a></div></div>
+    ${c.stations.length ? `<div class="card"><h3 style="margin-top:0">What we have</h3>${c.stations.map((s) => `<div class="rowb"><span>${esc(s.type)} × ${s.n}</span><span>from <b>${inr(s.rate)}/hr</b></span></div>`).join("")}</div>` : ""}
+    ${c.offers.length ? `<div class="card"><h3 style="margin-top:0">🔥 Offers</h3>${c.offers.map((o) => `<div class="rowb" style="flex-direction:column"><b>${esc(o.name)}</b><span class="muted small">${offer(o)}</span></div>`).join("")}</div>` : ""}
+    <div class="card"><h3 style="margin-top:0">📅 Book a slot</h3><p class="muted" style="margin-top:0">Send a request. The club confirms on WhatsApp.</p>
+      <form id="f"><div class="fields"><div class="field"><label>Name</label><input id="n" required></div><div class="field"><label>WhatsApp number</label>${phoneInput("ph", { required: true })}</div>
+      <div class="field"><label>Date</label><input id="d" type="date" min="${todayISO()}" value="${todayISO()}" required></div><div class="field"><label>Time</label><input id="t" type="time" required></div>
+      <div class="field"><label>Station</label><select id="s"><option value="">Any</option>${c.stations.map((s) => `<option>${esc(s.type)}</option>`).join("")}</select></div>
+      <div class="field"><label>For</label><select id="m"><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option><option value="180">3 hours</option></select></div>
+      <div class="field"><label>Players</label><input id="pl" type="number" min="1" max="10" value="1"></div><div class="field"><label>Note</label><input id="no"></div></div>
+      <p class="err" id="e"></p><button class="btn primary" style="width:100%;justify-content:center;margin-top:8px">Request booking</button></form></div>
+    <p class="muted small" style="text-align:center">Powered by Branditude</p>`;
+  $("#f").onsubmit = async (ev) => { ev.preventDefault(); const btn = ev.target.querySelector("button"); btn.disabled = true; $("#e").textContent = "";
+    const { error: er } = await sb.rpc("gc_public_booking", { p_slug: slug, p: { customer_name: $("#n").value, customer_phone: readPhone("ph") || "", date: $("#d").value, time: $("#t").value,
+      station_type: $("#s").value, minutes: +$("#m").value, players: +$("#pl").value, notes: $("#no").value } });
+    btn.disabled = false;
+    if (er) $("#e").textContent = friendly(er); else { ev.target.outerHTML = `<p class="ok-msg">✅ Request sent. You'll get a WhatsApp from the club to confirm.</p>`; } };
+}
+</script>
+</body>
+</html>

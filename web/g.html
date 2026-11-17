@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="/assets/icons/favicon-64.png">
+<title>Your bill</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#eceae4;color:#16203a;font-family:Figtree,"Segoe UI",system-ui,sans-serif}
+.inv{background:#fff;max-width:760px;margin:20px auto;padding:30px;border-radius:14px;font-size:14px}
+.inv.th{max-width:80mm;padding:10px;border-radius:0;font-size:12px}
+h1{font:800 22px "Bricolage Grotesque",sans-serif;margin:0}.th h1{font-size:16px}
+.hd{display:flex;justify-content:space-between;gap:16px}.th .hd{flex-direction:column;text-align:center}
+.mut{color:#6b7280}.r{text-align:right}table{width:100%;border-collapse:collapse;margin-top:12px}
+th,td{padding:7px 6px;border-bottom:1px solid #eee;text-align:left;vertical-align:top}.th th,.th td{padding:4px 2px}
+.tot{max-width:340px;margin-left:auto}.th .tot{max-width:none}.tot td{border:0;padding:3px 6px}.tot .g td{font:800 18px "Bricolage Grotesque",sans-serif;border-top:2px solid #16203a}
+.pill{display:inline-block;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:700}.paid{background:#e1f2e8;color:#1d7f4e}.partial,.unpaid{background:#fbf0d9;color:#8a5a00}.void{background:#f9e1dd;color:#c2402f}
+.lp{background:#fdf1e5;border-radius:10px;padding:10px;margin-top:14px}
+.acts{max-width:760px;margin:0 auto 30px;display:flex;flex-wrap:wrap;gap:10px;justify-content:center;padding:0 12px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:11px 16px;border-radius:10px;border:1px solid #d9d6cc;background:#fff;color:#16203a;font:600 14px Figtree,sans-serif;text-decoration:none;cursor:pointer}
+.btn.p{background:#e2701b;border-color:#e2701b;color:#fff}.btn.w{background:#128c5e;border-color:#128c5e;color:#fff}
+@media print{body{background:#fff}.acts{display:none}.inv{margin:0;border-radius:0;max-width:none}}
+</style>
+</head>
+<body>
+<div id="root"><div class="inv mut" style="text-align:center">Loading your bill…</div></div>
+<script type="module">
+// Public gaming bill: g.html?t=<token> (sent on WhatsApp). ?print=thermal for 80 mm receipt printers.
+import { sb, friendly } from "./assets/js/sb.js";
+const qs = new URLSearchParams(location.search), th = qs.get("print") === "thermal";
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const rs = (n) => (+n < 0 ? "−" : "") + "₹" + new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(+n || 0));
+const dt = (iso) => new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
+const tm = (iso) => new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+const { data: b, error } = await sb.rpc("gc_public_bill", { p_token: qs.get("t") || "" });
+const root = document.getElementById("root");
+if (error || !b) root.innerHTML = `<div class="inv"><h1>Bill not found</h1><p class="mut">${esc(error ? friendly(error) : "The link may be wrong or old.")}</p></div>`;
+else {
+  const z = b.business, pays = b.payments || [], lp = b.lp;
+  const upi = z.upi_id && b.due > 0 ? `upi://pay?pa=${encodeURIComponent(z.upi_id)}&pn=${encodeURIComponent(z.name)}&am=${b.due}&cu=INR&tn=${encodeURIComponent(b.number)}` : "";
+  document.title = `${b.number} · ${z.name}`;
+  root.innerHTML = `<div class="inv ${th ? "th" : ""}">
+    <div class="hd"><div><h1>${esc(z.name)}</h1><div class="mut">${esc([z.address, z.city].filter(Boolean).join(", "))}</div><div class="mut">${z.phone ? "📞 " + esc(z.phone) : ""}${z.gstin ? " · GSTIN " + esc(z.gstin) : ""}</div></div>
+      <div class="${th ? "" : "r"}"><b>TAX INVOICE</b><div>${esc(b.number)}</div><div class="mut">${dt(b.created_at)}</div><span class="pill ${b.status}">${b.status === "void" ? "CANCELLED" : b.status.toUpperCase()}</span></div></div>
+    <p><b>Billed to:</b> ${esc(b.customer_name || "Walk-in customer")}</p>
+    <table><thead><tr><th>Item</th><th class="r">Qty</th><th class="r">Amount</th></tr></thead><tbody>
+      ${b.lines.map((l) => `<tr><td>${esc(l.desc)}</td><td class="r">${+l.qty}</td><td class="r">${rs(l.amount)}</td></tr>`).join("")}</tbody></table>
+    <table class="tot"><tbody><tr><td>Subtotal</td><td class="r">${rs(b.subtotal)}</td></tr>${+b.discount ? `<tr><td>Discount</td><td class="r">−${rs(b.discount)}</td></tr>` : ""}
+      ${+b.tax_percent ? `<tr><td>GST ${+b.tax_percent}%${z.tax_inclusive ? " (included)" : ""}<br><span class="mut" style="font-size:11px">CGST ${+b.tax_percent / 2}% ${rs(b.tax / 2)} · SGST ${+b.tax_percent / 2}% ${rs(b.tax / 2)}</span></td><td class="r">${rs(b.tax)}</td></tr>` : ""}
+      ${+b.round_off ? `<tr><td>Round off</td><td class="r">${rs(b.round_off)}</td></tr>` : ""}<tr class="g"><td>Total</td><td class="r">${rs(b.total)}</td></tr>
+      <tr><td>Paid${pays.length ? " (" + [...new Set(pays.map((p) => p.mode.toUpperCase()))].join(" + ") + ")" : ""}</td><td class="r">${rs(b.paid)}</td></tr>
+      ${b.due > 0 ? `<tr><td style="color:#b35c00;font-weight:700">Balance due</td><td class="r" style="color:#b35c00;font-weight:700">${rs(b.due)}</td></tr>` : ""}</tbody></table>
+    ${lp ? `<div class="lp"><b>🏆 LP (loser pays) split</b><table><thead><tr><th>Player</th><th class="r">Wins</th><th class="r">Game</th><th class="r">Snacks</th><th class="r">Pays</th></tr></thead><tbody>
+      ${lp.players.map((p) => `<tr><td>${esc(p.player)}</td><td class="r">${p.wins}</td><td class="r">${rs(p.game)}</td><td class="r">${rs(p.items)}</td><td class="r"><b>${rs(p.payable)}</b></td></tr>`).join("")}</tbody></table>
+      <div class="mut" style="font-size:12px;margin-top:6px">${lp.segments.map((s, i) => `Game ${i + 1}: ${tm(s.from_at)}–${tm(s.to_at)} (${Math.round(s.minutes)}m) · winner ${esc(s.winner || "—")} · paid by ${esc((s.payers || []).join(" + "))}`).join("<br>")}</div></div>` : ""}
+    <p class="mut" style="text-align:center;margin-top:16px">${esc(z.footer || "")}</p>
+    ${upi ? `<p style="text-align:center"><a href="${esc(upi)}">Pay ${rs(b.due)} by UPI (${esc(z.upi_id)})</a></p>` : ""}
+    <p class="mut" style="text-align:center;font-size:11px">Powered by Branditude</p></div>
+    <div class="acts"><button class="btn p" onclick="print()">🖨️ Print / save PDF</button><a class="btn" href="?t=${encodeURIComponent(qs.get("t"))}${th ? "" : "&print=thermal"}">${th ? "A4 layout" : "Receipt (80 mm)"}</a>
+      ${upi ? `<a class="btn w" href="${esc(upi)}">Pay by UPI</a>` : ""}<a class="btn" href="f.html?b=${encodeURIComponent(z.slug)}">⭐ Rate your visit</a></div>`;
+}
+</script>
+</body>
+</html>

@@ -202,7 +202,7 @@ VIEWS.payments = async () => {
 
 /* ---------------- Packages ---------------- */
 VIEWS.packages = async () => {
-  await pkgs(true); await mods(true);
+  await pkgs(true); await mods(true); await cats();
   return head("Packages", "The plans businesses buy on the store. A discount here shows a sale price to everyone.", `<button class="btn primary" data-a="pkg-new">${ico("plus")} New package</button>`) + `
   <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">${D.pkgs.map((p) => `<div class="coupon" style="border-style:solid">
     <div class="row" style="justify-content:space-between"><span class="code" style="font-size:20px">${esc(p.name)}</span>${p.active ? (p.is_popular ? '<span class="pill acc">Most popular</span>' : '<span class="pill good">Live</span>') : '<span class="pill">Hidden</span>'}</div>
@@ -210,6 +210,7 @@ VIEWS.packages = async () => {
       <div class="muted small num">${inr(p.yearly_price * (1 - p.discount_percent / 100))}/year · ${p.max_locations} location${p.max_locations > 1 ? "s" : ""}${p.includes_whatsapp ? " · WhatsApp on" : ""}</div></div>
     <ul class="small" style="margin:0;padding-left:18px">${p.features.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
     <p class="small muted" style="margin-top:8px">Unlocks: ${(p.modules || []).map((m) => esc(modName(m))).join(", ") || "no extra modules"}</p>
+    ${p.categories?.length ? `<p class="small" style="margin:0">Only for: ${p.categories.map((c) => esc((D.cats || []).find((x) => x.slug === c)?.name || c)).join(", ")}</p>` : ""}
     <div class="row"><button class="btn sm" data-a="pkg-edit" data-id="${p.id}">Edit</button></div></div>`).join("")}</div>
   <div class="card" style="margin-top:16px"><div class="card-head"><h2>Modules & add-on prices</h2></div>
     <p class="muted small" style="margin-top:-6px">Core modules are in every plan. Others can be bought on their own per month (yearly = 10 × monthly). Leave the price empty to stop selling it on its own.</p>
@@ -228,11 +229,12 @@ function pkgForm(p = { active: true, features: [], modules: ["reviews", "custome
       { key: "max_locations", label: "Locations included", type: "number", min: 1 }, { key: "sort", label: "Order on page", type: "number" },
       { key: "features", label: "Features (one per line)", type: "lines", full: true },
       { key: "modules", label: "Modules switched on for this plan", type: "multiselect", options: (D.mods || []).map((m) => [m.key, m.name + (m.core ? " (core)" : "")]), full: true },
+      { key: "categories", label: "Only for these business types (none ticked = every type)", type: "multiselect", options: (D.cats || []).map((c) => [c.slug, c.name]), full: true },
       { key: "includes_whatsapp", label: "Switch WhatsApp add-on on (credits still charged)", type: "checkbox", full: true },
       { key: "is_popular", label: "Highlight as most popular", type: "checkbox", full: true }, { key: "active", label: "Show on store", type: "checkbox", full: true },
     ],
     onSave: async (v) => { v.slug = (v.slug || v.name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-      v.discount_percent = v.discount_percent || 0; v.max_locations = v.max_locations || 1; v.sort = v.sort ?? 100;
+      v.discount_percent = v.discount_percent || 0; v.max_locations = v.max_locations || 1; v.sort = v.sort ?? 100; v.categories = v.categories?.length ? v.categories : null;
       if (p.id) await q(sb.from("packages").update(v).eq("id", p.id)); else await q(sb.from("packages").insert(v));
       toast("Package saved"); D.pkgs = null; render(); },
   });
@@ -520,7 +522,7 @@ VIEWS.team = async () => {
 VIEWS.settings = async () => {
   if (!isSuper()) return `<div class="card empty">Only a super admin can change settings.</div>`;
   const rows = await q(sb.from("settings").select("*")); const g = (k) => rows.find((r) => r.key === k)?.value || {};
-  D.settings = { agency: g("agency"), payment: g("payment"), gst: g("gst"), whatsapp: g("whatsapp"), trial: g("trial"), razorpay: g("razorpay") };
+  D.settings = { agency: g("agency"), payment: g("payment"), gst: g("gst"), whatsapp: g("whatsapp"), trial: g("trial"), razorpay: g("razorpay"), gaming: g("gaming") };
   const a = D.settings.agency, p = D.settings.payment;
   const f = (id, label, val, ph = "") => `<div class="field"><label for="${id}">${label}</label><input id="${id}" value="${esc(val || "")}" placeholder="${esc(ph)}"></div>`;
   return head("Settings", "Agency details shown on the store and in emails, and how businesses pay you.") + `
@@ -539,6 +541,10 @@ VIEWS.settings = async () => {
     <div class="fields"><div class="field"><label for="s-trial">Free trial for new businesses (days, 0 = no trial)</label><input id="s-trial" type="number" min="0" max="60" value="${D.settings.trial.days ?? 3}"></div></div>
     <h2 style="margin:22px 0 12px">WhatsApp</h2>
     <div class="field"><label for="s-wanote">Pricing note shown to businesses</label><input id="s-wanote" value="${esc(D.settings.whatsapp.price_note || "")}"></div>
+    <h2 style="margin:22px 0 12px">🎮 Gaming store</h2>
+    <p class="small muted" style="margin-top:-6px">The store opened for gaming clubs (gamingclubs.branditudeglobal.com or <code>?for=gaming-club</code>). The site address is used in WhatsApp bill links.</p>
+    <div class="fields">${f("s-gh", "Headline", D.settings.gaming.headline, "Run your gaming club on autopilot.")}${f("s-gurl", "Gaming site address", D.settings.gaming.site_url, "https://gamingclubs.branditudeglobal.com")}</div>
+    <div class="field" style="margin-top:14px"><label for="s-gsub">Line under the headline</label><input id="s-gsub" value="${esc(D.settings.gaming.subline || "")}"></div>
     <div class="modal-foot" style="justify-content:flex-start"><button class="btn primary">Save settings</button></div>
   </form>`;
 };
@@ -555,6 +561,7 @@ after.settings = () => {
       { key: "gst", public: true, value: { rate: (+v("s-gst") || 0) / 100 } },
       { key: "whatsapp", public: true, value: { price_note: v("s-wanote") } },
       { key: "razorpay", public: true, value: { ...(D.settings.razorpay || {}), enabled: true } },
+      { key: "gaming", public: true, value: { ...(D.settings.gaming || {}), headline: v("s-gh"), subline: v("s-gsub"), site_url: v("s-gurl").replace(/\/$/, "") } },
       { key: "trial", public: true, value: { days: Math.max(0, Math.min(60, parseInt(v("s-trial"), 10) || 0)) } },
     ].map((r) => ({ ...r, updated_at: new Date().toISOString() }));
     try { await q(sb.from("settings").upsert(up)); toast("Settings saved"); } catch (err) { toast(err.message, "error"); } };

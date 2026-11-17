@@ -680,6 +680,13 @@ function toast(m) { const t = document.createElement("div"); t.className = "toas
 
 const KEY_RX = /review qr|loyalty card|attendance|qr menu/i, KEY_MODS = ["reviews", "loyalty", "attendance", "menu"];
 let CATS = [], PKGS = [], PRODS = [], MODS = [], SET = {}, billing = "monthly", cat = "", TRIAL = 0;
+// gamingclubs.branditudeglobal.com (or ?for=gaming-club) is the same store, opened for gaming clubs only
+const GAMING = /^gamingclubs\./.test(location.hostname) || new URLSearchParams(location.search).get("for") === "gaming-club";
+// Plans can be for one business type only (packages.categories). A type with its own plans sees just those.
+const slugOf = (id) => CATS.find((x) => x.id === id)?.slug || "";
+const forPkg = (p, id = cat) => { const s = slugOf(id), own = s && PKGS.some((x) => (x.categories || []).includes(s));
+  return own ? (p.categories || []).includes(s) : !p.categories && !GAMING; };
+const shownPkgs = (id = cat) => PKGS.filter((p) => forPkg(p, id));
 const price = (p, b = billing) => (b === "yearly" ? p.yearly_price : p.monthly_price) * (1 - p.discount_percent / 100);
 const full = (p, b = billing) => (b === "yearly" ? p.yearly_price : p.monthly_price);
 const forCat = (p) => !p.product_categories.length || p.product_categories.some((x) => x.category_id === cat);
@@ -695,9 +702,11 @@ async function load() {
   ]);
   if (c.error || p.error) { $("#plans").innerHTML = `<p class="gst">Couldn't load plans. ${esc(friendly(c.error || p.error))}</p>`; return; }
   CATS = c.data; PKGS = p.data.filter((x) => x.active !== false); PRODS = pr.data || []; MODS = md?.data || [];
-  const lo = Math.min(...PKGS.map((x) => price(x, "monthly"))); if (isFinite(lo)) $("#hero-cta").textContent = `See plans from ${inr(Math.round(lo))}/month`; SET = Object.fromEntries((s.data || []).map((x) => [x.key, x.value]));
+  SET = Object.fromEntries((s.data || []).map((x) => [x.key, x.value]));
+  if (GAMING) gamingMode();
+  const lo = Math.min(...shownPkgs(GAMING ? CATS.find((x) => x.slug === "gaming-club")?.id : "").map((x) => price(x, "monthly"))); if (isFinite(lo)) $("#hero-cta").textContent = `See plans from ${inr(Math.round(lo))}/month`; SET = Object.fromEntries((s.data || []).map((x) => [x.key, x.value]));
   const saved = (() => { try { return localStorage.getItem("bgp_cat") || ""; } catch { return ""; } })();
-  cat = CATS.some((x) => x.id === saved) ? saved : "";
+  cat = GAMING ? CATS.find((x) => x.slug === "gaming-club")?.id || "" : CATS.some((x) => x.id === saved) ? saved : "";
   $("#cat").innerHTML = `<option value="">Choose your business type</option>` + CATS.map((x) => `<option value="${x.id}" ${x.id === cat ? "selected" : ""}>${esc(x.icon)} ${esc(x.name)}</option>`).join("");
   $("#cat").onchange = (e) => setCat(e.target.value);
   $("#cat-chips").innerHTML = CATS.map((x) => `<button type="button" class="chip" data-cat="${x.id}" aria-pressed="${x.id === cat}"><span class="e" aria-hidden="true">${esc(x.icon)}</span>${esc(x.name)}</button>`).join("");
@@ -712,6 +721,32 @@ async function load() {
   const gr = +(SET.gst?.rate ?? 0); $("#gst-note").textContent = gr > 0 ? `Prices are in Indian rupees and exclude ${Math.round(gr * 100)}% GST, which is added at checkout.` : "Prices are in Indian rupees. No GST is charged.";
   drawPlans(); drawServices();
 }
+function gamingMode() {
+  document.title = "Gaming Club Manager · Billing, timers & LP splits · Branditude";
+  document.documentElement.classList.add("gaming");
+  const set = (sel, html) => { const el = document.querySelector(sel); if (el) el.innerHTML = html; };
+  set(".pill-tag", "<b>New</b> LP (loser pays) splits");
+  // headline and line under it are editable in Admin → Settings → Gaming store
+  const g = SET.gaming || {}, words = (g.headline || "Run your gaming club on autopilot.").trim().split(/\s+/), third = Math.ceil(words.length / 3);
+  set("#hero-h1", [0, 1, 2].map((i) => words.slice(i * third, (i + 1) * third).join(" ")).filter(Boolean).map((w) => `<span class="w">${esc(w)} </span>`).join(""));
+  set(".hero .lede", esc(g.subline || "Live timers for every station, LP matches split game by game, happy-hour pricing, snacks and GST bills. Bills, reminders and reports on WhatsApp, Google reviews and a customer list built in. We set it up for you."));
+  document.querySelectorAll("#stage, #features, .who").forEach((el) => (el.hidden = true));
+  const f = document.getElementById("features");
+  if (f && !document.getElementById("gaming-features")) f.insertAdjacentHTML("afterend", `<section id="gaming-features"><div class="wrap"><div class="sec-head"><h2>Everything a gaming club runs on, in one app.</h2><p>PS5, Xbox, PC, VR, racing sims, pool and snooker.</p></div>
+    <div class="addons">${[["⏱️ Live station timers", "Start, pause, add time and move stations from any staff phone. No double bookings."],
+      ["🏆 LP (loser pays) matches", "Player names, a split after every game, the winner noted, and each player's share on the bill."],
+      ["⏰ 15-minute warning", "Staff get a popup with an alarm before booked time ends, with one-tap extend or WhatsApp reminder."],
+      ["💸 Happy hours & Sunday prices", "Prices by day and time, worked out minute by minute, so a session across 4 pm is billed right."],
+      ["🍿 Snacks & stock", "Drinks and snacks on the same bill, stock counted, low-stock alerts."],
+      ["🧾 GST bills", "Cash, UPI, card, split or pay later. Thermal and A4 bills with a UPI pay link."],
+      ["💬 WhatsApp bills (add-on)", "Bill + feedback link, payment reminders and a daily report, sent from Branditude's number."],
+      ["⭐ Reviews & regulars", "Feedback page, Google reviews, customer list, loyalty card and win-back messages."]]
+      .map(([t, d]) => `<div class="addon"><b>${t}</b><span>${d}</span></div>`).join("")}</div></div></section>`);
+  const pick = document.getElementById("biz-pick-t")?.parentElement; if (pick) pick.hidden = true;
+  set("#pricing .sec-head h2", "Plans for gaming clubs.");
+  document.querySelectorAll('#site-nav a[href="#features"]').forEach((a) => (a.href = "#gaming-features"));
+  document.querySelectorAll("[data-wa]").forEach((a) => (a.dataset.wa = "Hi Branditude, I'd like to know more about the Gaming Club software."));
+}
 // Features that only fit some businesses (e.g. table ordering for food places). modules.categories holds the slugs.
 const FEAT_RX = { menu: /qr menu|table order/i };
 const catSlug = () => CATS.find((x) => x.id === cat)?.slug || "";
@@ -725,7 +760,7 @@ function applyCat() {
   drawPlans(); drawServices();
 }
 function drawPlans() {
-  $("#plans").innerHTML = PKGS.map((p) => `<div class="plan${p.is_popular ? " pop" : ""}">${p.is_popular ? '<span class="badge">Most popular</span>' : ""}
+  $("#plans").innerHTML = (shownPkgs().length ? "" : `<p class="gst">Choose your business type to see plans for you.</p>`) + shownPkgs().map((p) => `<div class="plan${p.is_popular ? " pop" : ""}">${p.is_popular ? '<span class="badge">Most popular</span>' : ""}
     <div><h3>${esc(p.name)}</h3><p class="for">${esc(p.tagline)}</p></div>
     <div class="price"><b class="num">${inr(Math.round(price(p)))}</b><span>/${billing === "monthly" ? "month" : "year"}</span>${+p.discount_percent ? ` <s class="num">${inr(full(p))}</s>` : ""}</div>
     <p class="bill">${+p.discount_percent ? `<span class="sale">${+p.discount_percent}% off${p.discount_label ? " · " + esc(p.discount_label) : ""}</span> ` : ""}${billing === "monthly" ? "Billed monthly" : "Works out to " + inr(Math.round(price(p) / 12)) + "/month"}</p>
@@ -735,7 +770,7 @@ function drawPlans() {
   drawCompare();
 }
 function drawCompare() {
-  if (!MODS.length || !PKGS.length) return;
+  const PKGS = shownPkgs(); if (!MODS.length || !PKGS.length) { $("#compare-wrap").hidden = true; return; }
   const yr = billing === "yearly", unit = yr ? "/yr" : "/mo";
   $("#compare").innerHTML = `<thead><tr><th scope="col">Feature</th>${PKGS.map((p) => `<th scope="col" class="${p.is_popular ? "pop" : ""}">${esc(p.name)}<small class="num">${inr(Math.round(price(p)))}${yr ? "/year" : "/month"}</small></th>`).join("")}</tr></thead>
     <tbody>${MODS.filter(fits).sort((x, y) => (KEY_MODS.includes(y.key) - KEY_MODS.includes(x.key)) || x.sort - y.sort).map((m) => `<tr class="${KEY_MODS.includes(m.key) ? "key" : ""}"><td><b>${esc(m.icon)} ${esc(m.name)}</b><span>${esc(m.blurb)}</span></td>${PKGS.map((p) => {
@@ -786,7 +821,7 @@ function draw() {
       <div class="field"><label for="b-phone">WhatsApp number</label>${phoneInput("b-phone", { value: co.biz.phone || "", placeholder: "98xxxxxxxx", label: "WhatsApp number" })}</div>
       <div class="field"><label for="b-email">Email</label><input id="b-email" type="email" value="${esc(co.biz.email || "")}" autocomplete="email"></div>
       <div class="field"><label for="b-city">City</label><input id="b-city" value="${esc(co.biz.city || "")}"></div>
-      <div class="field"><label for="b-plan">Plan</label><select id="b-plan">${PKGS.map((p) => `<option value="${p.id}" ${co.pkg === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></div>
+      <div class="field"><label for="b-plan">Plan</label><select id="b-plan">${shownPkgs(co.cat).map((p) => `<option value="${p.id}" ${co.pkg === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></div>
       <div class="field"><label for="b-bill">Billing</label><select id="b-bill"><option value="monthly" ${co.billing === "monthly" ? "selected" : ""}>Monthly</option><option value="yearly" ${co.billing === "yearly" ? "selected" : ""}>Yearly (2 months free)</option></select></div></div>
       ${prods.length ? `<div class="summary"><b style="font-size:15px">Services for your business</b><div class="svc-list">${prods.map((a) => `<label class="opt"><input type="checkbox" data-prod="${a.id}" ${co.products.includes(a.id) ? "checked" : ""}><div><b>${esc(a.name)}</b><span>${esc(a.description)}</span></div><em class="num">${inr(a.price)}${a.billing === "monthly" ? "/mo" : ""}</em></label>`).join("")}</div></div>` : ""}
       <div class="row2" style="margin-top:14px"><input id="b-promo" placeholder="Promo code" value="${esc(co.promo)}" style="max-width:200px" aria-label="Promo code"><button class="btn sm line" data-co="promo">Apply</button></div>

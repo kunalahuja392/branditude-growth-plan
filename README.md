@@ -53,6 +53,18 @@ tests/
 - Database time zone is Asia/Kolkata, so "today", trial ends and renewals follow Indian dates.
 - **Customers** only ever see rows that match their own verified phone number.
 
+## Gaming clubs (gamingclubs.branditudeglobal.com)
+
+Same database, logins, superadmin, payments and WhatsApp wallet as the Growth Plan. Migration `…029_gaming_clubs.sql`.
+
+- **Business type "Gaming Club"** + module **`gaming`**: live station timers, LP ("loser pays") matches with splits and winners, day/time pricing rules (happy hours, Sundays), snacks with stock, GST bills (cash / UPI / card / split / pay later), bookings, reports. Portal pages `#gboard #gbookings #gbills #gstock #greports #gsetup` (`web/assets/js/gaming.js`). All money maths is in SQL (`gc_calc`, `gc_checkout`, `gc_make_bill`). A bill also logs a normal visit, so customers, loyalty and reviews keep working.
+- **Plans per business type**: `packages.categories` (null = every type). Game Club / Game Club Pro are for gaming clubs only; a trigger refuses a plan meant for another type. Every other Growth Plan module shows in the gaming portal as an add-on.
+- **Add-on `wa_billing`** "WhatsApp bills, follow-ups & reports": monthly add-on price + **1 utility credit per message** (`wa_reserve`/`wa_refund`). Templates to create in WhatsApp Manager with the same names: `gc_bill`, `gc_payment_due`, `gc_time_up`, `gc_daily_report`. Functions: `gc-notify` (staff sends now; verify_jwt on) and `gc-cron` (every 5 min via pg_cron job `gc-wa-5min`; verify_jwt off): time-up reminders, payment follow-ups (10 am–8 pm), daily owner report. Without the add-on staff get a free wa.me link from their own phone.
+- **Team area `gaming`**: front-desk staff see only the board, bookings, bills and snacks.
+- **Public pages**: `g.html?t=<token>` bill (A4 / 80 mm, UPI pay link, feedback link) and `play.html?b=<slug>` club page with online booking requests.
+- **Store**: `index.html` opens in gaming mode on `gamingclubs.*` or with `?for=gaming-club`. Bill links use `settings.gaming.site_url`.
+- Tests: `psql -d bgp -f tests/test_gaming.sql` (after `test_platform.sql`) ends with "GAMING TESTS PASSED".
+
 ---
 
 ## Live project

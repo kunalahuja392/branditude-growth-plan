@@ -16,8 +16,8 @@ grant execute on function pg_temp.as_user(text) to anon, authenticated;
 insert into promo_codes(code,type,value) values ('LAUNCH20','percent',20);
 set role anon; select pg_temp.as_user(null);
 do $$ declare n int; q jsonb; begin
-  select count(*) into n from packages; assert n=3, 'anon sees 3 packages';
-  select count(*) into n from categories; assert n=10, 'anon sees 10 categories';
+  select count(*) into n from packages where categories is null; assert n=3, 'anon sees 3 packages for every business type';
+  select count(*) into n from categories; assert n=11, 'anon sees 11 categories (incl. Gaming Club)';
   select count(*) into n from promo_codes; assert n=0, 'anon cannot see promo codes';
   select count(*) into n from leads; assert n=0, 'anon cannot read leads';
   q := submit_lead(jsonb_build_object('business_name','Chai Point','phone','98765 11111','package_id',(select id from packages where slug='growth'),'billing','monthly','promo_code','launch20',
