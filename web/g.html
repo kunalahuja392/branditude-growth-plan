@@ -48,7 +48,7 @@ else {
     <p><b>Billed to:</b> ${esc(b.customer_name || "Walk-in customer")}</p>
     <table><thead><tr><th>Item</th><th class="r">Qty</th><th class="r">Amount</th></tr></thead><tbody>
       ${b.lines.map((l) => `<tr><td>${esc(l.desc)}</td><td class="r">${+l.qty}</td><td class="r">${rs(l.amount)}</td></tr>`).join("")}</tbody></table>
-    <table class="tot"><tbody><tr><td>Subtotal</td><td class="r">${rs(b.subtotal)}</td></tr>${+b.discount ? `<tr><td>Discount</td><td class="r">−${rs(b.discount)}</td></tr>` : ""}
+    <table class="tot"><tbody><tr><td>Subtotal</td><td class="r">${rs(b.subtotal)}</td></tr>${+b.discount ? `<tr><td>Discount${+b.subtotal ? ` (${+((b.discount / b.subtotal) * 100).toFixed(1)}%)` : ""}</td><td class="r">−${rs(b.discount)}</td></tr>` : ""}
       ${+b.tax_percent ? `<tr><td>GST ${+b.tax_percent}%${z.tax_inclusive ? " (included)" : ""}<br><span class="mut" style="font-size:11px">CGST ${+b.tax_percent / 2}% ${rs(b.tax / 2)} · SGST ${+b.tax_percent / 2}% ${rs(b.tax / 2)}</span></td><td class="r">${rs(b.tax)}</td></tr>` : ""}
       ${+b.round_off ? `<tr><td>Round off</td><td class="r">${rs(b.round_off)}</td></tr>` : ""}<tr class="g"><td>Total</td><td class="r">${rs(b.total)}</td></tr>
       <tr><td>Paid${pays.length ? " (" + [...new Set(pays.map((p) => p.mode.toUpperCase()))].join(" + ") + ")" : ""}</td><td class="r">${rs(b.paid)}</td></tr>

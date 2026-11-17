@@ -335,6 +335,19 @@ async function snackModal(sid) {
 }
 
 // ---------- billing ----------
+// ---------- discount: ₹ or %, with quick % buttons ----------
+const discField = () => `<div class="field"><label>Discount</label><div class="row" style="flex-wrap:nowrap"><input id="g-disc" type="number" min="0" step="0.01" value="0"><select id="g-dt" style="width:70px" aria-label="Discount in rupees or percent"><option value="amt">₹</option><option value="pct">%</option></select></div>
+  <div class="chips" id="g-dq" style="margin-top:6px">${[5, 10, 15, 20].map((v) => `<button type="button" class="chip" data-dq="${v}">${v}%</button>`).join("")}</div></div>`;
+const discOf = (m, base) => { const v = Math.max(0, +($("#g-disc", m)?.value || 0)); return +Math.min(base, $("#g-dt", m)?.value === "pct" ? (base * Math.min(v, 100)) / 100 : v).toFixed(2); };
+const discRow = (m, base) => { const d = discOf(m, base); if (!d) return ""; const pct = base ? (d / base) * 100 : 0;
+  return `<tr><td>Discount ${$("#g-dt", m)?.value === "pct" ? `${+(+$("#g-disc", m).value).toFixed(2)}%` : `(${+pct.toFixed(1)}%)`}</td><td class="num">−${inr2(d)}</td></tr>`; };
+function wireDisc(m, draw) {
+  ["#g-disc", "#g-dt"].forEach((x) => { const el = $(x, m); el.addEventListener("input", () => { syncQuick(); draw(); }); el.addEventListener("change", () => { syncQuick(); draw(); }); });
+  const syncQuick = () => $$("#g-dq [data-dq]", m).forEach((b) => b.setAttribute("aria-pressed", $("#g-dt", m).value === "pct" && +$("#g-disc", m).value === +b.dataset.dq));
+  $("#g-dq", m).onclick = (e) => { const b = e.target.closest("[data-dq]"); if (!b) return; const on = b.getAttribute("aria-pressed") === "true";
+    $("#g-dt", m).value = "pct"; $("#g-disc", m).value = on ? 0 : b.dataset.dq; syncQuick(); draw(); };
+  syncQuick();
+}
 function totals(sub, disc) {
   const cf = G.board?.settings || { tax_percent: 18, tax_inclusive: false }, t = +cf.tax_percent || 0, taxable = Math.max(0, sub - disc);
   let tax, total; if (cf.tax_inclusive) { total = taxable; tax = total - total / (1 + t / 100); } else { tax = (taxable * t) / 100; total = taxable + tax; }
@@ -378,7 +391,7 @@ async function checkout(sid, btn) {
     ${s.is_lp ? `<h3 style="margin-top:14px">Who pays what</h3><div id="g-lpb"></div>` : ""}
     <div class="fields" style="margin-top:10px"><div class="field"><label>Customer name</label><input id="g-cname" value="${esc(s.customer_name || "")}"></div>
       <div class="field"><label>WhatsApp number</label>${phoneInput("g-cph", { value: s.customer_phone || "" })}</div>
-      <div class="field"><label>Discount</label><div class="row" style="flex-wrap:nowrap"><input id="g-disc" type="number" min="0" value="0"><select id="g-dt" style="width:80px"><option value="amt">₹</option><option value="pct">%</option></select></div></div>
+      ${discField()}
       <div class="field" id="g-loy"></div></div>
     <table class="gc-tot" style="width:100%;margin-top:8px"><tbody id="g-tots"></tbody></table>
     <div id="g-pays" style="margin-top:8px"></div>
@@ -386,7 +399,7 @@ async function checkout(sid, btn) {
     <div class="modal-foot"><button class="btn" id="g-res">↺ Resume timer</button><button class="btn primary" id="g-go">✓ Create bill</button></div>`, { wide: true });
   const tail = { winner: null, payers: [] };
   const sub = () => +(c.amount - memCover().amt + c.items_total).toFixed(2);
-  const disc = () => { const v = +($("#g-disc", m).value || 0); return Math.min(sub(), $("#g-dt", m).value === "pct" ? (sub() * v) / 100 : v); };
+  const disc = () => discOf(m, sub());
   const shares = () => {
     const pp = { ...c.per_player }; if (needTail) tail.payers.forEach((p) => (pp[p] = (pp[p] || 0) + c.tail.amount / tail.payers.length));
     const common = c.items.filter((i) => !i.assigned_to).reduce((t, i) => t + i.qty * i.price, 0);
@@ -396,11 +409,11 @@ async function checkout(sid, btn) {
   };
   const draw = () => { const t = totals(sub(), disc()), mc = memCover(), mr = $("#g-mr", m);
     if (mr) { mr.hidden = !mc.min; mr.innerHTML = mc.min ? `<td>🎟️ Membership hours: ${mc.min} min used</td><td class="num">−${inr2(mc.amt)}</td>` : ""; }
-    $("#g-tots", m).innerHTML = `<tr><td>Subtotal</td><td class="num">${inr2(sub())}</td></tr>${disc() ? `<tr><td>Discount</td><td class="num">−${inr2(disc())}</td></tr>` : ""}${t.t ? `<tr><td>GST ${t.t}%${t.incl ? " (included)" : ""}</td><td class="num">${inr2(t.tax)}</td></tr>` : ""}${Math.abs(t.round) >= 0.01 ? `<tr><td>Round off</td><td class="num">${inr2(t.round)}</td></tr>` : ""}<tr class="g"><td>Total</td><td class="num">${inr(t.total)}</td></tr>`;
+    $("#g-tots", m).innerHTML = `<tr><td>Subtotal</td><td class="num">${inr2(sub())}</td></tr>${discRow(m, sub())}${t.t ? `<tr><td>GST ${t.t}%${t.incl ? " (included)" : ""}</td><td class="num">${inr2(t.tax)}</td></tr>` : ""}${Math.abs(t.round) >= 0.01 ? `<tr><td>Round off</td><td class="num">${inr2(t.round)}</td></tr>` : ""}<tr class="g"><td>Total</td><td class="num">${inr(t.total)}</td></tr>`;
     if (s.is_lp) $("#g-lpb", m).innerHTML = `<div class="table-wrap"><table><thead><tr><th>Player</th><th class="num">Game time</th><th class="num">Snacks</th><th class="num">Pays</th></tr></thead><tbody>${shares().map((r) => `<tr><td>${esc(r.player)}</td><td class="num">${inr2(r.game)}</td><td class="num">${inr2(r.items)}</td><td class="num"><b>${inr(r.amount)}</b></td></tr>`).join("")}</tbody></table></div>${needTail && !tail.payers.length ? `<p class="small" style="color:var(--warn)">Pick who pays for the last game above.</p>` : ""}`;
     m.syncPay && m.syncPay(); };
   const getPays = payBox(m, { players: pl, total: () => totals(sub(), disc()).total, shares });
-  draw(); ["#g-disc", "#g-dt"].forEach((x) => $(x, m).addEventListener("input", draw));
+  draw(); wireDisc(m, draw);
   // charge for: time played, the full booking, or other minutes
   const setTime = (mode, minutes) => guard(null, async () => { const v = await rpc("gc_bill_time", { p_session: sid, p_mode: mode, p_minutes: minutes ?? null }); c = v.calc;
     $("#g-hd", m).innerHTML = headLine(); $("#g-gr", m).innerHTML = gameRow(); drawMem(); draw(); });
@@ -456,21 +469,21 @@ async function counterSale() {
   const m = openModal(`<div class="modal-head"><h2>🧾 Counter sale</h2><button class="btn ghost" data-close>Close</button></div>
     <input id="g-q" placeholder="Search snacks…">${catBar(prods, G.board?.settings)}<div class="gc-prods" id="g-pl"></div><h3 style="margin-top:12px">Cart</h3><div id="g-cart"></div>
     <div class="fields" style="margin-top:8px"><div class="field"><label>Customer name</label><input id="g-cname"></div><div class="field"><label>WhatsApp number</label>${phoneInput("g-cph")}</div>
-    <div class="field"><label>Discount (₹)</label><input id="g-disc" type="number" min="0" value="0"></div></div>
+    ${discField()}</div>
     <table class="gc-tot" style="width:100%;margin-top:8px"><tbody id="g-tots"></tbody></table><div id="g-pays"></div>
     <div class="modal-foot"><button class="btn" data-close>Cancel</button><button class="btn primary" id="g-go">✓ Create bill</button></div>`, { wide: true });
-  const sub = () => [...cart.values()].reduce((t, x) => t + x.p.price * x.qty, 0), tot = () => totals(sub(), Math.min(sub(), +($("#g-disc", m).value || 0)));
+  const sub = () => [...cart.values()].reduce((t, x) => t + x.p.price * x.qty, 0), tot = () => totals(sub(), discOf(m, sub()));
   let cat = ""; const cb = $("#g-cat", m); if (cb) pick(cb, { onChange: (v) => { cat = v[0] || ""; list(); } });
   const list = () => { const t = $("#g-q", m).value.toLowerCase(); $("#g-pl", m).innerHTML = prods.filter((p) => p.name.toLowerCase().includes(t) && (!cat || p.category === cat)).map((p) => `<button data-p="${p.id}"><b>${esc(p.name)}</b><span class="muted small">${inr(p.price)}${p.track_stock ? " · " + p.stock + " left" : ""}</span></button>`).join("") || `<p class="muted">No items yet.</p>`; };
   const draw = () => { $("#g-cart", m).innerHTML = cart.size ? `<div class="table-wrap"><table><tbody>${[...cart.values()].map((x) => `<tr><td>${esc(x.p.name)}</td><td><button class="btn sm" data-d="${x.p.id}">−</button> <b>${x.qty}</b> <button class="btn sm" data-i="${x.p.id}">＋</button></td><td class="num">${inr(x.p.price * x.qty)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">Tap items to add them.</p>`;
-    const t = tot(); $("#g-tots", m).innerHTML = `<tr><td>Subtotal</td><td class="num">${inr2(sub())}</td></tr>${t.t ? `<tr><td>GST ${t.t}%</td><td class="num">${inr2(t.tax)}</td></tr>` : ""}<tr class="g"><td>Total</td><td class="num">${inr(t.total)}</td></tr>`; m.syncPay && m.syncPay(); };
+    const t = tot(); $("#g-tots", m).innerHTML = `<tr><td>Subtotal</td><td class="num">${inr2(sub())}</td></tr>${discRow(m, sub())}${t.t ? `<tr><td>GST ${t.t}%</td><td class="num">${inr2(t.tax)}</td></tr>` : ""}<tr class="g"><td>Total</td><td class="num">${inr(t.total)}</td></tr>`; m.syncPay && m.syncPay(); };
   list(); const getPays = payBox(m, { total: () => tot().total }); draw();
-  $("#g-q", m).oninput = list; $("#g-disc", m).oninput = draw;
+  $("#g-q", m).oninput = list; wireDisc(m, draw);
   m.addEventListener("click", (e) => { const p = e.target.closest("[data-p]"), i = e.target.closest("[data-i]"), d = e.target.closest("[data-d]");
     if (p) { const pr = prods.find((x) => x.id === p.dataset.p), x = cart.get(pr.id) || { p: pr, qty: 0 }; x.qty++; cart.set(pr.id, x); draw(); }
     if (i) { cart.get(i.dataset.i).qty++; draw(); } if (d) { const x = cart.get(d.dataset.d); if (--x.qty <= 0) cart.delete(x.p.id); draw(); } });
   $("#g-go", m).onclick = () => guard($("#g-go", m), async () => { if (!cart.size) throw new Error("The cart is empty");
-    const bl = await rpc("gc_quick_sale", { p_business: BID(), p: { items: [...cart.values()].map((x) => ({ product_id: x.p.id, qty: x.qty })), customer_name: $("#g-cname", m).value.trim(), customer_phone: readPhone("g-cph", m) || "", discount: +($("#g-disc", m).value || 0), payments: getPays() } });
+    const bl = await rpc("gc_quick_sale", { p_business: BID(), p: { items: [...cart.values()].map((x) => ({ product_id: x.p.id, qty: x.qty })), customer_name: $("#g-cname", m).value.trim(), customer_phone: readPhone("g-cph", m) || "", discount: discOf(m, sub()), payments: getPays() } });
     closeModal(); G.products = null; billDone(bl, false); if (A.isRoute("gboard")) refresh(); });
 }
 
@@ -708,18 +721,18 @@ function sellModal(plans, st) {
   const m = openModal(`<div class="modal-head"><h2>🎟️ Sell membership</h2><button class="btn ghost" data-close>Close</button></div>
     <div class="chips" id="ms-p">${chips(plans.map((p) => [p.id, `${p.name} · ${inr(p.price)}`]), [pl.id])}</div><div id="ms-sum" class="card" style="margin-top:10px;padding:10px 12px"></div>
     <div class="fields" style="margin-top:10px"><div class="field"><label>Customer name</label><input id="g-cname"></div><div class="field"><label>WhatsApp number</label>${phoneInput("g-cph", { required: true })}</div>
-      <div class="field"><label>Starts on</label><input id="ms-d" type="date" value="${todayISO()}"></div><div class="field"><label>Discount (₹)</label><input id="g-disc" type="number" min="0" value="0"></div></div>
+      <div class="field"><label>Starts on</label><input id="ms-d" type="date" value="${todayISO()}"></div>${discField()}</div>
     <table class="gc-tot" style="width:100%;margin-top:8px"><tbody id="g-tots"></tbody></table><div id="g-pays"></div>
     <div class="modal-foot"><button class="btn" data-close>Cancel</button><button class="btn primary" id="ms-go">✓ Sell & make bill</button></div>`, { wide: true });
-  const tot = () => totals(+pl.price, Math.min(+pl.price, +($("#g-disc", m).value || 0)));
+  const tot = () => totals(+pl.price, discOf(m, +pl.price));
   const draw = () => { const t = tot(), end = new Date($("#ms-d", m).value + "T12:00:00"); end.setDate(end.getDate() + pl.validity_days - 1);
     $("#ms-sum", m).innerHTML = `${pl.buckets.map((b) => `<div class="small">⏱️ <b>${hrs(b.minutes)}</b> ${esc(b.name)} <span class="muted">· ${b.station_ids.length ? b.station_ids.map((id) => esc(st.find((x) => x.id === id)?.name || "?")).join(" or ") : "any station"}</span></div>`).join("")}<div class="small" style="margin-top:4px">Valid till <b>${fmtDay(end.toISOString().slice(0, 10))}</b></div>`;
-    $("#g-tots", m).innerHTML = `<tr><td>Price</td><td class="num">${inr2(pl.price)}</td></tr>${t.t ? `<tr><td>GST ${t.t}%${t.incl ? " (included)" : ""}</td><td class="num">${inr2(t.tax)}</td></tr>` : ""}<tr class="g"><td>Total</td><td class="num">${inr(t.total)}</td></tr>`; m.syncPay && m.syncPay(); };
+    $("#g-tots", m).innerHTML = `<tr><td>Price</td><td class="num">${inr2(pl.price)}</td></tr>${discRow(m, +pl.price)}${t.t ? `<tr><td>GST ${t.t}%${t.incl ? " (included)" : ""}</td><td class="num">${inr2(t.tax)}</td></tr>` : ""}<tr class="g"><td>Total</td><td class="num">${inr(t.total)}</td></tr>`; m.syncPay && m.syncPay(); };
   const getPays = payBox(m, { total: () => tot().total }); draw();
   pick($("#ms-p", m), { onChange: (v) => { pl = plans.find((x) => x.id === v[0]) || pl; draw(); } });
-  ["#g-disc", "#ms-d"].forEach((x) => $(x, m).addEventListener("input", draw));
+  $("#ms-d", m).addEventListener("input", draw); wireDisc(m, draw);
   $("#ms-go", m).onclick = () => guard($("#ms-go", m), async () => { const ph = readPhone("g-cph", m); if (!ph) throw new Error("Add the customer's mobile number");
-    const r = await rpc("gc_membership_sell", { p_business: BID(), p: { plan_id: pl.id, customer_name: $("#g-cname", m).value.trim(), customer_phone: ph, starts_on: $("#ms-d", m).value, discount: +($("#g-disc", m).value || 0), payments: getPays() } });
+    const r = await rpc("gc_membership_sell", { p_business: BID(), p: { plan_id: pl.id, customer_name: $("#g-cname", m).value.trim(), customer_phone: ph, starts_on: $("#ms-d", m).value, discount: discOf(m, +pl.price), payments: getPays() } });
     closeModal(); G.memTab = "members"; drawMembers(); billDone(r.bill, false); });
 }
 async function memberModal(x, st) {
