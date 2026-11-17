@@ -45,6 +45,28 @@ async function site() {
   return (G.site = (r?.value?.site_url || location.origin).replace(/\/$/, ""));
 }
 const styles = `<style id="gc-css">
+.tl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--card)}
+.tl{position:relative;min-width:max-content}
+.tl-row{display:flex;border-top:1px solid var(--line);height:46px}
+.tl-row:first-child{border-top:0}
+.tl-lab{position:sticky;left:0;z-index:3;width:120px;min-width:120px;background:var(--card);border-right:1px solid var(--line);padding:6px 10px;display:flex;flex-direction:column;justify-content:center;font-size:13px;line-height:1.2}
+.tl-lab small{color:var(--muted);font-size:11px}
+.tl-track{position:relative;cursor:pointer;background-image:repeating-linear-gradient(90deg,transparent 0 59px,var(--line) 59px 60px)}
+.tl-track:hover{background-color:rgba(0,0,0,.015)}
+.tl-head .tl-track{cursor:default;height:28px}
+.tl-hr{position:absolute;top:6px;font-size:11px;color:var(--muted);transform:translateX(4px)}
+.tl-b{position:absolute;top:6px;bottom:6px;border-radius:8px;padding:3px 7px;font-size:12px;line-height:1.25;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:#fff;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.tl-b small{display:block;opacity:.85;font-size:10.5px}
+.tl-b.bk{background:#3b6fd8}.tl-b.pend{background:repeating-linear-gradient(135deg,#d9902a 0 8px,#c98420 8px 16px)}.tl-b.play{background:#2f9b62}.tl-b.open{background:linear-gradient(90deg,#2f9b62 60%,rgba(47,155,98,.25))}
+.tl-now{position:absolute;top:0;bottom:0;width:2px;background:#e0413a;z-index:2;pointer-events:none}
+.tl-now.nl::before{display:none}
+.tl-now::before{content:"now";position:absolute;top:-1px;left:3px;font-size:10px;color:#e0413a;font-weight:700}
+.tl-key{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:8px 2px 0}
+.tl-key i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:5px}
+.av-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
+.av{border:1px solid var(--line);border-radius:12px;padding:9px 11px;background:var(--card);cursor:pointer}
+.av b{display:block}.av span{font-size:12.5px}
+.av.free{border-left:4px solid #2f9b62}.av.busy{border-left:4px solid #e0413a}.av.soon{border-left:4px solid #d9902a}
 .gc-board{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
 .gc-st{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:9px;position:relative;overflow:hidden;min-height:210px}
 .gc-st::before{content:"";position:absolute;inset:0 0 auto;height:4px;background:var(--line)}
@@ -584,13 +606,73 @@ const bkSummary = (rows) => { if (!rows.length) return ""; const n = (st) => row
   const hrs = live.reduce((t, k) => t + k.minutes, 0) / 60, up = live.filter((k) => Date.parse(k.start_at) > Date.now()).sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at))[0];
   return `<div class="grid g4" style="margin-bottom:12px">${A.kpi("Bookings", rows.length - n(["cancelled"]), `${+hrs.toFixed(1)} hrs still to play`)}${A.kpi("Waiting for approval", n(["pending"]), n(["pending"]) ? "online requests" : "none")}
     ${A.kpi("Arrived", n(["arrived"]), `${n(["no_show"])} no-show · ${n(["cancelled"])} cancelled`)}${A.kpi("Next", up ? tm(up.start_at) : "—", up ? `${esc(up.customer_name)} · ${new Date(up.start_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : "nothing upcoming")}</div>`; };
+// ---------- availability: summary per station + a day timeline ----------
+const fmtH = (h) => { h = ((h % 24) + 24) % 24; return `${h % 12 || 12}${h < 12 ? "am" : "pm"}`; };
+const dayStr = (d) => { const x = new Date(d + "T12:00:00"); return x.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }); };
+const addDays = (d, n) => { const x = new Date(d + "T12:00:00"); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
+async function drawAvail() {
+  const el = $("#gk-av"); if (!el) return;
+  const day = G.avDay = G.avDay || todayISO(), d0 = new Date(day + "T00:00:00+05:30").getTime(), isToday = day === todayISO();
+  const [st, bks] = await Promise.all([q(sb.from("gc_stations").select("id,name,type,rate,sort").eq("business_id", BID()).eq("active", true).order("sort").order("name")),
+    q(sb.from("gc_bookings").select("*").eq("business_id", BID()).in("status", ["pending", "confirmed", "arrived"]).gte("start_at", new Date(d0 - 6 * 36e5).toISOString()).lte("start_at", new Date(d0 + 30 * 36e5).toISOString()).order("start_at"))]).catch((e) => (err(e), [[], []]));
+  if (isToday && !G.board) await loadBoard().catch(() => {});
+  const now = Date.now(), sess = isToday ? (G.board?.sessions || []) : [];
+  // blocks per station: live sessions (projected to their booked end) and bookings (arrived ones are shown as the live session)
+  const blocks = {}, add = (k, b) => (blocks[k] = blocks[k] || []).push(b);
+  sess.forEach((s) => { const a = Date.parse(s.start_at), end = s.booked_minutes ? now + Math.max(0, s.booked_minutes * 60000 - liveOf(s).active) : null;
+    add(s.station_id, { kind: s.booked_minutes ? "play" : "open", a, z: Math.max(end || now + 30 * 60000, now + 5 * 60000), name: s.customer_name || "Walk-in", sub: s.booked_minutes ? `playing · until ${tm(new Date(Math.max(end, now)).toISOString())}` : "playing · open time", sid: s.id }); });
+  const anyRows = {};
+  bks.filter((k) => k.status !== "arrived").forEach((k) => { const a = Date.parse(k.start_at), z = a + k.minutes * 60000; if (z < d0 || a > d0 + 30 * 36e5) return;
+    const key = k.station_id || ("type:" + (k.station_type || "Any")); if (!k.station_id) anyRows[key] = k.station_type || "Any";
+    add(key, { kind: k.status === "pending" ? "pend" : "bk", a, z, name: k.customer_name, sub: `${tm(k.start_at)}–${tm(new Date(z).toISOString())}${k.status === "pending" ? " · to approve" : ""}`, bk: k }); });
+  // time range: 9am to midnight, stretched to fit what's on the day (up to 6am next day)
+  const all = Object.values(blocks).flat(), hrs = (t) => (t - d0) / 36e5;
+  let h0 = Math.min(9, ...all.map((b) => Math.floor(hrs(Math.max(b.a, d0))))), h1 = Math.max(24, ...all.map((b) => Math.ceil(hrs(Math.min(b.z, d0 + 30 * 36e5)))));
+  if (isToday) { h0 = Math.min(h0, Math.floor(hrs(now))); h1 = Math.max(h1, Math.ceil(hrs(now)) + 1); }
+  h0 = Math.max(0, h0); h1 = Math.min(30, h1); const W = 60, x = (t) => Math.max(0, Math.min((h1 - h0) * W, (hrs(t) - h0) * W));
+  const rowsDef = [...st.map((s) => ({ key: s.id, label: s.name, sub: s.type, st: s })), ...Object.entries(anyRows).map(([key, t]) => ({ key, label: "Any " + t, sub: "no station picked" }))];
+  // summary per station
+  const stat = (r) => { const bl = (blocks[r.key] || []).slice().sort((p, q2) => p.a - q2.a);
+    if (!isToday) { const n = bl.length, h = bl.reduce((t, b) => t + (b.z - b.a), 0) / 36e5; return n ? ["soon", `${n} booking${n === 1 ? "" : "s"} · ${+h.toFixed(1)} hrs`, `first ${tm(new Date(bl[0].a).toISOString())}`] : ["free", "Free all day", ""]; }
+    const cur = bl.find((b) => b.a <= now && b.z > now), next = bl.find((b) => b.a > now);
+    if (cur) { let free = cur.z; for (const b of bl) if (b.a <= free && b.z > free) free = b.z; return ["busy", cur.kind === "open" ? "In use · open time" : `Busy until ${tm(new Date(free).toISOString())}`, next && next.a > cur.z ? `then free till ${tm(new Date(next.a).toISOString())}` : ""]; }
+    if (next) { const m = Math.round((next.a - now) / 60000); return [m <= 60 ? "soon" : "free", `Free now · for ${mins(m)}`, `booked at ${tm(new Date(next.a).toISOString())} (${esc(next.name)})`]; }
+    return ["free", "Free now", "nothing booked later today"]; };
+  const S = rowsDef.filter((r) => r.st).map((r) => [r, stat(r)]), freeNow = S.filter(([, z]) => z[0] !== "busy").length;
+  const openHrs = (h1 - h0) * st.length, bookedHrs = st.reduce((t, s) => t + (blocks[s.id] || []).reduce((u, b) => u + (Math.min(b.z, d0 + h1 * 36e5) - Math.max(b.a, d0 + h0 * 36e5)) / 36e5, 0), 0);
+  el.innerHTML = `<div class="card" style="margin-bottom:14px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+      <div><h2 style="margin:0">Availability</h2><span class="muted small">${isToday ? `${freeNow} of ${st.length} station${st.length === 1 ? "" : "s"} free right now · ` : ""}${+bookedHrs.toFixed(1)} of ${openHrs} station-hours booked (${openHrs ? Math.round((bookedHrs / openHrs) * 100) : 0}%)</span></div>
+      <div class="row" style="gap:6px"><button class="btn sm" id="av-p">‹</button><button class="btn sm ${isToday ? "primary" : ""}" id="av-t">Today</button><b style="min-width:110px;text-align:center">${dayStr(day)}</b><button class="btn sm" id="av-n">›</button></div></div>
+    ${st.length ? `<div class="av-grid" style="margin-bottom:12px">${S.map(([r, z]) => `<div class="av ${z[0]}" data-avs="${r.key}"><b>${esc(r.label)}</b><span>${z[1]}</span>${z[2] ? `<div class="muted small">${z[2]}</div>` : ""}</div>`).join("")}</div>` : `<p class="muted">Add stations first in Stations & pricing.</p>`}
+    ${rowsDef.length ? `<div class="tl-wrap"><div class="tl">
+      <div class="tl-row tl-head"><div class="tl-lab"><small>${isToday ? "Tap a free spot to book" : "Tap to book"}</small></div><div class="tl-track" style="width:${(h1 - h0) * W}px">${Array.from({ length: h1 - h0 }, (_, i) => `<span class="tl-hr" style="left:${i * W}px">${fmtH(h0 + i)}</span>`).join("")}</div></div>
+      ${rowsDef.map((r, ri) => `<div class="tl-row"><div class="tl-lab"><b>${esc(r.label)}</b><small>${esc(r.sub)}</small></div><div class="tl-track" data-tk="${r.st ? r.key : ""}" style="width:${(h1 - h0) * W}px">
+        ${(blocks[r.key] || []).map((b, i) => `<div class="tl-b ${b.kind}" data-tb="${r.key}|${i}" style="left:${x(b.a)}px;width:${Math.max(18, x(b.z) - x(b.a) - 2)}px" title="${esc(b.name)} · ${esc(b.sub)}">${esc(b.name)}<small>${esc(b.sub)}</small></div>`).join("")}
+        ${isToday && hrs(now) >= h0 && hrs(now) <= h1 ? `<div class="tl-now ${ri ? "nl" : ""}" style="left:${x(now)}px"></div>` : ""}</div></div>`).join("")}
+    </div></div>
+    <div class="tl-key"><span><i style="background:#2f9b62"></i>Playing now</span><span><i style="background:#3b6fd8"></i>Booked</span><span><i style="background:#d9902a"></i>Waiting for approval</span><span><i style="background:var(--card);border:1px solid var(--line)"></i>Free</span></div>` : ""}</div>`;
+  $("#av-p", el).onclick = () => { G.avDay = addDays(day, -1); drawAvail(); }; $("#av-n", el).onclick = () => { G.avDay = addDays(day, 1); drawAvail(); }; $("#av-t", el).onclick = () => { G.avDay = todayISO(); drawAvail(); };
+  const wrap = $(".tl-wrap", el); if (wrap && isToday) wrap.scrollLeft = Math.max(0, x(now) - 180);
+  el.onclick = (e) => {
+    const b = e.target.closest("[data-tb]");
+    if (b) { const [k, i] = b.dataset.tb.split("|"), bl = blocks[k][+i]; if (bl.bk) return bookingView({ ...bl.bk, station_name: st.find((s) => s.id === bl.bk.station_id)?.name }, drawBookings);
+      location.hash = "#gboard"; return; }
+    const tk = e.target.closest("[data-tk]"); if (tk && tk.dataset.tk && ctx().canWrite) {
+      const r = tk.getBoundingClientRect(), h = h0 + (e.clientX - r.left) / W, t = d0 + Math.round(h * 2) / 2 * 36e5;
+      const when = new Date(Math.max(t, isToday ? Math.ceil(now / 9e5) * 9e5 : t)), ist = new Date(when.getTime() + 5.5 * 36e5).toISOString();
+      return bookingModal(() => { drawBookings(); }, { station_id: tk.dataset.tk, date: ist.slice(0, 10), time: ist.slice(11, 16) }); }
+    const av = e.target.closest("[data-avs]"); if (av) { const row = $(`[data-tk="${av.dataset.avs}"]`, el); row?.scrollIntoView({ block: "nearest" }); row?.animate?.([{ background: "rgba(59,111,216,.15)" }, { background: "transparent" }], 900); }
+  };
+}
+
 async function drawBookings() {
   const el = $("#gk-view"); if (!el) return;
   const from = $("#gk-f")?.value || todayISO(), to = $("#gk-t")?.value || new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
   const rows = await q(sb.from("gc_bookings").select("*, gc_stations(name)").eq("business_id", BID()).gte("start_at", from + "T00:00:00+05:30").lte("start_at", to + "T23:59:59+05:30").order("start_at"));
   const link = `${await site()}/play.html?b=${biz().slug}`;
-  el.innerHTML = `<div class="row" style="justify-content:space-between;margin-bottom:12px"><div class="row"><input type="date" id="gk-f" value="${from}"><span class="muted">to</span><input type="date" id="gk-t" value="${to}"></div>
+  el.innerHTML = `<div class="row" style="justify-content:space-between;margin-bottom:12px"><div class="row" style="flex-wrap:nowrap;gap:6px"><span class="muted small">List</span><input type="date" id="gk-f" value="${from}" style="width:auto"><span class="muted">to</span><input type="date" id="gk-t" value="${to}" style="width:auto"></div>
       <div class="row"><button class="btn" id="gk-link">🔗 Online booking link</button>${ctx().canWrite ? `<button class="btn primary" id="gk-new">＋ New booking</button>` : ""}</div></div>
+    <div id="gk-av"></div>
     ${bkSummary(rows)}
     ${rows.length ? `<div class="table-wrap"><table><thead><tr><th>When</th><th>Customer</th><th>Station</th><th>Time</th><th>Status</th><th></th></tr></thead><tbody>
     ${rows.map((k, i) => `${i === 0 || new Date(rows[i - 1].start_at).toDateString() !== new Date(k.start_at).toDateString() ? `<tr><td colspan="6" style="background:var(--soft,#f5f3ef);font-weight:700">${new Date(k.start_at).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" })} · ${rows.filter((x) => new Date(x.start_at).toDateString() === new Date(k.start_at).toDateString() && !["cancelled", "no_show"].includes(x.status)).length} booking(s)</td></tr>` : ""}<tr><td><b>${tm(k.start_at)}</b><div class="muted small">to ${tm(new Date(Date.parse(k.start_at) + k.minutes * 60000).toISOString())}</div></td><td><a href="javascript:void 0" data-kv="${k.id}"><b>${esc(k.customer_name)}</b></a><div class="muted small">${esc(prettyPhone(k.customer_phone || ""))}${k.source === "online" ? " · 🌐 online" : ""}${k.notes ? " · " + esc(k.notes) : ""}</div></td>
@@ -600,6 +682,7 @@ async function drawBookings() {
         ${k.customer_phone ? `<a class="btn sm wa" target="_blank" href="https://wa.me/${k.customer_phone}?text=${encodeURIComponent(`Hi ${k.customer_name.split(" ")[0]}, your booking at ${biz().name} on ${fmtDT(k.start_at)} is ${k.status === "pending" ? "received" : k.status}.`)}">💬</a>` : ""}</td></tr>`).join("")}</tbody></table></div>`
       : `<div class="card empty">No bookings in these dates. Share your online booking link so customers can ask for a slot.</div>`}`;
   $("#gk-f").onchange = drawBookings; $("#gk-t").onchange = drawBookings;
+  drawAvail();
   $("#gk-link").onclick = () => copy(link, "Booking link copied");
   const nb = $("#gk-new"); if (nb) nb.onclick = () => bookingModal(drawBookings);
   el.onclick = async (e) => {
@@ -610,14 +693,14 @@ async function drawBookings() {
     const vw = e.target.closest("[data-kv]"); if (vw) { const k = rows.find((x) => x.id === vw.dataset.kv); bookingView({ ...k, station_name: k.gc_stations?.name }, drawBookings); }
   };
 }
-async function bookingModal(after) {
+async function bookingModal(after, pre = {}) {
   const st = await q(sb.from("gc_stations").select("id,name,type").eq("business_id", BID()).eq("active", true).order("sort")).catch(() => []);
   formModal({ title: "📅 New booking", submitLabel: "Save booking",
     fields: [{ key: "customer_name", label: "Customer name", required: true }, { key: "customer_phone", label: "WhatsApp number", type: "phone" },
       { key: "date", label: "Date", type: "date", required: true }, { key: "time", label: "Time", type: "time", required: true },
       { key: "station_id", label: "Station", type: "select", options: [["", "Any"], ...st.map((x) => [x.id, `${x.name} (${x.type})`])] },
       { key: "minutes", label: "Minutes", type: "number", min: 15 }, { key: "players", label: "Players", type: "number", min: 1 }, { key: "notes", label: "Notes" }],
-    values: { date: todayISO(), minutes: 60, players: 1 },
+    values: { date: todayISO(), minutes: 60, players: 1, ...pre },
     onSave: async (v) => { const s = st.find((x) => x.id === v.station_id);
       const k = await rpc("gc_booking_save", { p_business: BID(), p: { ...v, station_type: s?.type || null, start_at: new Date(`${v.date}T${v.time}:00+05:30`).toISOString() } });
       const r = k.customer_phone ? await viaAddon("booking", k.id) : {}; toast(r.ok ? "Booking saved · confirmation sent on WhatsApp" : "Booking saved"); after ? after() : A.isRoute("gboard") && refresh(); } });
