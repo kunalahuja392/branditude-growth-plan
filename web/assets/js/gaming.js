@@ -31,6 +31,9 @@ function pick(el, { multi = false, onChange } = {}) {
     onChange && onChange(picked(el)); });
 }
 const picked = (el) => $$('button[data-v][aria-pressed="true"]', el).map((b) => b.dataset.v);
+// snack categories: the club's own list plus any category an item already uses
+const catList = (prods, cf) => [...new Set([...(cf?.snack_categories || []), ...prods.map((p) => p.category).filter(Boolean)])];
+const catBar = (prods, cf) => { const cs = catList(prods, cf).filter((c) => prods.some((p) => p.category === c)); return cs.length > 1 ? `<div class="chips" id="g-cat" style="margin-top:10px">${chips([["", "All"], ...cs.map((c) => [c, c])], [""])}</div>` : ""; };
 const chips = (vals, sel = []) => vals.map(([v, l]) => `<button type="button" class="chip" data-v="${esc(v)}" aria-pressed="${sel.includes(v)}">${esc(l)}</button>`).join("");
 function beep(n = 2) { try { const c = new (window.AudioContext || window.webkitAudioContext)();
   for (let i = 0; i < n; i++) { const o = c.createOscillator(), g = c.createGain(); o.frequency.value = 880; o.connect(g); g.connect(c.destination);
@@ -310,14 +313,16 @@ async function snackModal(sid) {
   const pl = s.is_lp ? s.lp_players : [];
   const m = openModal(`<div class="modal-head"><h2>🍿 Snacks · ${esc(s.calc.station.name)}</h2><button class="btn ghost" data-close>Close</button></div>
     <div class="row"><input id="g-q" placeholder="Search…" style="flex:1"><span class="muted small">Qty</span><input id="g-qty" type="number" min="1" value="1" style="width:70px"></div>
+    ${catBar(prods, G.board?.settings)}
     ${pl.length ? `<div class="field" style="margin-top:10px"><label>Charge to (LP)</label><div class="chips" id="g-who">${chips([["", "Shared"], ...pl.map((p) => [p, p])], [""])}</div></div>` : ""}
     <div class="gc-prods" id="g-pl"></div>
     <details style="margin-top:10px"><summary class="muted">Something not in the list</summary><div class="row" style="margin-top:8px"><input id="g-cn" placeholder="Item" style="flex:1"><input id="g-cp" type="number" placeholder="Price" style="width:100px"><button class="btn" id="g-ca">Add</button></div></details>
     <h3 style="margin-top:14px">On this session</h3><div id="g-cur"></div>`, { wide: true });
   if (pl.length) pick($("#g-who", m));
   const who = () => (pl.length ? picked($("#g-who", m))[0] || null : null);
+  let cat = ""; const cb = $("#g-cat", m); if (cb) pick(cb, { onChange: (v) => { cat = v[0] || ""; list(); } });
   const list = () => { const t = $("#g-q", m).value.toLowerCase();
-    $("#g-pl", m).innerHTML = prods.filter((p) => p.name.toLowerCase().includes(t)).map((p) => `<button data-p="${p.id}" ${p.track_stock && p.stock <= 0 ? "disabled" : ""}><b>${esc(p.name)}</b><span class="muted small">${inr(p.price)}${p.track_stock ? ` · ${p.stock} left` : ""}</span></button>`).join("")
+    $("#g-pl", m).innerHTML = prods.filter((p) => p.name.toLowerCase().includes(t) && (!cat || p.category === cat)).map((p) => `<button data-p="${p.id}" ${p.track_stock && p.stock <= 0 ? "disabled" : ""}><b>${esc(p.name)}</b><span class="muted small">${inr(p.price)}${p.track_stock ? ` · ${p.stock} left` : ""}</span></button>`).join("")
       || `<p class="muted">No items yet.${owner() ? ` Add them in <a href="#gstock">Snacks & stock</a>.` : ""}</p>`; };
   const cur = (v) => { $("#g-cur", m).innerHTML = v.calc.items.length ? `<div class="table-wrap"><table><tbody>${v.calc.items.map((i) => `<tr><td>${+i.qty}× ${esc(i.name)} ${i.assigned_to ? `<span class="pill acc">${esc(i.assigned_to)}</span>` : ""}</td><td class="num">${inr(i.qty * i.price)}</td><td style="text-align:right"><button class="btn sm" data-del="${i.id}">✕</button></td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">Nothing yet.</p>`; };
   list(); cur(s); $("#g-q", m).oninput = list;
@@ -429,13 +434,14 @@ async function counterSale() {
   const prods = await products(true).catch((e) => (err(e), null)); if (!prods) return; const cart = new Map();
   if (!G.board) await loadBoard().catch(() => {});
   const m = openModal(`<div class="modal-head"><h2>🧾 Counter sale</h2><button class="btn ghost" data-close>Close</button></div>
-    <input id="g-q" placeholder="Search snacks…"><div class="gc-prods" id="g-pl"></div><h3 style="margin-top:12px">Cart</h3><div id="g-cart"></div>
+    <input id="g-q" placeholder="Search snacks…">${catBar(prods, G.board?.settings)}<div class="gc-prods" id="g-pl"></div><h3 style="margin-top:12px">Cart</h3><div id="g-cart"></div>
     <div class="fields" style="margin-top:8px"><div class="field"><label>Customer name</label><input id="g-cname"></div><div class="field"><label>WhatsApp number</label>${phoneInput("g-cph")}</div>
     <div class="field"><label>Discount (₹)</label><input id="g-disc" type="number" min="0" value="0"></div></div>
     <table class="gc-tot" style="width:100%;margin-top:8px"><tbody id="g-tots"></tbody></table><div id="g-pays"></div>
     <div class="modal-foot"><button class="btn" data-close>Cancel</button><button class="btn primary" id="g-go">✓ Create bill</button></div>`, { wide: true });
   const sub = () => [...cart.values()].reduce((t, x) => t + x.p.price * x.qty, 0), tot = () => totals(sub(), Math.min(sub(), +($("#g-disc", m).value || 0)));
-  const list = () => { const t = $("#g-q", m).value.toLowerCase(); $("#g-pl", m).innerHTML = prods.filter((p) => p.name.toLowerCase().includes(t)).map((p) => `<button data-p="${p.id}"><b>${esc(p.name)}</b><span class="muted small">${inr(p.price)}${p.track_stock ? " · " + p.stock + " left" : ""}</span></button>`).join("") || `<p class="muted">No items yet.</p>`; };
+  let cat = ""; const cb = $("#g-cat", m); if (cb) pick(cb, { onChange: (v) => { cat = v[0] || ""; list(); } });
+  const list = () => { const t = $("#g-q", m).value.toLowerCase(); $("#g-pl", m).innerHTML = prods.filter((p) => p.name.toLowerCase().includes(t) && (!cat || p.category === cat)).map((p) => `<button data-p="${p.id}"><b>${esc(p.name)}</b><span class="muted small">${inr(p.price)}${p.track_stock ? " · " + p.stock + " left" : ""}</span></button>`).join("") || `<p class="muted">No items yet.</p>`; };
   const draw = () => { $("#g-cart", m).innerHTML = cart.size ? `<div class="table-wrap"><table><tbody>${[...cart.values()].map((x) => `<tr><td>${esc(x.p.name)}</td><td><button class="btn sm" data-d="${x.p.id}">−</button> <b>${x.qty}</b> <button class="btn sm" data-i="${x.p.id}">＋</button></td><td class="num">${inr(x.p.price * x.qty)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">Tap items to add them.</p>`;
     const t = tot(); $("#g-tots", m).innerHTML = `<tr><td>Subtotal</td><td class="num">${inr2(sub())}</td></tr>${t.t ? `<tr><td>GST ${t.t}%</td><td class="num">${inr2(t.tax)}</td></tr>` : ""}<tr class="g"><td>Total</td><td class="num">${inr(t.total)}</td></tr>`; m.syncPay && m.syncPay(); };
   list(); const getPays = payBox(m, { total: () => tot().total }); draw();
@@ -543,20 +549,61 @@ async function billModal(b) {
 // =====================================================================================
 //  Snacks & stock
 // =====================================================================================
+function newCatInForm(e) {
+  const b = e.target.closest && e.target.closest("#gs-newcat"); if (!b) return; e.preventDefault();
+  const name = (prompt("New category name") || "").trim(); if (!name) return;
+  rpc("gc_category", { p_business: BID(), p_action: "add", p_name: name }).catch(() => null).finally(() => {
+    const sel = $("#fm-category"); if (!sel) return;
+    if (![...sel.options].some((o) => o.value === name)) sel.add(new Option(name, name)); sel.value = name; });
+}
+async function catModal() {
+  const [all, cf] = await Promise.all([q(sb.from("gc_products").select("category").eq("business_id", BID())),
+    q(sb.from("gc_settings").select("snack_categories").eq("business_id", BID()).maybeSingle()).catch(() => null)]).catch((e) => (err(e), []));
+  if (!all) return; const cats = catList(all, cf), cnt = {}; all.forEach((p) => (cnt[p.category] = (cnt[p.category] || 0) + 1)); const n = (c) => cnt[c] || 0;
+  const m = openModal(`<div class="modal-head"><h2>🗂️ Snack categories</h2><button class="btn ghost" data-close>Close</button></div>
+    <p class="muted small" style="margin-top:-4px">Staff see these as tabs when adding snacks to a bill or making a counter sale.</p>
+    <div class="row" style="margin:10px 0"><input id="gc-cn" placeholder="New category, e.g. Combos" style="flex:1"><button class="btn primary" id="gc-ca">＋ Add</button></div>
+    <div class="list" id="gc-cl"></div>`);
+  let list = [...cats];
+  const draw = () => { $("#gc-cl", m).innerHTML = list.map((c) => `<div class="item"><div class="grow"><b>${esc(c)}</b><span class="muted small">${n(c)} item${n(c) === 1 ? "" : "s"}</span></div>
+      <button class="btn sm" data-rn="${esc(c)}">Rename</button><button class="btn sm ghost" data-rm="${esc(c)}">Delete</button></div>`).join("") || `<p class="muted">No categories yet.</p>`; };
+  const run = (a, name, nw) => guard(null, async () => { list = await rpc("gc_category", { p_business: BID(), p_action: a, p_name: name, p_new: nw || null }); G.products = null;
+    if (a === "rename") { cnt[nw] = (cnt[nw] || 0) + n(name); delete cnt[name]; } draw(); });
+  draw();
+  $("#gc-ca", m).onclick = () => { const v = $("#gc-cn", m).value.trim(); if (v) run("add", v).then(() => ($("#gc-cn", m).value = "")); };
+  $("#gc-cn", m).onkeydown = (e) => { if (e.key === "Enter") $("#gc-ca", m).click(); };
+  $("#gc-cl", m).onclick = async (e) => { const rn = e.target.closest("[data-rn]"), rm = e.target.closest("[data-rm]");
+    if (rn) { const v = (prompt(`Rename "${rn.dataset.rn}" to`, rn.dataset.rn) || "").trim(); if (v && v !== rn.dataset.rn) run("rename", rn.dataset.rn, v); }
+    if (rm) { const c = rm.dataset.rm, k = n(c), to = list.find((x) => x !== c) || "Other";
+      const ok = await confirmBox(`Delete ${c}?`, k ? `Its ${k} item${k === 1 ? "" : "s"} will move to ${to}. Nothing is deleted from your stock.` : "This category has no items.", "Delete", { danger: true });
+      if (ok) { try { await rpc("gc_category", { p_business: BID(), p_action: "delete", p_name: c, p_new: to }); G.products = null; toast(`${c} deleted`); } catch (e2) { err(e2); } }
+      catModal(); } };
+  m.addEventListener("click", (e) => { if (e.target.closest("[data-close]")) drawStock(); });
+}
+
 async function drawStock() {
   const el = $("#gs-view"); if (!el) return;
-  const rows = await q(sb.from("gc_products").select("*").eq("business_id", BID()).order("category").order("name"));
-  el.innerHTML = `<div class="row" style="justify-content:space-between;margin-bottom:12px"><span class="muted">${rows.length} items</span><div class="row">${ctx().canWrite ? `<button class="btn" data-g="sale">🧾 Counter sale</button>` : ""}${owner() ? `<button class="btn primary" id="gs-new">＋ Item</button>` : ""}</div></div>
-    ${rows.length ? `<div class="table-wrap"><table><thead><tr><th>Item</th><th>Group</th><th class="num">Price</th>${owner() ? `<th class="num">Cost</th>` : ""}<th class="num">Stock</th><th></th></tr></thead><tbody>
+  const [all, cf] = await Promise.all([q(sb.from("gc_products").select("*").eq("business_id", BID()).order("category").order("name")),
+    q(sb.from("gc_settings").select("snack_categories").eq("business_id", BID()).maybeSingle()).catch(() => null)]);
+  const cats = catList(all, cf || { snack_categories: ["Snacks", "Drinks", "Food", "Accessories"] });
+  if (G.stockCat && !cats.includes(G.stockCat)) G.stockCat = "";
+  const rows = G.stockCat ? all.filter((p) => p.category === G.stockCat) : all, n = (c) => all.filter((p) => p.category === c).length;
+  el.innerHTML = `<div class="row" style="justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px"><span class="muted">${all.length} items</span><div class="row">${ctx().canWrite ? `<button class="btn" data-g="sale">🧾 Counter sale</button>` : ""}${owner() ? `<button class="btn" id="gs-cats">🗂️ Categories</button><button class="btn primary" id="gs-new">＋ Item</button>` : ""}</div></div>
+    ${all.length ? `<div class="chips" id="gs-cat" style="margin-bottom:12px">${chips([["", `All (${all.length})`], ...cats.map((c) => [c, `${c} (${n(c)})`])], [G.stockCat || ""])}</div>` : ""}
+    ${rows.length ? `<div class="table-wrap"><table><thead><tr><th>Item</th><th>Category</th><th class="num">Price</th>${owner() ? `<th class="num">Cost</th>` : ""}<th class="num">Stock</th><th></th></tr></thead><tbody>
     ${rows.map((p) => `<tr><td><b>${esc(p.name)}</b> ${p.active ? "" : '<span class="pill bad">hidden</span>'}</td><td>${esc(p.category)}</td><td class="num">${inr(p.price)}</td>${owner() ? `<td class="num muted">${inr(p.cost)}</td>` : ""}
       <td class="num" style="${p.track_stock && p.stock <= p.low_stock ? "color:var(--bad);font-weight:700" : ""}">${p.track_stock ? p.stock : "∞"}</td><td style="text-align:right">${owner() ? `<button class="btn sm" data-sk="${p.id}">± Stock</button> <button class="btn sm" data-se="${p.id}">✎</button>` : ""}</td></tr>`).join("")}</tbody></table></div>`
-      : `<div class="card empty">No snacks yet. Add drinks, snacks and accessories (extra controller, headset) so staff can put them on bills.</div>`}`;
+      : all.length ? `<div class="card empty">No items in ${esc(G.stockCat)} yet.</div>` : `<div class="card empty">No snacks yet. Add drinks, snacks and accessories (extra controller, headset) so staff can put them on bills.</div>`}`;
+  const cb = $("#gs-cat"); if (cb) pick(cb, { onChange: (v) => { G.stockCat = v[0] || ""; drawStock(); } });
+  const cbtn = $("#gs-cats"); if (cbtn) cbtn.onclick = () => catModal();
   const edit = (p = {}) => formModal({ title: p.id ? "Edit item" : "New item", submitLabel: "Save",
-    fields: [{ key: "name", label: "Name", required: true }, { key: "category", label: "Group" }, { key: "price", label: "Selling price", type: "number", required: true, step: "0.01" }, { key: "cost", label: "Cost price", type: "number", step: "0.01" },
+    fields: [{ key: "name", label: "Name", required: true }, { key: "category", label: "Category", type: "select", options: [...new Set([...cats, ...(p.category ? [p.category] : [])])] }, { key: "price", label: "Selling price", type: "number", required: true, step: "0.01" }, { key: "cost", label: "Cost price", type: "number", step: "0.01" },
       ...(p.id ? [] : [{ key: "stock", label: "Opening stock", type: "number" }]), { key: "low_stock", label: "Warn when stock is at", type: "number" }, { key: "track_stock", label: "Track stock", type: "checkbox" }, { key: "active", label: "Show to staff", type: "checkbox" }],
-    values: { category: "Snacks", low_stock: 5, track_stock: true, active: true, stock: 0, cost: 0, ...p },
+    extraFoot: `<button type="button" class="btn ghost" id="gs-newcat" style="margin-right:auto">＋ New category</button>`,
+    values: { category: G.stockCat || cats[0] || "Snacks", low_stock: 5, track_stock: true, active: true, stock: 0, cost: 0, ...p },
     onSave: async (v) => { if (p.id) await q(sb.from("gc_products").update(v).eq("id", p.id)); else await q(sb.from("gc_products").insert({ ...v, business_id: BID() })); G.products = null; drawStock(); } });
   const nb = $("#gs-new"); if (nb) nb.onclick = () => edit();
+  document.addEventListener("click", newCatInForm);
   el.onclick = (e) => { const ed = e.target.closest("[data-se]"), sk = e.target.closest("[data-sk]");
     if (ed) edit(rows.find((x) => x.id === ed.dataset.se));
     if (sk) { const p = rows.find((x) => x.id === sk.dataset.sk); formModal({ title: `Stock · ${p.name} (now ${p.stock})`, submitLabel: "Update", fields: [{ key: "delta", label: "Add (+) or remove (−)", type: "number", required: true }],
