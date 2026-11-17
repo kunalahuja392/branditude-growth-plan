@@ -46,7 +46,7 @@ do $$ declare b uuid := current_setting('t.b')::uuid; v jsonb; begin
 end $$;
 reset role;
 select pg_temp.backdate(current_setting('t.s')::uuid, 60);
-set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000009d2');
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000009d1');
 do $$ declare v jsonb; bl jsonb; begin
   v := gc_action(current_setting('t.s')::uuid, 'stop'); v := gc_bill_time(current_setting('t.s')::uuid, 'custom', 60);
   assert (v->'calc'->>'amount')::numeric = 15, 'band ₹30 with 50% off for 60 min = ₹15: ' || (v->'calc'->>'amount');
@@ -72,7 +72,7 @@ do $$ declare b uuid := current_setting('t.b')::uuid; v jsonb; begin
 end $$;
 reset role;
 select pg_temp.backdate(current_setting('t.s')::uuid, 23);
-set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000009d2');
+set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000009d1');
 do $$ declare s uuid := current_setting('t.s')::uuid; v jsonb; begin
   v := gc_action(s, 'stop');
   assert (v->'calc'->>'charged_minutes')::int = 60 and (v->'calc'->>'played_minutes')::int between 23 and 24, 'club setting: full booking ' || (v->'calc'->>'charged_minutes') || ' played ' || (v->'calc'->>'played_minutes');

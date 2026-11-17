@@ -8,7 +8,7 @@ import { sb, q } from "./sb.js";
 import { $, $$, esc, inr, inr2, toast, copy, openModal, closeModal, modalOpen, confirmBox, formModal, phoneInput, readPhone, prettyPhone, fmtDT, todayISO } from "./ui.js";
 
 let A;
-const G = { board: null, at: 0, products: null, dismissed: {}, reminderOpen: false, ticker: null, poll: null, chan: null, site: null, setupTab: "stations", billQ: { from: "", to: "", status: "" }, repFrom: "", repTo: "" };
+const G = { board: null, at: 0, products: null, dismissed: {}, pauseAsk: {}, reminderOpen: false, ticker: null, poll: null, chan: null, site: null, setupTab: "stations", billQ: { from: "", to: "", status: "" }, repFrom: "", repTo: "" };
 try { G.dismissed = JSON.parse(localStorage.getItem("gc_dismissed") || "{}"); } catch {}
 const ctx = () => A.ctx();
 const BID = () => ctx().BID;
@@ -128,6 +128,10 @@ function tick() {
       $(`[data-gc="${s.id}"]`)?.classList.toggle("warn", warn);
       const key = `${s.id}:${s.booked_minutes}`;
       if (warn && !G.dismissed[key] && !G.reminderOpen && !modalOpen() && ctx().canWrite) reminder(s, key);
+    }
+    if (s.status === "paused" && s.paused_at && ctx().canWrite && !G.reminderOpen && !modalOpen()) {
+      const since = Date.now() - Date.parse(s.paused_at), next = G.pauseAsk[s.id + s.paused_at] || 3 * 60000;
+      if (since >= next) pausedAsk(s, since);
     }
     if (s.is_lp) { const el = $(`[data-gl="${s.id}"]`); if (el) { const done = s.calc.segments.filter((x) => !x.open);
       el.textContent = `${dur(L.active - done.reduce((t2, x) => t2 + x.minutes * 60000, 0))} · ≈${inr(L.amount - done.reduce((t2, x) => t2 + x.amount, 0))}`; } }
@@ -286,6 +290,21 @@ function remindWA(s) { const L = liveOf(s);
   return sendWA("reminder", s.id, s.customer_phone, `Hi ${(s.customer_name || "there").split(" ")[0]}, your time on ${s.calc.station.name} at ${biz().name} ends in ${Math.max(0, Math.round(L.remaining / 60000))} minutes. Want to keep playing? Just tell us at the counter.`); }
 
 // ---------- 15 minutes left popup ----------
+// Paused for 3 minutes or more: still paused? Asks again every 3 minutes.
+function pausedAsk(s, since) {
+  G.reminderOpen = true; beep(2);
+  const m = openModal(`<div class="modal-head"><h2>⏸ ${esc(s.calc.station.name)} is paused</h2></div>
+    <p style="text-align:center;margin:0">${esc(s.customer_name || "Walk-in")} · paused for <b id="g-pz">${dur(since)}</b></p>
+    <h3 style="text-align:center;margin:14px 0">Still paused?</h3>
+    <div class="grid" style="grid-template-columns:1fr 1fr;gap:8px"><button class="btn" id="g-pyes">Yes, keep paused</button><button class="btn primary" id="g-pno">No, start the timer</button></div>
+    <div class="modal-foot"><button class="btn ghost" id="g-pbill">■ Stop & bill</button></div>`);
+  m.classList.add("gc-alarm");
+  const iv = setInterval(() => { const el = $("#g-pz"); if (!el) return end(false); el.textContent = dur(Date.now() - Date.parse(s.paused_at)); }, 1000);
+  const end = (close = true) => { clearInterval(iv); G.reminderOpen = false; G.pauseAsk[s.id + s.paused_at] = Date.now() - Date.parse(s.paused_at) + 3 * 60000; if (close) closeModal(); };
+  $("#g-pyes", m).onclick = () => end();
+  $("#g-pno", m).onclick = () => guard($("#g-pno", m), async () => { await rpc("gc_action", { p_session: s.id, p_action: "resume", p: {} }); end(); toast("Timer started"); await refresh(); });
+  $("#g-pbill", m).onclick = () => { end(); checkout(s.id, null); };
+}
 function reminder(s, key) {
   G.reminderOpen = true; beep(3);
   const L = liveOf(s);
@@ -380,8 +399,9 @@ async function checkout(sid, btn) {
   const memCover = () => { const o = mem.opts.find((x) => x.id === mem.id), b = o?.buckets[mem.bucket]; if (!b || !c.charged_minutes) return { min: 0, amt: 0 }; const min = Math.min(b.left, c.charged_minutes); return { min, amt: +(c.amount * min / c.charged_minutes).toFixed(2) }; };
   const m = openModal(`<div class="modal-head"><h2>🧾 Bill · ${esc(c.station.name)}</h2><button class="btn ghost" data-close>Close</button></div>
     <p class="muted" style="margin:0" id="g-hd">${headLine()}</p>
-    <div class="field" style="margin-top:10px"><label>Charge for</label><div class="row" style="gap:8px;flex-wrap:wrap"><div class="chips" id="g-bt">${chips([["played", `Time played (${c.played_minutes} min)`], ...(s.booked_minutes ? [["booked", `Full booking (${mins(s.booked_minutes)})`]] : []), ["custom", "Other"]], [modeOf()])}</div>
+    <div class="field" style="margin-top:10px"><label>Charge for</label><div class="row" style="gap:8px;flex-wrap:wrap"><div class="chips" id="g-bt">${chips([["played", `Time played (${c.played_minutes} min)`], ...(s.booked_minutes ? [["booked", `Full booking (${mins(s.booked_minutes)})`]] : []), ...(owner() ? [["custom", "Other minutes"]] : [])], [modeOf()])}</div>
       <span id="g-btc" ${c.bill_mode === "custom" ? "" : "hidden"}><input id="g-btm" type="number" min="0" max="1440" value="${c.bill_minutes ?? c.charged_minutes}" style="width:80px"> min <button class="btn sm" id="g-bts">Apply</button></span></div></div>
+    ${owner() ? `<div id="g-own" class="small" style="margin-top:6px"></div>` : ""}
     ${s.is_lp ? "" : `<div id="g-mem"></div>`}
     ${needTail ? `<div class="gc-lp" style="margin-top:12px;font-size:14px"><b>🏆 Last LP game (${mins(c.tail.minutes)} · ${inr(c.tail.amount)}): who won and who pays?</b>
       <div class="chips" id="g-tw" style="margin-top:8px">${chips([...pl.map((p) => [p, p]), ["Draw", "Draw"]])}</div><div class="muted small" style="margin-top:8px">Put this time on:</div><div class="chips" id="g-tp">${chips(pl.map((p) => [p, p]))}</div></div>` : ""}
@@ -415,11 +435,22 @@ async function checkout(sid, btn) {
   const getPays = payBox(m, { players: pl, total: () => totals(sub(), disc()).total, shares });
   draw(); wireDisc(m, draw);
   // charge for: time played, the full booking, or other minutes
-  const setTime = (mode, minutes) => guard(null, async () => { const v = await rpc("gc_bill_time", { p_session: sid, p_mode: mode, p_minutes: minutes ?? null }); c = v.calc;
-    $("#g-hd", m).innerHTML = headLine(); $("#g-gr", m).innerHTML = gameRow(); drawMem(); draw(); });
+  const applyCalc = (v) => { c = v.calc; $("#g-hd", m).innerHTML = headLine(); $("#g-gr", m).innerHTML = gameRow(); drawOwn(); drawMem(); draw(); };
+  const setTime = (mode, minutes) => guard(null, async () => applyCalc(await rpc("gc_bill_time", { p_session: sid, p_mode: mode, p_minutes: minutes ?? null })));
+  // owner only: change the gaming price on this bill (staff never see this)
+  const drawOwn = () => { const el = $("#g-own", m); if (!el) return; const set = c.bill_amount != null;
+    el.innerHTML = set ? `🔒 Price changed by owner: ${inr2(c.auto_amount)} → <b>${inr2(c.amount)}</b> <button type="button" class="btn sm ghost" id="g-pr0">Undo</button> <button type="button" class="btn sm ghost" id="g-pre">Change</button>`
+      : `<button type="button" class="btn sm ghost" id="g-pre">🔒 Change gaming price (owner)</button>`;
+    $("#g-pre", el).onclick = () => { el.innerHTML = `<div class="row" style="flex-wrap:nowrap;gap:6px">🔒 Gaming price ₹ <input id="g-pra" type="number" min="0" step="1" value="${Math.round(c.amount)}" style="width:100px"><button type="button" class="btn sm primary" id="g-prs">Apply</button><button type="button" class="btn sm ghost" id="g-prx">Cancel</button></div><span class="muted">Calculated: ${inr2(c.auto_amount)}. Only you see this option; the bill shows the new price.</span>`;
+      $("#g-pra", el).focus(); $("#g-pra", el).select();
+      $("#g-prs", el).onclick = () => guard($("#g-prs", el), async () => { const a = $("#g-pra", el).value; if (a === "" || +a < 0) throw new Error("Enter the price"); applyCalc(await rpc("gc_bill_price", { p_session: sid, p_amount: +a })); toast("Price changed"); });
+      $("#g-pra", el).onkeydown = (e) => { if (e.key === "Enter") $("#g-prs", el).click(); };
+      $("#g-prx", el).onclick = drawOwn; };
+    const z = $("#g-pr0", el); if (z) z.onclick = () => guard(z, async () => applyCalc(await rpc("gc_bill_price", { p_session: sid, p_amount: null }))); };
+  drawOwn();
   pick($("#g-bt", m), { onChange: (v) => { $("#g-btc", m).hidden = v[0] !== "custom"; if (v[0] === "custom") $("#g-btm", m).focus(); else setTime(v[0]); } });
-  $("#g-bts", m).onclick = () => setTime("custom", Math.max(0, Math.round(+$("#g-btm", m).value || 0)));
-  $("#g-btm", m).onkeydown = (e) => { if (e.key === "Enter") $("#g-bts", m).click(); };
+  if ($("#g-bts", m)) $("#g-bts", m).onclick = () => setTime("custom", Math.max(0, Math.round(+$("#g-btm", m).value || 0)));
+  if ($("#g-btm", m)) $("#g-btm", m).onkeydown = (e) => { if (e.key === "Enter") $("#g-bts", m).click(); };
   // membership hours
   const drawMem = () => { const el = $("#g-mem", m); if (!el) return; if (!mem.opts.length) { el.innerHTML = ""; return; }
     el.innerHTML = `<div class="card" style="margin-top:10px;padding:10px 12px"><b>🎟️ Use membership hours</b><div class="chips" id="g-mo" style="margin-top:8px">${chips([["", "Don't use"], ...mem.opts.flatMap((o) => o.buckets.filter((b) => b.left > 0 && (!b.station_ids.length || b.station_ids.includes(c.station.id))).map((b) => [`${o.id}|${b.idx}`, `${o.plan_name} · ${b.name}: ${mins(b.left)} left (till ${o.expires_on.slice(8, 10)}/${o.expires_on.slice(5, 7)})`]))], [mem.id ? `${mem.id}|${mem.bucket}` : ""])}</div></div>`;
