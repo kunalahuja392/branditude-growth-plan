@@ -775,7 +775,7 @@ function drawCompare() {
   $("#compare").innerHTML = `<thead><tr><th scope="col">Feature</th>${PKGS.map((p) => `<th scope="col" class="${p.is_popular ? "pop" : ""}">${esc(p.name)}<small class="num">${inr(Math.round(price(p)))}${yr ? "/year" : "/month"}</small></th>`).join("")}</tr></thead>
     <tbody>${MODS.filter(fits).sort((x, y) => (KEY_MODS.includes(y.key) - KEY_MODS.includes(x.key)) || x.sort - y.sort).map((m) => `<tr class="${KEY_MODS.includes(m.key) ? "key" : ""}"><td><b>${esc(m.icon)} ${esc(m.name)}</b><span>${esc(m.blurb)}</span></td>${PKGS.map((p) => {
       const inc = m.core || (p.modules || []).includes(m.key);
-      return `<td class="${p.is_popular ? "popc" : ""}">${inc ? '<span class="yes" aria-label="Included">✓</span>' : m.addon_price != null ? `<span class="add num">+${inr(m.addon_price * (yr ? 10 : 1))}${unit}</span>` : '<span aria-label="Not available">–</span>'}</td>`; }).join("")}</tr>`).join("")}
+      return `<td class="${p.is_popular ? "popc" : ""}">${inc ? '<span class="yes" aria-label="Included">✓</span>' : m.addon_price != null ? (+m.addon_price ? `<span class="add num">+${inr(m.addon_price * (yr ? 10 : 1))}${unit}</span>` : '<span class="add">Free add-on</span>') : '<span aria-label="Not available">–</span>'}</td>`; }).join("")}</tr>`).join("")}
     <tr><td><b>📍 Locations</b></td>${PKGS.map((p) => `<td class="${p.is_popular ? "popc" : ""}"><b class="num">${p.max_locations}</b></td>`).join("")}</tr></tbody>`;
   $("#compare-wrap").hidden = false;
 }

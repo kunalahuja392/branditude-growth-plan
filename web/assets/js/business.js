@@ -658,7 +658,7 @@ function addonsCard(pend) {
     <p class="muted small" style="margin-top:-6px">Add any single feature to your plan. Add-ons renew with your plan.</p>
     <div class="list">${(D.mods || []).filter((m) => fitsBiz(m.key)).map((m) => `<div class="item"><span style="font-size:20px" aria-hidden="true">${esc(m.icon)}</span><div class="grow"><b>${esc(m.name)}</b><span class="muted small">${esc(m.blurb)}</span></div>
       ${m.core || inPlan(m.key) ? '<span class="pill good">In your plan</span>' : bought(m.key) ? '<span class="pill good">Add-on on</span>' : waiting(m.key) ? '<span class="pill warn">Payment waiting</span>'
-        : m.addon_price != null ? `<b class="num">${inr(m.addon_price * (yr ? 10 : 1))}${yr ? "/yr" : "/mo"}</b><button class="btn sm" data-a="buy-module" data-id="${m.id}">Add</button>` : ""}</div>`).join("")}</div></div>`;
+        : m.addon_price != null ? `${+m.addon_price ? `<b class="num">${inr(m.addon_price * (yr ? 10 : 1))}${yr ? "/yr" : "/mo"}</b>` : '<b>Free</b>'}<button class="btn sm" data-a="buy-module" data-id="${m.id}">${+m.addon_price ? "Add" : "Switch on"}</button>` : ""}</div>`).join("")}</div></div>`;
 }
 // All payments go through Razorpay (UPI, cards, netbanking, wallets) and switch on by themselves once paid.
 async function payModal(paymentId) {
@@ -693,6 +693,7 @@ async function order(kind, ref, billing) {
     }
     throw e;
   }
+  if (r.free) { toast(`${r.description.replace(/^Add-on: /, "").replace(/ \(.*\)$/, "")} is on`); await reload("biz"); render(); return; }
   D.pays = null; await payModal(r.payment_id);
 }
 
@@ -713,7 +714,7 @@ function lockedView(key) {
     <h2>${esc(md.name)} isn't in your ${esc(D.biz.packages?.name || "")} plan yet</h2><p class="muted">${esc(md.blurb)}</p>
     <p class="small" style="margin-top:10px">${md.addon_price == null ? "Upgrade your plan to use it." : "Add just this feature, or upgrade to get it with more."}</p>
     <div class="row" style="justify-content:center;margin-top:16px;flex-wrap:wrap;gap:10px">
-      ${price != null ? `<button class="btn primary" data-a="buy-module" data-id="${md.id}">Add it for ${inr(price)}${yr ? "/year" : "/month"}${plusGst()}</button>` : ""}
+      ${price != null ? `<button class="btn primary" data-a="buy-module" data-id="${md.id}">${price ? `Add it for ${inr(price)}${yr ? "/year" : "/month"}${plusGst()}` : "Switch it on (free)"}</button>` : ""}
       <span id="lock-plan"></span></div>
     <p class="small muted" style="margin-top:14px">Your data is safe. ${rzpOn(D.settings) ? "Pay online and it switches on straight away." : "Pay by UPI and it switches on as soon as Branditude confirms the payment."}</p></div>`;
 }
@@ -1189,7 +1190,7 @@ document.addEventListener("click", async (e) => {
         const better = PKGS_CACHE.find((p) => p.id !== D.biz.package_id && want.every((k) => (p.modules || []).includes(k)) && +p.monthly_price <= cost);
         const msg = better ? `The ${better.name} plan (${inr(better.monthly_price)}/month) already includes ${m.name}${want.length > 1 ? " and your other add-ons" : ""}, for the same or less than adding them one by one.` : m.blurb;
         if (better && await confirmBox(`Switch to ${better.name} instead?`, msg, `Switch to ${better.name}`)) { await order("subscription", better.id, D.biz.billing || "monthly"); break; }
-        if (await confirmBox(`Add ${m.name}?`, better ? "We'll create a payment for the add-on only." : msg, "Continue to payment")) await order("module", id);
+        if (await confirmBox(`Add ${m.name}?`, better ? "We'll create a payment for the add-on only." : msg, +m.addon_price ? "Continue to payment" : "Switch on")) await order("module", id);
         break; }
       case "renew": await order("subscription", id, el.dataset.bill); break;
       case "upgrade-to": { PKGS_CACHE = PKGS_CACHE || plansForBiz(await q(sb.from("packages").select("*").eq("active", true).order("sort")));
