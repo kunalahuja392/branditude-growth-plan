@@ -83,17 +83,56 @@ function drawBoard() {
   el.innerHTML = `<div class="grid g4">${A.kpi("Today's sales", inr(t.sales), `${t.bills} bills`)}${A.kpi("Collected today", inr(t.collected), "cash + UPI + card")}
       ${A.kpi("Playing now", `${b.sessions.length} / ${b.stations.length}`, "stations in use")}${A.kpi("Pending today", inr(t.due), "pay later")}</div>
     ${b.bookings.length ? `<div class="card" style="margin-top:14px"><div class="row" style="justify-content:space-between"><b>📅 Next 24 hours</b><a href="#gbookings" class="small">All bookings</a></div>
-      <div class="chips" style="margin-top:8px">${b.bookings.slice(0, 8).map((k) => `<span class="pill ${k.status === "pending" ? "warn" : "info"}">${tm(k.start_at)} · ${esc(k.customer_name)} · ${esc(k.station_name || k.station_type || "Any")} · ${k.minutes}m${k.status === "pending" ? " · approve" : ""}</span>`).join("")}</div></div>` : ""}
+      <div class="chips" style="margin-top:8px">${b.bookings.slice(0, 10).map((k) => `<button type="button" class="chip" data-bk="${k.id}" style="${k.status === "pending" ? "border-color:var(--warn)" : ""}">${bkWhen(k)} · <b>${esc(k.customer_name)}</b> · ${esc(k.station_name || k.station_type || "Any station")} · ${mins(k.minutes)}${k.status === "pending" ? " · ⏳ approve" : ""}</button>`).join("")}</div></div>` : ""}
+    <div id="gb-cnt"></div>
     ${b.low_stock.length ? `<div class="card" style="margin-top:10px;border-color:var(--warn)">⚠️ <b>Low stock:</b> ${b.low_stock.map((p) => `${esc(p.name)} (${p.stock})`).join(", ")}</div>` : ""}
     <div class="row" style="justify-content:space-between;margin:18px 0 10px"><h2 style="margin:0">Stations</h2>
       <div class="row">${w ? `<button class="btn" data-g="sale">🧾 Counter sale</button><button class="btn" data-g="book">📅 New booking</button>` : ""}${owner() ? `<a class="btn" href="#gsetup">＋ Station</a>` : ""}</div></div>
     ${b.stations.length ? `<div class="gc-board">${b.stations.map((st) => card(st, by[st.id], w)).join("")}</div>`
       : `<div class="card empty">No stations yet. ${owner() ? `<a href="#gsetup">Add your PS5, PC, VR and pool stations →</a>` : "Ask the owner to add stations."}</div>`}`;
-  tick();
+  drawCnt(); tick();
+}
+function drawCnt() { const el = $("#gb-cnt"), ss = G.stockStat; if (!el || !ss || !+ss.products) { if (el) el.innerHTML = ""; return; }
+  const parts = [];
+  if (!ss.opening_at && ctx().canWrite) parts.push(`📋 <b>Opening stock count not done yet.</b> <button class="btn sm" data-cnt="opening">Count now</button>`);
+  else if (ss.opening_at && !ss.closing_at && new Date().getHours() >= 21 && ctx().canWrite) parts.push(`📋 <b>Closing stock count is due.</b> <button class="btn sm" data-cnt="closing">Count now</button>`);
+  if (+ss.to_check && owner()) parts.push(`⚠️ <b>${ss.to_check} stock difference${+ss.to_check === 1 ? "" : "s"} to check.</b> <button class="btn sm danger" data-cnt="review">Review</button>`);
+  el.innerHTML = parts.map((x) => `<div class="card" style="margin-top:10px;border-color:var(--warn);padding:10px 14px">${x}</div>`).join("");
+  wireCountCard(el, async () => { G.stockStat = await rpc("gc_stock_status", { p_business: BID() }).catch(() => G.stockStat); drawCnt(); }); }
+// ---------- bookings on the board ----------
+const bkWhen = (k) => { const d = new Date(k.start_at), today = new Date().toDateString() === d.toDateString(); return (today ? "" : d.toLocaleDateString("en-IN", { weekday: "short" }) + " ") + tm(k.start_at); };
+const bkIn = (k) => { const m = Math.round((Date.parse(k.start_at) - Date.now()) / 60000); return m > 0 ? `in ${mins(m)}` : m === 0 ? "now" : `${mins(-m)} late`; };
+const nextBooking = (st) => (G.board?.bookings || []).filter((k) => (k.station_id === st.id || (!k.station_id && k.station_type === st.type)) && Date.parse(k.start_at) + k.minutes * 60000 > Date.now())
+  .sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at))[0];
+function bookingView(k, after) {
+  const st = (G.board?.stations || []).find((x) => x.id === k.station_id), w = ctx().canWrite;
+  const m = openModal(`<div class="modal-head"><h2>📅 ${esc(k.customer_name)}</h2><button class="btn ghost" data-close>Close</button></div>
+    <div class="list"><div class="item"><span class="grow">When</span><b>${fmtDT(k.start_at)} <span class="muted">(${bkIn(k)})</span></b></div>
+      <div class="item"><span class="grow">Station</span><b>${esc(k.station_name || st?.name || k.station_type || "Any station")}</b></div>
+      <div class="item"><span class="grow">Time</span><b>${mins(k.minutes)} · until ${tm(new Date(Date.parse(k.start_at) + k.minutes * 60000).toISOString())}</b></div>
+      <div class="item"><span class="grow">Players</span><b>${k.players}</b></div>
+      <div class="item"><span class="grow">Mobile</span><b>${k.customer_phone ? esc(prettyPhone(k.customer_phone)) : "—"}</b></div>
+      <div class="item"><span class="grow">Status</span><span class="pill ${BK[k.status]}">${k.status.replace("_", "-")}</span>${k.source === "online" ? ' <span class="pill">🌐 online</span>' : ""}</div>
+      ${k.notes ? `<div class="item"><span class="grow">Notes</span><span>${esc(k.notes)}</span></div>` : ""}</div>
+    <div class="modal-foot">${w && ["pending", "confirmed"].includes(k.status) ? `${k.status === "pending" ? `<button class="btn" data-bka="confirmed">✓ Approve</button>` : ""}<button class="btn ghost" data-bka="no_show">No-show</button><button class="btn ghost" data-bka="cancelled">Cancel booking</button><button class="btn primary" id="bk-start">▶ Start</button>` : `<button class="btn primary" data-close>Done</button>`}</div>`);
+  $$("[data-bka]", m).forEach((b) => (b.onclick = () => guard(b, async () => { await rpc("gc_booking_save", { p_business: BID(), p: { id: k.id, status: b.dataset.bka } });
+    const r = ["confirmed", "cancelled"].includes(b.dataset.bka) ? await viaAddon("booking", k.id) : {}; closeModal(); toast(r.ok ? "Updated · customer told on WhatsApp" : "Updated"); after ? after() : refresh(); })));
+  const sb2 = $("#bk-start", m); if (sb2) sb2.onclick = () => startBooking(k);
+}
+// pick a free station for a booking, then the usual start flow
+async function startBooking(k) {
+  await loadBoard().catch(err); const free = G.board.stations.filter((x) => !G.board.sessions.some((y) => y.station_id === x.id));
+  if (!free.length) return toast("No station is free right now", "error");
+  const pre = free.find((x) => x.id === k.station_id) || free.find((x) => x.type === k.station_type);
+  if (pre && pre.id === k.station_id) return startFlow(pre, k);
+  const m = openModal(`<div class="modal-head"><h2>Start booking · ${esc(k.customer_name)}</h2><button class="btn ghost" data-close>Close</button></div>${k.station_id ? `<p class="small" style="color:var(--warn)">The booked station isn't free. Pick another.</p>` : ""}<div class="field"><label>Station</label><select id="g-bs">${free.map((x) => `<option value="${x.id}" ${x.id === (pre || free[0]).id ? "selected" : ""}>${esc(x.name)} (${esc(x.type)})</option>`).join("")}</select></div><div class="modal-foot"><button class="btn primary" id="g-go">Next</button></div>`);
+  $("#g-go", m).onclick = () => startFlow(free.find((x) => x.id === $("#g-bs", m).value), k);
 }
 function card(st, s, w) {
-  if (!s) return `<div class="gc-st"><div class="gc-hd"><div><div class="gc-nm">${esc(st.name)}</div><div class="muted small">${esc(st.type)} · ${inr(st.rate)}/hr</div></div><span class="pill">Free</span></div>
-    <div class="gc-free"><div style="font-size:34px">🎮</div>${w ? `<button class="btn primary" data-g="start" data-st="${st.id}">▶ Start session</button>` : ""}</div></div>`;
+  if (!s) { const nb = nextBooking(st), soon = nb && Date.parse(nb.start_at) - Date.now() < 3 * 3600000;
+    return `<div class="gc-st"><div class="gc-hd"><div><div class="gc-nm">${esc(st.name)}</div><div class="muted small">${esc(st.type)} · ${inr(st.rate)}/hr</div></div><span class="pill ${soon ? "warn" : ""}">${soon ? "Booked soon" : "Free"}</span></div>
+    ${soon ? `<button type="button" class="card" data-bk="${nb.id}" style="width:100%;text-align:left;margin:8px 0 0;padding:8px 10px;border-color:var(--warn);cursor:pointer">📅 <b>${esc(nb.customer_name)}</b> · ${bkWhen(nb)} <span class="muted">(${bkIn(nb)})</span> · ${mins(nb.minutes)}${nb.status === "pending" ? ' · <span class="pill warn">approve</span>' : ""}</button>` : ""}
+    <div class="gc-free"><div style="font-size:34px">🎮</div>${w ? `<div class="row" style="justify-content:center">${soon ? `<button class="btn primary" data-g="startbk" data-bkid="${nb.id}">▶ Start ${esc(nb.customer_name.split(" ")[0])}'s booking</button>` : ""}<button class="btn ${soon ? "" : "primary"}" data-g="start" data-st="${st.id}">▶ ${soon ? "Walk-in" : "Start session"}</button></div>` : ""}</div></div>`; }
   const c = s.calc, games = c.segments.filter((x) => !x.open).length;
   const lp = s.is_lp ? `<div class="gc-lp"><div class="row" style="justify-content:space-between"><b>🏆 LP: ${s.lp_players.map(esc).join(" vs ")}</b><span>${games} game${games === 1 ? "" : "s"}</span></div>
     <div class="muted">Since last split: <b data-gl="${s.id}">—</b></div>
@@ -151,9 +190,13 @@ const findS = (id) => G.board?.sessions.find((s) => s.id === id);
 async function refresh() { await loadBoard(); drawBoard(); }
 
 document.addEventListener("click", async (e) => {
+  const bk = e.target.closest("[data-bk]"); if (bk && $("#gb-view")?.contains(bk) && !e.target.closest("[data-g]")) { const k = (G.board?.bookings || []).find((x) => x.id === bk.dataset.bk); if (k) return bookingView(k); }
   const b = e.target.closest("[data-g]"); if (!b || !$("#main")?.contains(b)) return;
   const a = b.dataset.g, s = b.dataset.s ? findS(b.dataset.s) : null;
-  if (a === "start") return startFlow(G.board.stations.find((x) => x.id === b.dataset.st));
+  if (a === "start") { const st = G.board.stations.find((x) => x.id === b.dataset.st), nb = nextBooking(st);
+    if (nb && Date.parse(nb.start_at) - Date.now() < 60 * 60000) return clashModal(st, nb);
+    return startFlow(st); }
+  if (a === "startbk") { const k = G.board.bookings.find((x) => x.id === b.dataset.bkid); if (k) return startBooking(k); }
   if (a === "pause" || a === "resume") return guard(b, async () => { await rpc("gc_action", { p_session: s.id, p_action: a, p: {} }); await refresh(); });
   if (a === "extend") return extendModal(s);
   if (a === "snack") return snackModal(s.id);
@@ -166,11 +209,24 @@ document.addEventListener("click", async (e) => {
 });
 
 // ---------- start: "Is this match an LP?" popup first ----------
-function startFlow(st, booking) {
+// Walk-in on a station booked within the hour: check first
+function clashModal(st, k) {
+  const m = openModal(`<div class="modal-head"><h2>⚠️ ${esc(st.name)} is booked soon</h2><button class="btn ghost" data-close>Close</button></div>
+    <p><b>${esc(k.customer_name)}</b> booked it for <b>${bkWhen(k)}</b> (${bkIn(k)}) for ${mins(k.minutes)}.</p><p class="muted">A walk-in now may still be playing when they arrive.</p>
+    <div class="grid" style="grid-template-columns:1fr 1fr;gap:8px"><button class="btn primary" id="cl-bk">▶ This is ${esc(k.customer_name.split(" ")[0])}'s booking</button><button class="btn" id="cl-walk">Start walk-in anyway</button></div>`);
+  $("#cl-bk", m).onclick = () => startFlow(st, k);
+  $("#cl-walk", m).onclick = () => startFlow(st, null, true);
+}
+async function startFlow(st, booking, skipCheck) {
+  // Booking started before its time: confirm once
+  if (booking && !skipCheck) { const early = Math.round((Date.parse(booking.start_at) - Date.now()) / 60000);
+    if (early > 5) { const ok = await confirmBox(`Start ${booking.customer_name}'s booking early?`, `The booking is for ${bkWhen(booking)}, ${mins(early)} from now. The timer starts now and the booked ${mins(booking.minutes)} count from now.`, "Yes, start now");
+      if (!ok) return; booking = { ...booking, _early: early }; } }
   const m = openModal(`<div class="modal-head"><h2>Start ${esc(st.name)}</h2><button class="btn ghost" data-close>Close</button></div>
     <p class="muted" style="margin:0">${esc(st.type)} · ${inr(st.rate)}/hr</p><h3 style="margin-top:16px">Is this match an LP?</h3>
     <div class="gc-choice"><button data-lp="1">🏆 Yes, LP<small>Loser pays: split the time game by game and note winners</small></button><button data-lp="0">🎮 No<small>Normal timed session</small></button></div>`);
   $$("[data-lp]", m).forEach((x) => (x.onclick = () => startForm(st, x.dataset.lp === "1", booking)));
+  if (booking) $(".modal-head", m).insertAdjacentHTML("afterend", `<div class="card" style="padding:8px 12px;margin:0 0 8px">📅 Booking: <b>${esc(booking.customer_name)}</b> · ${bkWhen(booking)} · ${mins(booking.minutes)} · ${booking.players} player${booking.players === 1 ? "" : "s"}${booking.notes ? ` · ${esc(booking.notes)}` : ""}${booking._early ? ` · <span class="pill warn">${mins(booking._early)} early</span>` : ""}</div>`);
 }
 function durPick(def) {
   return `<div class="field" style="grid-column:1/-1"><label>Booked time (staff get a popup ${G.board?.settings?.reminder_minutes || 15} min before it ends)</label>
@@ -199,7 +255,7 @@ function startForm(st, lp, booking) {
     ${lp ? `<div class="field"><label>Bill to (optional)</label><input id="g-name" placeholder="Player 1 vs Player 2"></div>` : "<div></div>"}
     <div id="g-cinfo" class="row" style="grid-column:1/-1"></div>
     ${durPick(booking?.minutes || 60)}
-    <div class="field" style="grid-column:1/-1"><label>Notes</label><input id="g-notes"></div></div>
+    <div class="field" style="grid-column:1/-1"><label>Notes</label><input id="g-notes" value="${esc([booking?.notes, booking?._early ? `Started ${mins(booking._early)} before the booking` : ""].filter(Boolean).join(" · "))}"></div></div>
     <div class="modal-foot"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary">▶ Start timer</button></div></form>`, { wide: true });
   pick($("#g-dur", m), { onChange: () => ($("#g-durc", m).value = "") });
   custHint(m, "g-ph", (c) => { const n = $("#g-name", m); if (n && !n.value && !lp) n.value = c.name; });
@@ -522,6 +578,10 @@ async function counterSale() {
 //  Bookings
 // =====================================================================================
 const BK = { pending: "warn", confirmed: "info", arrived: "good", cancelled: "bad", no_show: "bad" };
+const bkSummary = (rows) => { if (!rows.length) return ""; const n = (st) => rows.filter((k) => st.includes(k.status)).length, live = rows.filter((k) => ["pending", "confirmed"].includes(k.status));
+  const hrs = live.reduce((t, k) => t + k.minutes, 0) / 60, up = live.filter((k) => Date.parse(k.start_at) > Date.now()).sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at))[0];
+  return `<div class="grid g4" style="margin-bottom:12px">${A.kpi("Bookings", rows.length - n(["cancelled"]), `${+hrs.toFixed(1)} hrs still to play`)}${A.kpi("Waiting for approval", n(["pending"]), n(["pending"]) ? "online requests" : "none")}
+    ${A.kpi("Arrived", n(["arrived"]), `${n(["no_show"])} no-show · ${n(["cancelled"])} cancelled`)}${A.kpi("Next", up ? tm(up.start_at) : "—", up ? `${esc(up.customer_name)} · ${new Date(up.start_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : "nothing upcoming")}</div>`; };
 async function drawBookings() {
   const el = $("#gk-view"); if (!el) return;
   const from = $("#gk-f")?.value || todayISO(), to = $("#gk-t")?.value || new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
@@ -529,8 +589,9 @@ async function drawBookings() {
   const link = `${await site()}/play.html?b=${biz().slug}`;
   el.innerHTML = `<div class="row" style="justify-content:space-between;margin-bottom:12px"><div class="row"><input type="date" id="gk-f" value="${from}"><span class="muted">to</span><input type="date" id="gk-t" value="${to}"></div>
       <div class="row"><button class="btn" id="gk-link">🔗 Online booking link</button>${ctx().canWrite ? `<button class="btn primary" id="gk-new">＋ New booking</button>` : ""}</div></div>
+    ${bkSummary(rows)}
     ${rows.length ? `<div class="table-wrap"><table><thead><tr><th>When</th><th>Customer</th><th>Station</th><th>Time</th><th>Status</th><th></th></tr></thead><tbody>
-    ${rows.map((k) => `<tr><td><b>${fmtDT(k.start_at)}</b></td><td>${esc(k.customer_name)}<div class="muted small">${esc(prettyPhone(k.customer_phone || ""))}${k.source === "online" ? " · 🌐 online" : ""}${k.notes ? " · " + esc(k.notes) : ""}</div></td>
+    ${rows.map((k, i) => `${i === 0 || new Date(rows[i - 1].start_at).toDateString() !== new Date(k.start_at).toDateString() ? `<tr><td colspan="6" style="background:var(--soft,#f5f3ef);font-weight:700">${new Date(k.start_at).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" })} · ${rows.filter((x) => new Date(x.start_at).toDateString() === new Date(k.start_at).toDateString() && !["cancelled", "no_show"].includes(x.status)).length} booking(s)</td></tr>` : ""}<tr><td><b>${tm(k.start_at)}</b><div class="muted small">to ${tm(new Date(Date.parse(k.start_at) + k.minutes * 60000).toISOString())}</div></td><td><a href="javascript:void 0" data-kv="${k.id}"><b>${esc(k.customer_name)}</b></a><div class="muted small">${esc(prettyPhone(k.customer_phone || ""))}${k.source === "online" ? " · 🌐 online" : ""}${k.notes ? " · " + esc(k.notes) : ""}</div></td>
       <td>${esc(k.gc_stations?.name || k.station_type || "Any")}</td><td>${mins(k.minutes)} · ${k.players}p</td><td><span class="pill ${BK[k.status]}">${k.status.replace("_", "-")}</span></td>
       <td style="text-align:right;white-space:nowrap">${ctx().canWrite && ["pending", "confirmed"].includes(k.status) ? `${k.status === "pending" ? `<button class="btn sm primary" data-k="confirmed" data-id="${k.id}">✓ Approve</button>` : ""}
         <button class="btn sm" data-ks="${k.id}">▶ Start</button><button class="btn sm" data-k="cancelled" data-id="${k.id}">Cancel</button><button class="btn sm" data-k="no_show" data-id="${k.id}">No-show</button>` : ""}
@@ -543,11 +604,8 @@ async function drawBookings() {
     const a = e.target.closest("[data-k]"), st = e.target.closest("[data-ks]");
     if (a) guard(a, async () => { await rpc("gc_booking_save", { p_business: BID(), p: { id: a.dataset.id, status: a.dataset.k } });
       const r = ["confirmed", "cancelled"].includes(a.dataset.k) ? await viaAddon("booking", a.dataset.id) : {}; toast(r.ok ? "Updated · customer told on WhatsApp" : "Updated"); drawBookings(); });
-    if (st) { const k = rows.find((x) => x.id === st.dataset.ks); await loadBoard().catch(err); const free = G.board.stations.filter((x) => !G.board.sessions.some((y) => y.station_id === x.id));
-      if (!free.length) return toast("No station is free right now", "error");
-      const pre = free.find((x) => x.id === k.station_id) || free.find((x) => x.type === k.station_type) || free[0];
-      const m = openModal(`<div class="modal-head"><h2>Start booking · ${esc(k.customer_name)}</h2><button class="btn ghost" data-close>Close</button></div><div class="field"><label>Station</label><select id="g-bs">${free.map((x) => `<option value="${x.id}" ${x.id === pre.id ? "selected" : ""}>${esc(x.name)} (${esc(x.type)})</option>`).join("")}</select></div><div class="modal-foot"><button class="btn primary" id="g-go">Next</button></div>`);
-      $("#g-go", m).onclick = () => startFlow(free.find((x) => x.id === $("#g-bs", m).value), k); }
+    if (st) startBooking(rows.find((x) => x.id === st.dataset.ks));
+    const vw = e.target.closest("[data-kv]"); if (vw) { const k = rows.find((x) => x.id === vw.dataset.kv); bookingView({ ...k, station_name: k.gc_stations?.name }, drawBookings); }
   };
 }
 async function bookingModal(after) {
@@ -645,6 +703,49 @@ async function catModal() {
   m.addEventListener("click", (e) => { if (e.target.closest("[data-close]")) drawStock(); });
 }
 
+// ---------- daily opening / closing stock count ----------
+const countCard = (ss) => { if (!ss || !+ss.products) return "";
+  const done = (k) => (ss[k + "_at"] ? `<span class="pill good">✓ ${k === "opening" ? "Opening" : "Closing"} ${tm(ss[k + "_at"])}</span>` : `<span class="pill warn">${k === "opening" ? "Opening" : "Closing"} not counted</span>`);
+  return `<div class="card" style="margin-bottom:12px;padding:12px 14px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><div><b>📋 Daily stock count</b> <span class="muted small">${ss.products} item${+ss.products === 1 ? "" : "s"}</span><div class="row" style="gap:6px;margin-top:6px">${done("opening")}${done("closing")}${+ss.to_check ? `<span class="pill bad">⚠️ ${ss.to_check} difference${+ss.to_check === 1 ? "" : "s"} to check</span>` : ""}</div></div>
+    <div class="row">${ctx().canWrite ? `<button class="btn ${ss.opening_at ? "" : "primary"}" data-cnt="opening">Count opening</button><button class="btn ${ss.opening_at && !ss.closing_at ? "primary" : ""}" data-cnt="closing">Count closing</button>` : ""}${owner() ? `<button class="btn ${+ss.to_check ? "danger" : ""}" data-cnt="review">${+ss.to_check ? "Review differences" : "Count history"}</button>` : ""}</div></div></div>`; };
+function wireCountCard(el, after) { $$("[data-cnt]", el).forEach((b) => (b.onclick = () => (b.dataset.cnt === "review" ? countReview(after) : countModal(b.dataset.cnt, after)))); }
+async function countModal(kind, after) {
+  const prods = await q(sb.from("gc_products").select("id,name,category").eq("business_id", BID()).eq("daily_count", true).eq("active", true).order("category").order("name")).catch((e) => (err(e), null));
+  if (!prods) return; if (!prods.length) return toast("No items are set for daily counting. Tick it on an item first.", "error");
+  const m = openModal(`<div class="modal-head"><h2>📋 ${kind === "opening" ? "Opening" : "Closing"} stock count</h2><button class="btn ghost" data-close>Close</button></div>
+    <p class="muted small" style="margin-top:-4px">Count what is on the shelf now and type it in. ${kind === "closing" ? "Do this at the end of the day, after the last bill." : "Do this before the first bill of the day."}</p>
+    <div class="table-wrap"><table><tbody>${prods.map((p, i) => `<tr><td><b>${esc(p.name)}</b><div class="muted small">${esc(p.category)}</div></td><td style="width:130px"><input type="number" min="0" step="1" inputmode="numeric" data-ci="${p.id}" placeholder="Count" style="width:110px" ${i === 0 ? "autofocus" : ""}></td></tr>`).join("")}</tbody></table></div>
+    <p class="err" id="ci-err"></p><div class="modal-foot"><button class="btn" data-close>Cancel</button><button class="btn primary" id="ci-go">Save ${kind} count</button></div>`, { wide: true });
+  $$("[data-ci]", m).forEach((x, i, all) => (x.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); (all[i + 1] || $("#ci-go", m)).focus(); } }));
+  $("#ci-go", m).onclick = () => guard($("#ci-go", m), async () => {
+    const counts = $$("[data-ci]", m).map((x) => ({ product_id: x.dataset.ci, counted: x.value === "" ? "" : Math.round(+x.value) }));
+    const missing = counts.filter((c) => c.counted === "").length;
+    if (missing && !(await new Promise((res) => { $("#ci-err", m).innerHTML = `${missing} item${missing === 1 ? " is" : "s are"} not counted. <button class="btn sm" id="ci-yes">Save the rest</button>`; $("#ci-yes", m).onclick = () => res(true); }))) return;
+    const r = await rpc("gc_stock_count", { p_business: BID(), p_kind: kind, p_counts: counts });
+    closeModal();
+    if (owner() && r.mismatched) countReview(after);
+    else openModal(`<div style="text-align:center"><div style="font-size:44px">${r.mismatched ? "⚠️" : "✅"}</div><h2>${r.mismatched ? `${r.mismatched} item${r.mismatched === 1 ? " doesn't" : "s don't"} match` : `All ${r.counted} items match`}</h2>
+      <p class="muted">${r.mismatched ? "Your count is saved. The owner will check the difference." : "Thank you. The count is saved."}</p></div><div class="modal-foot"><button class="btn primary" data-close>Done</button></div>`);
+    after && after(); });
+}
+async function countReview(after) {
+  const rows = await q(sb.from("gc_stock_counts").select("*").eq("business_id", BID()).order("day", { ascending: false }).order("kind", { ascending: false }).order("product_name").limit(400)).catch((e) => (err(e), null));
+  if (!rows) return; const open = rows.filter((r) => r.diff !== 0 && !r.ack_at);
+  const sign = (n) => (n > 0 ? `+${n}` : String(n)), val = (r) => r.diff * r.price;
+  const line = (r) => `<tr><td>${fmtDay(r.day)}<div class="muted small">${r.kind === "opening" ? "Opening" : "Closing"} · ${tm(r.created_at)}</div></td><td><b>${esc(r.product_name)}</b></td>
+    <td class="num">${r.kind === "closing" && r.opening != null ? `${r.opening} − ${r.sold} sold → ` : ""}${r.expected}</td><td class="num">${r.counted}</td>
+    <td class="num" style="${r.diff ? "color:var(--bad);font-weight:700" : ""}">${r.diff ? `${sign(r.diff)}<div class="small">${inr(val(r))}</div>` : "✓"}</td>
+    <td>${r.diff ? (r.ack_at ? `<span class="pill good">Checked</span>${r.ack_note ? `<div class="muted small">${esc(r.ack_note)}</div>` : ""}` : `<label class="check"><input type="checkbox" data-ack="${r.id}" checked> Check</label>`) : ""}</td></tr>`;
+  const m = openModal(`<div class="modal-head"><h2>📋 Stock counts</h2><button class="btn ghost" data-close>Close</button></div>
+    ${open.length ? `<div class="card" style="border-color:var(--bad);padding:10px 12px"><b>⚠️ ${open.length} difference${open.length === 1 ? "" : "s"} to check</b> <span class="muted small">· worth ${inr(Math.abs(open.reduce((t, r) => t + val(r), 0)))} at selling price</span>
+      <div class="table-wrap" style="margin-top:8px"><table><thead><tr><th>When</th><th>Item</th><th class="num">Expected</th><th class="num">Counted</th><th class="num">Difference</th><th></th></tr></thead><tbody>${open.map(line).join("")}</tbody></table></div>
+      <div class="row" style="margin-top:8px;flex-wrap:nowrap"><input id="ck-note" placeholder="Note (optional), e.g. 2 Cokes given free to a regular" style="flex:1"><button class="btn primary" id="ck-go">✓ Acknowledge</button></div></div>`
+      : `<p class="good" style="margin:0">✓ No differences to check.</p>`}
+    <h3 style="margin-top:14px">History</h3>${rows.length ? `<div class="table-wrap"><table><thead><tr><th>When</th><th>Item</th><th class="num">Expected</th><th class="num">Counted</th><th class="num">Difference</th><th></th></tr></thead><tbody>${rows.filter((r) => !open.includes(r)).slice(0, 150).map(line).join("")}</tbody></table></div>` : `<p class="muted">No counts yet.</p>`}`, { wide: true });
+  const go = $("#ck-go", m); if (go) go.onclick = () => guard(go, async () => { const ids = $$("[data-ack]:checked", m).map((x) => +x.dataset.ack); if (!ids.length) throw new Error("Tick at least one difference");
+    await rpc("gc_stock_ack", { p_business: BID(), p_ids: ids, p_note: $("#ck-note", m).value }); toast("Checked"); countReview(after); after && after(); });
+}
+
 async function drawStock() {
   const el = $("#gs-view"); if (!el) return;
   const [all, cf] = await Promise.all([q(sb.from("gc_products").select("*").eq("business_id", BID()).order("category").order("name")),
@@ -652,19 +753,21 @@ async function drawStock() {
   const cats = catList(all, cf || { snack_categories: ["Snacks", "Drinks", "Food", "Accessories"] });
   if (G.stockCat && !cats.includes(G.stockCat)) G.stockCat = "";
   const rows = G.stockCat ? all.filter((p) => p.category === G.stockCat) : all, n = (c) => all.filter((p) => p.category === c).length;
-  el.innerHTML = `<div class="row" style="justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px"><span class="muted">${all.length} items</span><div class="row">${ctx().canWrite ? `<button class="btn" data-g="sale">🧾 Counter sale</button>` : ""}${owner() ? `<button class="btn" id="gs-cats">🗂️ Categories</button><button class="btn primary" id="gs-new">＋ Item</button>` : ""}</div></div>
+  const ss = await rpc("gc_stock_status", { p_business: BID() }).catch(() => null); G.stockStat = ss;
+  el.innerHTML = `${countCard(ss)}<div class="row" style="justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px"><span class="muted">${all.length} items</span><div class="row">${ctx().canWrite ? `<button class="btn" data-g="sale">🧾 Counter sale</button>` : ""}${owner() ? `<button class="btn" id="gs-cats">🗂️ Categories</button><button class="btn primary" id="gs-new">＋ Item</button>` : ""}</div></div>
     ${all.length ? `<div class="chips" id="gs-cat" style="margin-bottom:12px">${chips([["", `All (${all.length})`], ...cats.map((c) => [c, `${c} (${n(c)})`])], [G.stockCat || ""])}</div>` : ""}
     ${rows.length ? `<div class="table-wrap"><table><thead><tr><th>Item</th><th>Category</th><th class="num">Price</th>${owner() ? `<th class="num">Cost</th>` : ""}<th class="num">Stock</th><th></th></tr></thead><tbody>
-    ${rows.map((p) => `<tr><td><b>${esc(p.name)}</b> ${p.active ? "" : '<span class="pill bad">hidden</span>'}</td><td>${esc(p.category)}</td><td class="num">${inr(p.price)}</td>${owner() ? `<td class="num muted">${inr(p.cost)}</td>` : ""}
+    ${rows.map((p) => `<tr><td><b>${esc(p.name)}</b> ${p.active ? "" : '<span class="pill bad">hidden</span>'}${p.daily_count ? ' <span class="pill info" title="Counted at opening and closing">📋 daily count</span>' : ""}</td><td>${esc(p.category)}</td><td class="num">${inr(p.price)}</td>${owner() ? `<td class="num muted">${inr(p.cost)}</td>` : ""}
       <td class="num" style="${p.track_stock && p.stock <= p.low_stock ? "color:var(--bad);font-weight:700" : ""}">${p.track_stock ? p.stock : "∞"}</td><td style="text-align:right">${owner() ? `<button class="btn sm" data-sk="${p.id}">± Stock</button> <button class="btn sm" data-se="${p.id}">✎</button>` : ""}</td></tr>`).join("")}</tbody></table></div>`
       : all.length ? `<div class="card empty">No items in ${esc(G.stockCat)} yet.</div>` : `<div class="card empty">No snacks yet. Add drinks, snacks and accessories (extra controller, headset) so staff can put them on bills.</div>`}`;
   const cb = $("#gs-cat"); if (cb) pick(cb, { onChange: (v) => { G.stockCat = v[0] || ""; drawStock(); } });
   const cbtn = $("#gs-cats"); if (cbtn) cbtn.onclick = () => catModal();
+  wireCountCard(el, drawStock);
   const edit = (p = {}) => formModal({ title: p.id ? "Edit item" : "New item", submitLabel: "Save",
     fields: [{ key: "name", label: "Name", required: true }, { key: "category", label: "Category", type: "select", options: [...new Set([...cats, ...(p.category ? [p.category] : [])])] }, { key: "price", label: "Selling price", type: "number", required: true, step: "0.01" }, { key: "cost", label: "Cost price", type: "number", step: "0.01" },
-      ...(p.id ? [] : [{ key: "stock", label: "Opening stock", type: "number" }]), { key: "low_stock", label: "Warn when stock is at", type: "number" }, { key: "track_stock", label: "Track stock", type: "checkbox" }, { key: "active", label: "Show to staff", type: "checkbox" }],
+      ...(p.id ? [] : [{ key: "stock", label: "Opening stock", type: "number" }]), { key: "low_stock", label: "Warn when stock is at", type: "number" }, { key: "track_stock", label: "Track stock", type: "checkbox" }, { key: "daily_count", label: "Count opening & closing stock every day", type: "checkbox", full: true }, { key: "active", label: "Show to staff", type: "checkbox" }],
     extraFoot: `<button type="button" class="btn ghost" id="gs-newcat" style="margin-right:auto">＋ New category</button>`,
-    values: { category: G.stockCat || cats[0] || "Snacks", low_stock: 5, track_stock: true, active: true, stock: 0, cost: 0, ...p },
+    values: { category: G.stockCat || cats[0] || "Snacks", low_stock: 5, track_stock: true, daily_count: false, active: true, stock: 0, cost: 0, ...p },
     onSave: async (v) => { if (p.id) await q(sb.from("gc_products").update(v).eq("id", p.id)); else await q(sb.from("gc_products").insert({ ...v, business_id: BID() })); G.products = null; drawStock(); } });
   const nb = $("#gs-new"); if (nb) nb.onclick = () => edit();
   document.addEventListener("click", newCatInForm);
@@ -954,7 +1057,7 @@ const wrap = (id, fn) => async () => { const el = $("#" + id); if (!document.get
 export function registerGaming(api) {
   A = api;
   api.VIEWS.gboard = () => api.head("Live board", "Timers, LP matches and bills for every station") + `<div id="gb-view">${spin}</div>`;
-  api.after.gboard = wrap("gb-view", async () => { await loadBoard(); drawBoard(); startLive(); });
+  api.after.gboard = wrap("gb-view", async () => { const [, ss] = await Promise.all([loadBoard(), rpc("gc_stock_status", { p_business: BID() }).catch(() => null)]); G.stockStat = ss; drawBoard(); startLive(); });
   api.VIEWS.gbookings = () => api.head("Bookings", "Slots booked by staff or online") + `<div id="gk-view">${spin}</div>`;
   api.after.gbookings = wrap("gk-view", drawBookings);
   api.VIEWS.gbills = () => api.head("Bills", "Every bill, pending amounts and payment reminders") + `<div id="gi-view">${spin}</div>`;
