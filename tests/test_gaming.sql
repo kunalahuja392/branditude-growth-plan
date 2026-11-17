@@ -155,7 +155,7 @@ do $$ declare b uuid := current_setting('t.b')::uuid; v jsonb; begin
   begin perform gc_bill_void(current_setting('t.qs')::uuid, 'wrong'); assert false;
   exception when others then assert sqlerrm='Only the owner can cancel a bill', sqlerrm; end;
   begin perform gc_report(b, current_date, current_date); assert false;
-  exception when others then assert sqlerrm='Only the owner can see reports', sqlerrm; end;
+  exception when others then assert sqlerrm like 'Your login can''t see reports%', sqlerrm; end;
 end $$;
 reset role;
 set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-0000000009d1');

@@ -14,6 +14,7 @@ const ctx = () => A.ctx();
 const BID = () => ctx().BID;
 const biz = () => ctx().D.biz;
 const owner = () => A.can("settings");
+const canSales = () => A.can("g_sales"), canStock = () => A.can("g_stock"), canDisc = () => A.can("g_discount");
 const rpc = (fn, args) => q(sb.rpc(fn, args));
 const hasWA = () => A.hasMod("wa_billing");
 const mins = (m) => (m >= 60 ? `${Math.floor(m / 60)}h ${Math.round(m % 60)}m` : `${Math.round(m)}m`);
@@ -80,8 +81,8 @@ function drawBoard() {
   const el = $("#gb-view"); if (!el || !G.board) return;
   const b = G.board, t = b.today, w = ctx().canWrite;
   const by = Object.fromEntries(b.sessions.map((s) => [s.station_id, s]));
-  el.innerHTML = `<div class="grid g4">${A.kpi("Today's sales", inr(t.sales), `${t.bills} bills`)}${A.kpi("Collected today", inr(t.collected), "cash + UPI + card")}
-      ${A.kpi("Playing now", `${b.sessions.length} / ${b.stations.length}`, "stations in use")}${A.kpi("Pending today", inr(t.due), "pay later")}</div>
+  el.innerHTML = `<div class="grid g4">${t ? `${A.kpi("Today's sales", inr(t.sales), `${t.bills} bills`)}${A.kpi("Collected today", inr(t.collected), "cash + UPI + card")}` : ""}
+      ${A.kpi("Playing now", `${b.sessions.length} / ${b.stations.length}`, "stations in use")}${t ? A.kpi("Pending today", inr(t.due), "pay later") : A.kpi("Bookings next 24 h", b.bookings.length, "")}</div>
     ${b.bookings.length ? `<div class="card" style="margin-top:14px"><div class="row" style="justify-content:space-between"><b>📅 Next 24 hours</b><a href="#gbookings" class="small">All bookings</a></div>
       <div class="chips" style="margin-top:8px">${b.bookings.slice(0, 10).map((k) => `<button type="button" class="chip" data-bk="${k.id}" style="${k.status === "pending" ? "border-color:var(--warn)" : ""}">${bkWhen(k)} · <b>${esc(k.customer_name)}</b> · ${esc(k.station_name || k.station_type || "Any station")} · ${mins(k.minutes)}${k.status === "pending" ? " · ⏳ approve" : ""}</button>`).join("")}</div></div>` : ""}
     <div id="gb-cnt"></div>
@@ -398,7 +399,7 @@ async function snackModal(sid) {
   let cat = ""; const cb = $("#g-cat", m); if (cb) pick(cb, { onChange: (v) => { cat = v[0] || ""; list(); } });
   const list = () => { const t = $("#g-q", m).value.toLowerCase();
     $("#g-pl", m).innerHTML = prods.filter((p) => p.name.toLowerCase().includes(t) && (!cat || p.category === cat)).map((p) => `<button data-p="${p.id}" ${p.track_stock && p.stock <= 0 ? "disabled" : ""}><b>${esc(p.name)}</b><span class="muted small">${inr(p.price)}${p.track_stock ? ` · ${p.stock} left` : ""}</span></button>`).join("")
-      || `<p class="muted">No items yet.${owner() ? ` Add them in <a href="#gstock">Snacks & stock</a>.` : ""}</p>`; };
+      || `<p class="muted">No items yet.${canStock() ? ` Add them in <a href="#gstock">Snacks & stock</a>.` : ""}</p>`; };
   const cur = (v) => { $("#g-cur", m).innerHTML = v.calc.items.length ? `<div class="table-wrap"><table><tbody>${v.calc.items.map((i) => `<tr><td>${+i.qty}× ${esc(i.name)} ${i.assigned_to ? `<span class="pill acc">${esc(i.assigned_to)}</span>` : ""}</td><td class="num">${inr(i.qty * i.price)}</td><td style="text-align:right"><button class="btn sm" data-del="${i.id}">✕</button></td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">Nothing yet.</p>`; };
   list(); cur(s); $("#g-q", m).oninput = list;
   const add = (p) => guard(null, async () => { const v = await rpc("gc_item_add", { p_session: sid, p: { ...p, qty: +($("#g-qty", m).value || 1), assigned_to: who() } }); toast("Added"); cur(v);
@@ -411,12 +412,13 @@ async function snackModal(sid) {
 
 // ---------- billing ----------
 // ---------- discount: ₹ or %, with quick % buttons ----------
-const discField = () => `<div class="field"><label>Discount</label><div class="row" style="flex-wrap:nowrap"><input id="g-disc" type="number" min="0" step="0.01" value="0"><select id="g-dt" style="width:70px" aria-label="Discount in rupees or percent"><option value="amt">₹</option><option value="pct">%</option></select></div>
+const discField = () => !canDisc() ? "" : `<div class="field"><label>Discount</label><div class="row" style="flex-wrap:nowrap"><input id="g-disc" type="number" min="0" step="0.01" value="0"><select id="g-dt" style="width:70px" aria-label="Discount in rupees or percent"><option value="amt">₹</option><option value="pct">%</option></select></div>
   <div class="chips" id="g-dq" style="margin-top:6px">${[5, 10, 15, 20].map((v) => `<button type="button" class="chip" data-dq="${v}">${v}%</button>`).join("")}</div></div>`;
 const discOf = (m, base) => { const v = Math.max(0, +($("#g-disc", m)?.value || 0)); return +Math.min(base, $("#g-dt", m)?.value === "pct" ? (base * Math.min(v, 100)) / 100 : v).toFixed(2); };
 const discRow = (m, base) => { const d = discOf(m, base); if (!d) return ""; const pct = base ? (d / base) * 100 : 0;
   return `<tr><td>Discount ${$("#g-dt", m)?.value === "pct" ? `${+(+$("#g-disc", m).value).toFixed(2)}%` : `(${+pct.toFixed(1)}%)`}</td><td class="num">−${inr2(d)}</td></tr>`; };
 function wireDisc(m, draw) {
+  if (!$("#g-disc", m)) return;
   ["#g-disc", "#g-dt"].forEach((x) => { const el = $(x, m); el.addEventListener("input", () => { syncQuick(); draw(); }); el.addEventListener("change", () => { syncQuick(); draw(); }); });
   const syncQuick = () => $$("#g-dq [data-dq]", m).forEach((b) => b.setAttribute("aria-pressed", $("#g-dt", m).value === "pct" && +$("#g-disc", m).value === +b.dataset.dq));
   $("#g-dq", m).onclick = (e) => { const b = e.target.closest("[data-dq]"); if (!b) return; const on = b.getAttribute("aria-pressed") === "true";
@@ -426,7 +428,7 @@ function wireDisc(m, draw) {
 function totals(sub, disc) {
   const cf = G.board?.settings || { tax_percent: 18, tax_inclusive: false }, t = +cf.tax_percent || 0, taxable = Math.max(0, sub - disc);
   let tax, total; if (cf.tax_inclusive) { total = taxable; tax = total - total / (1 + t / 100); } else { tax = (taxable * t) / 100; total = taxable + tax; }
-  const to = +cf.round_to || 1, r = to > 1 ? Math.ceil(+total.toFixed(2) / to) * to : Math.round(total); return { tax, round: r - total, total: r, t, incl: cf.tax_inclusive };
+  const to = +cf.round_to || 1, x = +total.toFixed(2) / to, r = to > 1 ? (cf.round_mode === "nearest" ? Math.round(x) : Math.ceil(x)) * to : Math.round(total); return { tax, round: r - total, total: r, t, incl: cf.tax_inclusive };
 }
 function payBox(m, { players = [], total, shares }) {
   const box = $("#g-pays", m);
@@ -521,7 +523,7 @@ async function checkout(sid, btn) {
   if (A.hasMod("loyalty") && s.customer_phone) rpc("preview_visit", { p_business: BID(), p_phone: s.customer_phone, p_gross: sub(), p_coupon: null }).then((pv) => {
     if (!pv?.loyalty_enabled) return; const el = $("#g-loy", m); if (!el) return;
     el.innerHTML = `<label>Loyalty card</label><div class="small">Visit ${pv.visit_no} of ${pv.loyalty_stamps}${pv.loyalty_reward ? ` · <b>reward: ${esc(pv.loyalty_reward.note || (pv.loyalty_reward.type === "percent" ? pv.loyalty_reward.value + "% off" : inr(pv.loyalty_reward.value) + " off"))}</b> <button type="button" class="btn sm" id="g-useloy">Give ${inr(pv.loyalty_reward.discount)} off</button>` : ""}</div>`;
-    const u = $("#g-useloy", m); if (u) u.onclick = () => { $("#g-dt", m).value = "amt"; $("#g-disc", m).value = Math.round(pv.loyalty_reward.discount); draw(); };
+    const u = $("#g-useloy", m); if (u && !canDisc()) u.remove(); else if (u) u.onclick = () => { $("#g-dt", m).value = "amt"; $("#g-disc", m).value = Math.round(pv.loyalty_reward.discount); draw(); };
   }).catch(() => {});
   $("#g-res", m).onclick = () => guard($("#g-res", m), async () => { await rpc("gc_action", { p_session: sid, p_action: "resume", p: {} }); closeModal(); toast("Timer resumed"); await refresh(); });
   $("#g-go", m).onclick = () => guard($("#g-go", m), async () => {
@@ -631,7 +633,7 @@ async function drawBills() {
   if (f.status === "due") qy = qy.in("status", ["partial", "unpaid"]); else if (f.status) qy = qy.eq("status", f.status);
   const rows = await q(qy), live = rows.filter((r) => r.status !== "void");
   const pend = await q(sb.from("gc_bills").select("customer_id,customer_name,customer_phone,due").eq("business_id", BID()).gte("due", 0.01).in("status", ["partial", "unpaid"])).catch(() => []);
-  el.innerHTML = `<div class="grid g4">${A.kpi("Bills", live.length, "in these dates")}${A.kpi("Sales", inr(live.reduce((t, r) => t + +r.total, 0)))}${A.kpi("Pending (all time)", inr(pend.reduce((t, r) => t + +r.due, 0)), `${new Set(pend.map((p) => p.customer_id)).size} customers`)}
+  el.innerHTML = `<div class="grid g4">${A.kpi("Bills", live.length, "in these dates")}${canSales() ? A.kpi("Sales", inr(live.reduce((t, r) => t + +r.total, 0))) : ""}${A.kpi("Pending (all time)", inr(pend.reduce((t, r) => t + +r.due, 0)), `${new Set(pend.map((p) => p.customer_id)).size} customers`)}
       ${A.kpi("WhatsApp follow-ups", hasWA() ? (G.board?.settings?.wa_followup !== false ? "Automatic" : "Off") : "Add-on", hasWA() ? "every few days until paid" : `<a href="#gsetup?wa">Turn on</a>`)}</div>
     <div class="row" style="justify-content:space-between;margin:14px 0 10px"><div class="row"><input type="date" id="gi-f" value="${f.from}"><input type="date" id="gi-t" value="${f.to}">
       <select id="gi-s"><option value="">All</option><option value="due" ${f.status === "due" ? "selected" : ""}>Pending</option><option value="paid" ${f.status === "paid" ? "selected" : ""}>Paid</option><option value="void" ${f.status === "void" ? "selected" : ""}>Cancelled</option></select></div>
@@ -754,11 +756,11 @@ async function drawStock() {
   if (G.stockCat && !cats.includes(G.stockCat)) G.stockCat = "";
   const rows = G.stockCat ? all.filter((p) => p.category === G.stockCat) : all, n = (c) => all.filter((p) => p.category === c).length;
   const ss = await rpc("gc_stock_status", { p_business: BID() }).catch(() => null); G.stockStat = ss;
-  el.innerHTML = `${countCard(ss)}<div class="row" style="justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px"><span class="muted">${all.length} items</span><div class="row">${ctx().canWrite ? `<button class="btn" data-g="sale">🧾 Counter sale</button>` : ""}${owner() ? `<button class="btn" id="gs-cats">🗂️ Categories</button><button class="btn primary" id="gs-new">＋ Item</button>` : ""}</div></div>
+  el.innerHTML = `${countCard(ss)}<div class="row" style="justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px"><span class="muted">${all.length} items</span><div class="row">${ctx().canWrite ? `<button class="btn" data-g="sale">🧾 Counter sale</button>` : ""}${canStock() ? `<button class="btn" id="gs-cats">🗂️ Categories</button><button class="btn primary" id="gs-new">＋ Item</button>` : ""}</div></div>
     ${all.length ? `<div class="chips" id="gs-cat" style="margin-bottom:12px">${chips([["", `All (${all.length})`], ...cats.map((c) => [c, `${c} (${n(c)})`])], [G.stockCat || ""])}</div>` : ""}
     ${rows.length ? `<div class="table-wrap"><table><thead><tr><th>Item</th><th>Category</th><th class="num">Price</th>${owner() ? `<th class="num">Cost</th>` : ""}<th class="num">Stock</th><th></th></tr></thead><tbody>
     ${rows.map((p) => `<tr><td><b>${esc(p.name)}</b> ${p.active ? "" : '<span class="pill bad">hidden</span>'}${p.daily_count ? ' <span class="pill info" title="Counted at opening and closing">📋 daily count</span>' : ""}</td><td>${esc(p.category)}</td><td class="num">${inr(p.price)}</td>${owner() ? `<td class="num muted">${inr(p.cost)}</td>` : ""}
-      <td class="num" style="${p.track_stock && p.stock <= p.low_stock ? "color:var(--bad);font-weight:700" : ""}">${p.track_stock ? p.stock : "∞"}</td><td style="text-align:right">${owner() ? `<button class="btn sm" data-sk="${p.id}">± Stock</button> <button class="btn sm" data-se="${p.id}">✎</button>` : ""}</td></tr>`).join("")}</tbody></table></div>`
+      <td class="num" style="${p.track_stock && p.stock <= p.low_stock ? "color:var(--bad);font-weight:700" : ""}">${p.track_stock ? p.stock : "∞"}</td><td style="text-align:right">${canStock() ? `<button class="btn sm" data-sk="${p.id}">± Stock</button> <button class="btn sm" data-se="${p.id}">✎</button>` : ""}</td></tr>`).join("")}</tbody></table></div>`
       : all.length ? `<div class="card empty">No items in ${esc(G.stockCat)} yet.</div>` : `<div class="card empty">No snacks yet. Add drinks, snacks and accessories (extra controller, headset) so staff can put them on bills.</div>`}`;
   const cb = $("#gs-cat"); if (cb) pick(cb, { onChange: (v) => { G.stockCat = v[0] || ""; drawStock(); } });
   const cbtn = $("#gs-cats"); if (cbtn) cbtn.onclick = () => catModal();
@@ -1009,12 +1011,12 @@ async function drawSetup() {
       <div class="field" style="grid-column:1/-1"><label>Bill footer</label><input id="u-foot" value="${esc(cf.bill_footer)}"></div>
       <div class="field"><label>Round up time to every (min)</label><input id="u-round" type="number" min="1" max="60" value="${cf.round_minutes}"></div><div class="field"><label>Minimum charge (min)</label><input id="u-min" type="number" min="0" value="${cf.min_minutes}"></div>
       <div class="field"><label>"Time up" popup, minutes before the end</label><input id="u-rem" type="number" min="1" max="60" value="${cf.reminder_minutes}"></div>
-      <div class="field"><label>Round the bill total up to</label><select id="u-rto">${[[1, "Nearest ₹1"], [2, "Next ₹2"], [5, "Next ₹5 (₹32 → ₹35)"], [10, "Next ₹10 (₹32 → ₹40)"]].map(([v, l]) => `<option value="${v}" ${+cf.round_to === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+      <div class="field"><label>Round the bill total</label><select id="u-rto">${[["1u", "To the nearest ₹1"], ["5n", "To the nearest ₹5 (₹32 → ₹30, ₹33 → ₹35)"], ["5u", "Up to the next ₹5 (₹32 → ₹35)"], ["10n", "To the nearest ₹10 (₹34 → ₹30, ₹35 → ₹40)"], ["10u", "Up to the next ₹10 (₹32 → ₹40)"], ["2u", "Up to the next ₹2"]].map(([v, l]) => `<option value="${v}" ${`${+cf.round_to > 1 ? +cf.round_to : 1}${+cf.round_to > 1 && cf.round_mode === "nearest" ? "n" : "u"}` === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
       <label class="check" style="grid-column:1/-1"><input type="checkbox" id="u-book" ${cf.charge_booked ? "checked" : ""}> Charge the full booked time even if they stop early (the biller can still change it on each bill)</label></div>
       <p class="err" id="u-err"></p><div class="modal-foot"><button class="btn primary">Save</button></div></form></div>`;
     $("#gu-f").onsubmit = (e) => { e.preventDefault(); guard($("#gu-f button"), async () => {
       await q(sb.from("gc_settings").update({ tax_percent: +$("#u-tax").value, gstin: $("#u-gstin").value.trim(), tax_inclusive: $("#u-incl").checked, bill_prefix: $("#u-pre").value.trim() || "GC", upi_id: $("#u-upi").value.trim(),
-        bill_footer: $("#u-foot").value, round_minutes: +$("#u-round").value, min_minutes: +$("#u-min").value, reminder_minutes: +$("#u-rem").value, charge_booked: $("#u-book").checked, round_to: +$("#u-rto").value, updated_at: new Date().toISOString() }).eq("business_id", BID()));
+        bill_footer: $("#u-foot").value, round_minutes: +$("#u-round").value, min_minutes: +$("#u-min").value, reminder_minutes: +$("#u-rem").value, charge_booked: $("#u-book").checked, round_to: parseInt($("#u-rto").value), round_mode: $("#u-rto").value.endsWith("n") ? "nearest" : "up", updated_at: new Date().toISOString() }).eq("business_id", BID()));
       toast("Saved"); G.board = null; }); };
   }
   if (G.setupTab === "wa") {
