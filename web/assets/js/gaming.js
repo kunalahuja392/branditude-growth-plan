@@ -20,7 +20,7 @@ const mins = (m) => (m >= 60 ? `${Math.floor(m / 60)}h ${Math.round(m % 60)}m` :
 const dur = (ms) => { ms = Math.max(0, ms); const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
   return h ? `${h}:${String(m).padStart(2, "0")}:${String(x).padStart(2, "0")}` : `${m}:${String(x).padStart(2, "0")}`; };
 const tm = (iso) => (iso ? new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "");
-const TYPES = ["PS5", "PS4", "Xbox", "PC", "VR", "Racing sim", "Nintendo Switch", "Pool", "Snooker", "Foosball", "Other"];
+const TYPES = ["PS5", "PS4", "Xbox", "PC", "VR", "Racing sim", "Nintendo Switch", "Pool", "Snooker", "Foosball", "Table Tennis", "Other"];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const spin = `<div class="loading"><span class="spinner"></span></div>`;
 const err = (e) => toast(e.message || String(e), "error");
@@ -830,7 +830,7 @@ async function drawSetup() {
   }
   if (G.setupTab === "rules") {
     const [rows, st] = await Promise.all([q(sb.from("gc_rules").select("*").eq("business_id", BID()).order("priority", { ascending: false })), q(sb.from("gc_stations").select("id,name,type").eq("business_id", BID()))]);
-    const price = (r) => (r.mode === "fixed" ? `${inr(r.value)}/hr` : r.mode === "percent" ? `${+r.value}% off` : `+${inr(r.value)}/hr`);
+    const price = (r) => (r.mode === "fixed" ? `${inr(r.value)}/hr` : r.mode === "percent" ? `${+r.value}% off` : `+${inr(r.value)}/hr`) + (r.per_extra_player != null ? ` · +${inr(r.per_extra_player)} each extra player` : "");
     const hm = (t) => String(t || "").slice(0, 5).replace("00:00", "00:00");
     body.innerHTML = `<div class="card" style="margin-bottom:12px"><b>How it works</b><p class="muted" style="margin:6px 0 0">Every minute is priced with the matching rule that has the highest priority. A session from 3:30 pm into a 4 pm happy hour is billed at both rates. Use rules for happy hours, weekend or Sunday prices, late nights, or one station type.</p></div>
       <div class="row" style="justify-content:flex-end;margin-bottom:10px"><button class="btn primary" id="gu-new">＋ Pricing rule</button></div>
@@ -842,7 +842,8 @@ async function drawSetup() {
         { key: "start_time", label: "From", type: "time", required: true }, { key: "end_time", label: "To (00:00 = midnight)", type: "time", required: true },
         { key: "station_type", label: "For", type: "select", options: [["*", "All stations"], ...types.map((t) => [t, "All " + t]), ...st.map((x) => ["#" + x.id, "Only " + x.name])] },
         { key: "mode", label: "Price", type: "select", options: [["percent", "% off the station price"], ["fixed", "Fixed price per hour"], ["add", "Extra per hour"]] },
-        { key: "value", label: "Value", type: "number", required: true, step: "0.01" }, { key: "priority", label: "Priority (higher wins)", type: "number" }, { key: "active", label: "On", type: "checkbox" }],
+        { key: "value", label: "Value", type: "number", required: true, step: "0.01" },
+        { key: "per_extra_player", label: "Each player after the first, per hour (optional)", type: "number", step: "0.01", help: "Leave empty to use the station's own extra-player price. Example: solo ₹150, duo ₹200 → ₹150 fixed + ₹50 here." }, { key: "priority", label: "Priority (higher wins)", type: "number" }, { key: "active", label: "On", type: "checkbox" }],
       values: { days: (r.days || [0, 1, 2, 3, 4, 5, 6]).map(String), start_time: hm(r.start_time) || "12:00", end_time: hm(r.end_time) === "24:00" ? "00:00" : hm(r.end_time) || "16:00", station_type: "*", mode: "percent", value: 20, priority: 1, active: true, ...r, ...(r.id ? { days: r.days.map(String), start_time: hm(r.start_time), end_time: hm(r.end_time) } : {}) },
       onSave: async (v) => { if (!v.days.length) throw new Error("Pick at least one day");
         const row = { ...v, days: v.days.map(Number), end_time: v.end_time === "00:00" ? "24:00" : v.end_time };
