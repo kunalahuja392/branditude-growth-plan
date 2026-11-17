@@ -161,6 +161,7 @@ async function openBiz(id) {
       <div class="field"><label for="bz-cat">Category</label><select id="bz-cat">${D.cats.map((c) => `<option value="${c.id}" ${b.category_id === c.id ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></div>
       <div class="field"><label for="bz-waid">WhatsApp sender id (optional)</label><input id="bz-waid" value="${esc(b.wa_phone_number_id || "")}" placeholder="Uses agency number if empty"></div>
       <label class="check" style="grid-column:1/-1"><input type="checkbox" id="bz-wa" ${b.wa_enabled ? "checked" : ""}> WhatsApp add-on on</label>
+      <label class="check" style="grid-column:1/-1"><input type="checkbox" id="bz-life" ${b.lifetime ? "checked" : ""}> <span><b>Lifetime access</b>: every feature on, never expires, no prices or payments shown to the business</span></label>
       <fieldset style="grid-column:1/-1;border:0;padding:0;margin:0"><legend class="small" style="font-weight:700;margin-bottom:6px">Add-on modules (on top of the plan)</legend>
         <div class="row" style="flex-wrap:wrap;gap:8px 16px">${(D.mods || []).filter((x) => !x.core).map((x) => `<label class="check"><input type="checkbox" data-addon="${esc(x.key)}" ${(b.addon_modules || []).includes(x.key) ? "checked" : ""}> ${esc(x.name)}</label>`).join("")}</div></fieldset>
     </div>
@@ -171,7 +172,7 @@ async function openBiz(id) {
     <h3 style="margin:18px 0 8px">Payments</h3>
     ${pays.length ? `<div class="list">${pays.map((p) => `<div class="item small"><div class="grow"><b>${esc(p.description)}</b><span class="muted">${fmtDT(p.created_at)}${p.utr ? " · UTR " + esc(p.utr) : ""}</span></div><span class="num">${inr2(p.total)}</span>${statusPill(p.status)}</div>`).join("")}</div>` : `<div class="empty">No payments.</div>`}`, { wide: true });
   m.querySelector("#bz-save").onclick = async () => {
-    try { await q(sb.rpc("admin_update_business", { p_business: id, p: { status: $("#bz-status").value, package_id: $("#bz-pkg").value, billing: $("#bz-bill").value, subscription_ends: $("#bz-ends").value, category_id: $("#bz-cat").value, wa_enabled: $("#bz-wa").checked, wa_phone_number_id: $("#bz-waid").value.trim(),
+    try { await q(sb.rpc("admin_update_business", { p_business: id, p: { status: $("#bz-status").value, package_id: $("#bz-pkg").value, billing: $("#bz-bill").value, subscription_ends: $("#bz-ends").value, category_id: $("#bz-cat").value, wa_enabled: $("#bz-wa").checked, lifetime: $("#bz-life").checked, wa_phone_number_id: $("#bz-waid").value.trim(),
       addon_modules: [...m.querySelectorAll("[data-addon]:checked")].map((x) => x.dataset.addon) } }));
       toast("Business updated"); closeModal(); render(); } catch (e) { toast(e.message, "error"); }
   };

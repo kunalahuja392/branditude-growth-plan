@@ -41,7 +41,7 @@ const ROUTES = () => [
   { label: "Account", items: [["plan", "Plan & services", "box"], ["profile", "Business profile", "store"], ["team", "Team & logins", "shield"], ["signout", "Sign out", "out"]] },
 ].map((g) => ({ ...g, items: g.items.filter((i) => allowed(i[0])) })).filter((g) => g.items.length);
 // On when: core module, in the plan, bought as an add-on, or on the free trial (everything unlocked). The database checks the same rule.
-const hasMod = (m) => D.biz?.status === "trial" || !!(D.mods || []).find((x) => x.key === m && x.core) || (D.biz?.packages?.modules || []).includes(m) || (D.biz?.addon_modules || []).includes(m);
+const hasMod = (m) => D.biz?.status === "trial" || (D.biz?.lifetime && D.biz?.status === "active") || !!(D.mods || []).find((x) => x.key === m && x.core) || (D.biz?.packages?.modules || []).includes(m) || (D.biz?.addon_modules || []).includes(m);
 const modInfo = (k) => (D.mods || []).find((x) => x.key === k);
 // Hide features that don't fit this kind of business (e.g. table ordering for a salon). Set per module in modules.categories.
 const fitsBiz = (k) => { const m = modInfo(k), slug = D.biz?.categories?.slug; return !m?.categories || !slug || m.categories.includes(slug); };
@@ -178,6 +178,7 @@ async function payPlan() {
   return order("subscription", pk.id, bill);
 }
 function banner() {
+  if (D.biz?.lifetime) return "";
   const bad = ' style="border-color:var(--bad);background:var(--bad-soft)"', pk = D.biz.packages, plan = pk ? `${esc(pk.name)} plan` : "your plan";
   if (D.biz.status === "trial") {
     const left = trialLeft();
@@ -608,6 +609,9 @@ after.alerts = () => { $("#rem-form").onsubmit = async (e) => { e.preventDefault
 /* ---------- Plan & services ---------- */
 VIEWS.plan = () => `<div id="plan-view"><div class="loading"><span class="spinner"></span></div></div>`;
 after.plan = async () => {
+  if (D.biz.lifetime) { const el = $("#plan-view"); if (!el) return;
+    el.innerHTML = head("Plan & services", "") + `<div class="card" style="text-align:center;padding:34px 20px"><div style="font-size:46px">🏆</div><h2 style="margin:6px 0">Lifetime access</h2>
+      <p class="muted" style="max-width:460px;margin:6px auto 0">${esc(D.biz.name)} has every feature switched on for life. There is nothing to pay or renew.</p></div>`; return; }
   const [pkgs, prods, pays] = await Promise.all([
     q(sb.from("packages").select("*").eq("active", true).order("sort")).then(plansForBiz),
     q(sb.from("products").select("*, product_categories(category_id)").eq("active", true).order("sort")),
