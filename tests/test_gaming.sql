@@ -162,7 +162,7 @@ set role authenticated; select pg_temp.as_user('00000000-0000-0000-0000-00000000
 do $$ declare b uuid := current_setting('t.b')::uuid; r jsonb; begin
   perform gc_bill_void(current_setting('t.qs')::uuid, 'wrong item');
   assert (select stock from gc_products where name='Maggi') = 2, 'void restores stock';
-  r := gc_report(b, current_date - 1, current_date);
+  r := gc_report(b, gc_bday(b, now()) - 1, gc_bday(b, now()));
   assert (r->'summary'->>'bills')::int = 1 and (r->'summary'->>'sales')::numeric = 236 and (r->'summary'->>'collected')::numeric = 136
      and (r->'summary'->>'lp_matches')::int = 1, 'report: '||(r->'summary')::text;
 end $$;
@@ -206,7 +206,7 @@ do $$ declare b uuid := current_setting('t.b')::uuid; m jsonb; n int; begin
   update gc_settings set report_low_stock = true, report_dues = true, wa_followup = false, report_hour = extract(hour from now() at time zone 'Asia/Kolkata') where business_id = b;
   select count(*) into n from gc_wa_jobs() j where j.business_id = b and j.kind in ('low_stock','dues'); assert n = 2, 'picked reports scheduled';
   select count(*) into n from gc_wa_jobs() j where j.business_id = b and j.kind = 'due'; assert n = 0, 'follow-ups switched off';
-  perform gc_wa_done(b, 'dues', current_date::text, '919822222222', 'sent', null, 1, 'w2');
+  perform gc_wa_done(b, 'dues', (now() at time zone 'Asia/Kolkata')::date::text, '919822222222', 'sent', null, 1, 'w2');
   select count(*) into n from gc_wa_jobs() j where j.business_id = b and j.kind = 'dues'; assert n = 0, 'a report goes once a day';
   m := gc_wa_payload(b, 'booking', (select id::text from gc_bookings where business_id = b limit 1));
   assert m->>'skip' = 'Booking is not confirmed', 'pending booking not confirmed yet: '||m::text;

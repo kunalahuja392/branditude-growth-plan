@@ -14,6 +14,11 @@ const ctx = () => A.ctx();
 const BID = () => ctx().BID;
 const biz = () => ctx().D.biz;
 const owner = () => A.can("settings");
+// Business day: a club can end its day at e.g. 2 am, so 1:30 am still counts as the day before
+const dayEnd = () => String(G.board?.settings?.day_end || "00:00").slice(0, 5);
+const bizToday = () => { const [h, m] = dayEnd().split(":").map(Number); return new Date(Date.now() + 5.5 * 36e5 - (h * 60 + m) * 6e4).toISOString().slice(0, 10); };
+const dayStart = (d) => `${d}T${dayEnd()}:00+05:30`;
+const nextDay = (d) => { const x = new Date(d + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + 1); return x.toISOString().slice(0, 10); };
 const canSales = () => A.can("g_sales"), canStock = () => A.can("g_stock"), canDisc = () => A.can("g_discount");
 const rpc = (fn, args) => q(sb.rpc(fn, args));
 const hasWA = () => A.hasMod("wa_billing");
@@ -759,8 +764,9 @@ async function bookingModal(after, pre = {}) {
 // =====================================================================================
 async function drawBills() {
   const el = $("#gi-view"); if (!el) return; const f = G.billQ;
-  f.from = $("#gi-f")?.value || f.from || new Date(Date.now() - 6 * 864e5).toISOString().slice(0, 10); f.to = $("#gi-t")?.value || f.to || todayISO(); f.status = $("#gi-s")?.value ?? f.status;
-  let qy = sb.from("gc_bills").select("*").eq("business_id", BID()).gte("created_at", f.from + "T00:00:00+05:30").lte("created_at", f.to + "T23:59:59+05:30").order("created_at", { ascending: false }).limit(500);
+  if (!G.board) await loadBoard().catch(() => {});
+  f.from = $("#gi-f")?.value || f.from || new Date(Date.parse(bizToday() + "T12:00:00Z") - 6 * 864e5).toISOString().slice(0, 10); f.to = $("#gi-t")?.value || f.to || bizToday(); f.status = $("#gi-s")?.value ?? f.status;
+  let qy = sb.from("gc_bills").select("*").eq("business_id", BID()).gte("created_at", dayStart(f.from)).lt("created_at", dayStart(nextDay(f.to))).order("created_at", { ascending: false }).limit(500);
   if (f.status === "due") qy = qy.in("status", ["partial", "unpaid"]); else if (f.status) qy = qy.eq("status", f.status);
   const rows = await q(qy), live = rows.filter((r) => r.status !== "void");
   const pend = await q(sb.from("gc_bills").select("customer_id,customer_name,customer_phone,due").eq("business_id", BID()).gte("due", 0.01).in("status", ["partial", "unpaid"])).catch(() => []);
@@ -785,7 +791,7 @@ async function billModal(b) {
   const m = openModal(`<div class="modal-head"><h2>${esc(b.number)}</h2><span class="pill ${{ paid: "good", partial: "warn", unpaid: "warn", void: "bad" }[b.status]}">${b.status}</span></div>
     <p class="muted" style="margin-top:0">${fmtDT(b.created_at)} · ${esc(b.customer_name || "Walk-in")} ${esc(prettyPhone(b.customer_phone || ""))}</p>
     <div class="table-wrap"><table><tbody>${b.lines.map((l) => `<tr><td>${esc(l.desc)}</td><td class="num">${+l.qty}</td><td class="num">${inr2(l.amount)}</td></tr>`).join("")}</tbody></table></div>
-    <table class="gc-tot" style="width:100%"><tbody><tr><td>Subtotal</td><td class="num">${inr2(b.subtotal)}</td></tr>${+b.discount ? `<tr><td>Discount</td><td class="num">−${inr2(b.discount)}</td></tr>` : ""}<tr><td>GST</td><td class="num">${inr2(b.tax)}</td></tr><tr class="g"><td>Total</td><td class="num">${inr(b.total)}</td></tr>
+    <table class="gc-tot" style="width:100%;min-width:0"><tbody><tr><td>Subtotal</td><td class="num">${inr2(b.subtotal)}</td></tr>${+b.discount ? `<tr><td>Discount</td><td class="num">−${inr2(b.discount)}</td></tr>` : ""}<tr><td>GST</td><td class="num">${inr2(b.tax)}</td></tr><tr class="g"><td>Total</td><td class="num">${inr(b.total)}</td></tr>
       <tr><td>Paid</td><td class="num">${inr2(b.paid)}</td></tr>${b.due > 0 ? `<tr><td style="color:var(--bad)">Pending</td><td class="num" style="color:var(--bad)"><b>${inr2(b.due)}</b></td></tr>` : ""}</tbody></table>
     ${b.lp ? `<h3>🏆 LP split</h3><div class="table-wrap"><table><tbody>${b.lp.players.map((p) => `<tr><td>${esc(p.player)}</td><td>${p.wins} win${p.wins === 1 ? "" : "s"}</td><td class="num"><b>${inr(p.payable)}</b></td></tr>`).join("")}</tbody></table></div>` : ""}
     ${pays.length ? `<p class="small muted">${pays.map((p) => `${fmtDT(p.created_at)} · ${p.mode.toUpperCase()} ${inr2(p.amount)}${p.paid_by ? " by " + esc(p.paid_by) : ""}`).join("<br>")}</p>` : ""}
@@ -1021,6 +1027,105 @@ async function memberModal(x, st) {
 }
 
 // =====================================================================================
+//  Cash & day close: opening balance, expenses, cash ⇄ bank, count notes, close each day in order
+// =====================================================================================
+const NOTES = [500, 200, 100, 50, 20, 10];
+const EXP_CATS = ["Snacks purchase", "Salary / advance", "Electricity", "Rent", "Repairs", "Cleaning", "Tea / food", "Other"];
+const sgn = (n) => (+n > 0 ? "+" : +n < 0 ? "−" : "") + inr(Math.abs(+n));
+async function drawCash() {
+  const el = $("#gc-cash"); if (!el) return; if (!G.board) await loadBoard().catch(() => {});
+  if (!owner()) {   // staff: add expenses for today and see what they added
+    const ex = await q(sb.from("gc_expenses").select("*").eq("business_id", BID()).eq("day", bizToday()).order("created_at", { ascending: false }));
+    el.innerHTML = `<div class="row" style="justify-content:space-between;margin-bottom:12px"><span class="muted">Today · ${dayStr(bizToday())}</span><button class="btn primary" id="cx-add">＋ Expense</button></div>${expList(ex, false)}`;
+    $("#cx-add", el).onclick = () => expModal(bizToday(), drawCash); return;
+  }
+  const st = await rpc("gc_cash_status", { p_business: BID(), p_day: G.cashDay || null });
+  if (!st.set_up) {
+    el.innerHTML = `<div class="card" style="max-width:560px"><h2 style="margin-top:0">💰 Start your cash book</h2><p class="muted">Enter the cash in hand and the money in the bank on the day you start. Each day after that opens with what you counted at the last close.</p>
+      <div class="fields"><div class="field"><label>Start from</label><input id="cs-d" type="date" value="${bizToday()}" max="${bizToday()}"></div><div></div>
+      <div class="field"><label>Cash in hand (₹)</label><input id="cs-c" type="number" min="0" step="1" placeholder="0"></div><div class="field"><label>Money in the bank (₹)</label><input id="cs-b" type="number" min="0" step="1" placeholder="0"></div></div>
+      <p class="muted small">Business day ends at <b>${dayEnd() === "00:00" ? "midnight" : t12(dayEnd())}</b>. Change it in Stations & pricing → Bill & timer settings.</p>
+      <div class="row" style="margin-top:10px"><button class="btn primary" id="cs-go">Start cash book</button></div></div>`;
+    $("#cs-go", el).onclick = () => guard($("#cs-go", el), async () => { await rpc("gc_cash_setup", { p_business: BID(), p_start: $("#cs-d", el).value, p_cash: +$("#cs-c", el).value || 0, p_bank: +$("#cs-b", el).value || 0 }); toast("Cash book started"); drawCash(); });
+    return;
+  }
+  const f = st.figures, c = st.closed, d = st.day, ex = await q(sb.from("gc_expenses").select("*").eq("business_id", BID()).eq("day", d).order("created_at", { ascending: false }));
+  const isNext = d === st.next_to_close, isToday = d === st.today, canClose = !c && isNext && d <= st.today;
+  const line = (l, v, b) => `<tr${b ? ' style="font-weight:700;border-top:2px solid var(--line)"' : ""}><td>${l}</td><td class="num">${typeof v === "string" ? v : sgn(v)}</td></tr>`;
+  el.innerHTML = `${st.pending.length ? `<div class="card" style="border-color:var(--warn);margin-bottom:12px;padding:10px 14px">📒 <b>${st.pending.length === 1 ? `${dayStr(st.pending[0])} isn't closed yet.` : `${st.pending.length} days aren't closed yet (from ${dayStr(st.pending[0])}).`}</b> Days close in order, so each one opens with the last count. ${d !== st.next_to_close ? `<button class="btn sm" data-cd="${st.next_to_close}">Open ${dayStr(st.next_to_close)}</button>` : ""}</div>` : ""}
+    <div class="row" style="justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div class="row" style="gap:6px"><button class="btn sm" data-cd="${addDays(d, -1)}">‹</button><b style="min-width:150px;text-align:center">${dayStr(d)}${isToday ? " (today)" : ""}</b><button class="btn sm" data-cd="${addDays(d, 1)}" ${d >= st.today ? "disabled" : ""}>›</button>
+        ${c ? '<span class="pill good">✓ Closed</span>' : canClose ? '<span class="pill warn">Open</span>' : '<span class="pill">Not closed</span>'}</div>
+      <div class="row">${!c ? `<button class="btn" id="cx-add">＋ Expense</button><button class="btn" id="cx-mv">⇄ Cash / bank</button>` : ""}${canClose ? `<button class="btn primary" id="cx-close">🧮 Close ${isToday ? "today" : dayStr(d)}</button>` : ""}</div></div>
+    <p class="muted small" style="margin:-6px 0 12px">Counts sales from ${dayStr(d)} ${t12(dayEnd())} to ${dayStr(addDays(d, 1))} ${t12(dayEnd())}</p>
+    <div class="grid g2">
+      <div class="card"><h3 style="margin-top:0">💵 Cash in hand</h3><table class="gc-tot" style="width:100%;min-width:0"><tbody>
+        ${line(`Opening <span class="muted small">(${f.opening_from === "start" ? "starting balance" : "counted " + dayStr(f.opening_from)})</span>`, inr(f.opening_cash))}${line("Cash collected", +f.cash_sales)}
+        ${line("Expenses paid in cash", -f.exp_cash)}${+f.to_bank ? line("Deposited in bank", -f.to_bank) : ""}${+f.to_cash ? line("Taken out of bank", +f.to_cash) : ""}${line("Should be in hand", inr(f.expected_cash), 1)}
+        ${c ? `${line("Counted", inr(c.counted_cash), 1)}<tr><td>Difference</td><td class="num" style="font-weight:700;color:${+c.diff_cash ? "var(--bad)" : "var(--good)"}">${+c.diff_cash ? sgn(c.diff_cash) : "✓ Tallied"}</td></tr>` : ""}</tbody></table></div>
+      <div class="card"><h3 style="margin-top:0">🏦 Bank</h3><table class="gc-tot" style="width:100%;min-width:0"><tbody>
+        ${line("Opening", inr(f.opening_bank))}${line("UPI collected", +f.upi_sales)}${line("Card collected", +f.card_sales)}${line("Expenses paid from bank", -f.exp_bank)}
+        ${+f.to_bank ? line("Cash deposited", +f.to_bank) : ""}${+f.to_cash ? line("Cash taken out", -f.to_cash) : ""}${line("Should be in the bank", inr(f.expected_bank), 1)}
+        ${c ? `${line("Bank balance", inr(c.counted_bank), 1)}<tr><td>Difference</td><td class="num" style="font-weight:700;color:${+c.diff_bank ? "var(--bad)" : "var(--good)"}">${+c.diff_bank ? sgn(c.diff_bank) : "✓ Tallied"}</td></tr>` : ""}</tbody></table></div></div>
+    ${c ? `<div class="card" style="margin-top:12px;padding:10px 14px">🧮 <b>Closed</b> ${fmtDT(c.closed_at)}${Object.keys(c.denoms || {}).length ? ` · notes: ${Object.entries(c.denoms).filter(([, n]) => +n).map(([k, n]) => (k === "coins" ? `coins ${inr(n)}` : `₹${k}×${n}`)).join(", ")}` : ""}${c.note ? ` · ${esc(c.note)}` : ""}
+      ${st.history[0]?.day === d ? ` <button class="btn sm ghost" id="cx-reopen">Reopen</button>` : ""}</div>` : ""}
+    <h3 style="margin-top:16px">Expenses & moves · ${dayStr(d)}</h3>${expList(ex, !c)}
+    <h3 style="margin-top:16px">Closed days</h3>${st.history.length ? `<div class="table-wrap"><table><thead><tr><th>Day</th><th class="num">Opening cash</th><th class="num">Cash in</th><th class="num">Out</th><th class="num">Expected</th><th class="num">Counted</th><th class="num">Cash diff</th><th class="num">Bank diff</th></tr></thead><tbody>
+      ${st.history.map((h) => `<tr data-cd="${h.day}" style="cursor:pointer"><td><b>${dayStr(h.day)}</b></td><td class="num">${inr(h.opening_cash)}</td><td class="num">${inr(+h.cash_sales + +h.to_cash)}</td><td class="num">${inr(+h.exp_cash + +h.to_bank)}</td><td class="num">${inr(h.expected_cash)}</td><td class="num">${inr(h.counted_cash)}</td>
+        <td class="num" style="color:${+h.diff_cash ? "var(--bad)" : "var(--good)"};font-weight:600">${+h.diff_cash ? sgn(h.diff_cash) : "✓"}</td><td class="num" style="color:${+h.diff_bank ? "var(--bad)" : "var(--good)"};font-weight:600">${+h.diff_bank ? sgn(h.diff_bank) : "✓"}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">No days closed yet.</p>`}`;
+  $$("[data-cd]", el).forEach((b) => (b.onclick = () => { G.cashDay = b.dataset.cd; drawCash(); }));
+  const ad = $("#cx-add", el); if (ad) ad.onclick = () => expModal(d, drawCash);
+  const mv = $("#cx-mv", el); if (mv) mv.onclick = () => moveModal(d, drawCash);
+  const cl = $("#cx-close", el); if (cl) cl.onclick = () => closeModalDay(st, drawCash);
+  const ro = $("#cx-reopen", el); if (ro) ro.onclick = async () => { if (await confirmBox(`Reopen ${dayStr(d)}?`, "You can then add or remove entries and close it again.", "Reopen")) guard(null, async () => { await rpc("gc_cash_reopen", { p_business: BID(), p_day: d }); toast("Reopened"); drawCash(); }); else drawCash(); };
+  el.querySelectorAll("[data-xd]").forEach((b) => (b.onclick = () => guard(b, async () => { await rpc("gc_expense_save", { p_business: BID(), p: { delete: +b.dataset.xd } }); drawCash(); })));
+}
+const expList = (ex, canDel) => ex.length ? `<div class="table-wrap"><table><tbody>${ex.map((e) => `<tr><td>${tm(e.created_at)}</td><td><b>${esc(e.category)}</b>${e.note ? `<div class="muted small">${esc(e.note)}</div>` : ""}</td>
+    <td>${e.kind === "expense" ? `<span class="pill">${e.paid_from === "bank" ? "🏦 bank" : "💵 cash"}</span>` : `<span class="pill info">${e.kind === "to_bank" ? "💵 → 🏦" : "🏦 → 💵"}</span>`}</td><td class="num"><b>${inr(e.amount)}</b></td>
+    <td style="text-align:right">${canDel && owner() ? `<button class="btn sm ghost" data-xd="${e.id}" title="Delete">✕</button>` : ""}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">Nothing yet.</p>`;
+function expModal(day, after) {
+  const m = openModal(`<div class="modal-head"><h2>＋ Expense · ${dayStr(day)}</h2><button class="btn ghost" data-close>Close</button></div>
+    <div class="chips" id="ex-c">${chips(EXP_CATS.map((x) => [x, x]), ["Other"])}</div>
+    <div class="fields" style="margin-top:10px"><div class="field"><label>Amount (₹)</label><input id="ex-a" type="number" min="1" step="1" autofocus></div>
+      <div class="field"><label>Paid from</label><div class="chips" id="ex-p">${chips([["cash", "💵 Cash"], ["bank", "🏦 Bank / UPI"]], ["cash"])}</div></div>
+      <div class="field" style="grid-column:1/-1"><label>Note</label><input id="ex-n" placeholder="e.g. 2 crates Coke from Sharma Traders"></div></div>
+    <div class="modal-foot"><button class="btn" data-close>Cancel</button><button class="btn primary" id="ex-go">Save expense</button></div>`);
+  let cat = "Other", from = "cash"; pick($("#ex-c", m), { onChange: (v) => (cat = v[0] || "Other") }); pick($("#ex-p", m), { onChange: (v) => (from = v[0] || "cash") });
+  $("#ex-go", m).onclick = () => guard($("#ex-go", m), async () => { const a = +$("#ex-a", m).value; if (!(a > 0)) throw new Error("Enter the amount");
+    await rpc("gc_expense_save", { p_business: BID(), p: { day, amount: a, category: cat, paid_from: from, note: $("#ex-n", m).value.trim() } }); closeModal(); toast("Expense saved"); after(); });
+}
+function moveModal(day, after) {
+  const m = openModal(`<div class="modal-head"><h2>⇄ Move money · ${dayStr(day)}</h2><button class="btn ghost" data-close>Close</button></div>
+    <div class="chips" id="mv-k">${chips([["to_bank", "💵 Cash deposited in bank"], ["to_cash", "🏦 Cash taken out of bank"]], ["to_bank"])}</div>
+    <div class="fields" style="margin-top:10px"><div class="field"><label>Amount (₹)</label><input id="mv-a" type="number" min="1" step="1"></div><div class="field"><label>Note</label><input id="mv-n" placeholder="optional"></div></div>
+    <div class="modal-foot"><button class="btn" data-close>Cancel</button><button class="btn primary" id="mv-go">Save</button></div>`);
+  let k = "to_bank"; pick($("#mv-k", m), { onChange: (v) => (k = v[0] || "to_bank") });
+  $("#mv-go", m).onclick = () => guard($("#mv-go", m), async () => { const a = +$("#mv-a", m).value; if (!(a > 0)) throw new Error("Enter the amount");
+    await rpc("gc_expense_save", { p_business: BID(), p: { day, kind: k, amount: a, note: $("#mv-n", m).value.trim() } }); closeModal(); toast("Saved"); after(); });
+}
+function closeModalDay(st, after) {
+  const f = st.figures, d = st.day;
+  const m = openModal(`<div class="modal-head"><h2>🧮 Close ${dayStr(d)}</h2><button class="btn ghost" data-close>Close</button></div>
+    <p class="muted small" style="margin-top:-4px">Count the cash in the drawer note by note, then enter the bank balance.</p>
+    <div class="grid" style="grid-template-columns:1fr 1fr;gap:14px"><div><h3 style="margin:4px 0 8px">💵 Cash count</h3><table class="gc-tot" style="width:100%;min-width:0"><tbody>
+      ${NOTES.map((n) => `<tr><td>₹${n} ×</td><td><input type="number" min="0" step="1" data-dn="${n}" placeholder="0" style="width:80px"></td><td class="num" data-dt="${n}">₹0</td></tr>`).join("")}
+      <tr><td>Coins</td><td><input type="number" min="0" step="1" id="dn-coins" placeholder="₹" style="width:80px"></td><td class="num" id="dt-coins">₹0</td></tr>
+      <tr class="g"><td>Counted</td><td></td><td class="num" id="dn-tot">₹0</td></tr><tr><td>Should be</td><td></td><td class="num">${inr(f.expected_cash)}</td></tr><tr><td><b>Difference</b></td><td></td><td class="num" id="dn-diff"></td></tr></tbody></table></div>
+      <div><h3 style="margin:4px 0 8px">🏦 Bank</h3><div class="field"><label>Balance now (₹)</label><input id="cb-bank" type="number" min="0" step="1" value="${Math.round(f.expected_bank)}"></div>
+        <p class="small">Should be <b>${inr(f.expected_bank)}</b> · Difference <b id="cb-diff">✓</b></p><div class="field"><label>Note</label><input id="cb-note" placeholder="e.g. ₹20 short, change given"></div></div></div>
+    <div class="modal-foot"><button class="btn" data-close>Cancel</button><button class="btn primary" id="cb-go">✓ Close the day</button></div>`, { wide: true });
+  const count = () => NOTES.reduce((t, n) => t + n * (+$(`[data-dn="${n}"]`, m).value || 0), 0) + (+$("#dn-coins", m).value || 0);
+  const dif = (v, e, el) => { const x = Math.round((v - e) * 100) / 100; el.textContent = x ? sgn(x) : "✓ Tallied"; el.style.color = x ? "var(--bad)" : "var(--good)"; };
+  const draw = () => { NOTES.forEach((n) => ($(`[data-dt="${n}"]`, m).textContent = inr(n * (+$(`[data-dn="${n}"]`, m).value || 0)))); $("#dt-coins", m).textContent = inr(+$("#dn-coins", m).value || 0);
+    $("#dn-tot", m).textContent = inr(count()); dif(count(), +f.expected_cash, $("#dn-diff", m)); dif(+$("#cb-bank", m).value || 0, +f.expected_bank, $("#cb-diff", m)); };
+  m.addEventListener("input", draw); draw();
+  $("#cb-go", m).onclick = () => guard($("#cb-go", m), async () => {
+    const den = Object.fromEntries([...NOTES.map((n) => [n, +$(`[data-dn="${n}"]`, m).value || 0]), ["coins", +$("#dn-coins", m).value || 0]]);
+    await rpc("gc_cash_close", { p_business: BID(), p_day: d, p_cash: count(), p_bank: +$("#cb-bank", m).value || 0, p_denoms: den, p_note: $("#cb-note", m).value.trim() });
+    closeModal(); toast(`${dayStr(d)} closed`); G.cashDay = null; after(); });
+}
+
+// =====================================================================================
 //  Reports (owner)
 // =====================================================================================
 function stationTable(r) {
@@ -1034,7 +1139,8 @@ function stationTable(r) {
 }
 async function drawReports() {
   const el = $("#gr-view"); if (!el) return;
-  G.repFrom = $("#gr-f")?.value || G.repFrom || new Date(Date.now() - 6 * 864e5).toISOString().slice(0, 10); G.repTo = $("#gr-t")?.value || G.repTo || todayISO();
+  if (!G.board) await loadBoard().catch(() => {});
+  G.repFrom = $("#gr-f")?.value || G.repFrom || new Date(Date.parse(bizToday() + "T12:00:00Z") - 6 * 864e5).toISOString().slice(0, 10); G.repTo = $("#gr-t")?.value || G.repTo || bizToday();
   const r = await rpc("gc_report", { p_business: BID(), p_from: G.repFrom, p_to: G.repTo }), s = r.summary;
   const days = []; for (let d = new Date(G.repFrom + "T12:00:00"); d <= new Date(G.repTo + "T12:00:00"); d.setDate(d.getDate() + 1)) days.push(d.toISOString().slice(0, 10));
   const byD = Object.fromEntries(r.daily.map((x) => [x.d, x])), mx = Math.max(1, ...r.daily.map((x) => +x.sales)), peak = Array.from({ length: 24 }, (_, h) => r.peak.find((p) => p.hour === h)?.sessions || 0), mp = Math.max(1, ...peak);
@@ -1142,12 +1248,13 @@ async function drawSetup() {
       <div class="field" style="grid-column:1/-1"><label>Bill footer</label><input id="u-foot" value="${esc(cf.bill_footer)}"></div>
       <div class="field"><label>Round up time to every (min)</label><input id="u-round" type="number" min="1" max="60" value="${cf.round_minutes}"></div><div class="field"><label>Minimum charge (min)</label><input id="u-min" type="number" min="0" value="${cf.min_minutes}"></div>
       <div class="field"><label>"Time up" popup, minutes before the end</label><input id="u-rem" type="number" min="1" max="60" value="${cf.reminder_minutes}"></div>
+      <div class="field"><label>Business day ends at</label><select id="u-de">${["00:00", "01:00", "02:00", "03:00", "04:00", "05:00", "06:00"].map((v) => `<option value="${v}" ${String(cf.day_end || "00:00").slice(0, 5) === v ? "selected" : ""}>${v === "00:00" ? "Midnight (12 am)" : `${+v.slice(0, 2)} am: sales till then count for the day before`}</option>`).join("")}</select></div>
       <div class="field"><label>Round the bill total</label><select id="u-rto">${[["1u", "To the nearest ₹1"], ["5n", "To the nearest ₹5 (₹32 → ₹30, ₹33 → ₹35)"], ["5u", "Up to the next ₹5 (₹32 → ₹35)"], ["10n", "To the nearest ₹10 (₹34 → ₹30, ₹35 → ₹40)"], ["10u", "Up to the next ₹10 (₹32 → ₹40)"], ["2u", "Up to the next ₹2"]].map(([v, l]) => `<option value="${v}" ${`${+cf.round_to > 1 ? +cf.round_to : 1}${+cf.round_to > 1 && cf.round_mode === "nearest" ? "n" : "u"}` === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
       <label class="check" style="grid-column:1/-1"><input type="checkbox" id="u-book" ${cf.charge_booked ? "checked" : ""}> Charge the full booked time even if they stop early (the biller can still change it on each bill)</label></div>
       <p class="err" id="u-err"></p><div class="modal-foot"><button class="btn primary">Save</button></div></form></div>`;
     $("#gu-f").onsubmit = (e) => { e.preventDefault(); guard($("#gu-f button"), async () => {
       await q(sb.from("gc_settings").update({ tax_percent: +$("#u-tax").value, gstin: $("#u-gstin").value.trim(), tax_inclusive: $("#u-incl").checked, bill_prefix: $("#u-pre").value.trim() || "GC", upi_id: $("#u-upi").value.trim(),
-        bill_footer: $("#u-foot").value, round_minutes: +$("#u-round").value, min_minutes: +$("#u-min").value, reminder_minutes: +$("#u-rem").value, charge_booked: $("#u-book").checked, round_to: parseInt($("#u-rto").value), round_mode: $("#u-rto").value.endsWith("n") ? "nearest" : "up", updated_at: new Date().toISOString() }).eq("business_id", BID()));
+        bill_footer: $("#u-foot").value, round_minutes: +$("#u-round").value, min_minutes: +$("#u-min").value, reminder_minutes: +$("#u-rem").value, charge_booked: $("#u-book").checked, round_to: parseInt($("#u-rto").value), round_mode: $("#u-rto").value.endsWith("n") ? "nearest" : "up", day_end: $("#u-de").value, updated_at: new Date().toISOString() }).eq("business_id", BID()));
       toast("Saved"); G.board = null; }); };
   }
   if (G.setupTab === "wa") {
@@ -1201,6 +1308,8 @@ export function registerGaming(api) {
   api.after.greports = wrap("gr-view", drawReports);
   api.VIEWS.gmembers = () => api.head("Memberships", "Hour packs customers pay for up front, with an expiry date") + `<div id="gm-view">${spin}</div>`;
   api.after.gmembers = wrap("gm-view", async () => { if (!G.board) await loadBoard().catch(() => {}); await drawMembers(); });
+  api.VIEWS.gcash = () => api.head("Cash & day close", owner() ? "Cash in hand, bank, expenses and the day-end tally" : "Add today's expenses") + `<div id="gc-cash">${spin}</div>`;
+  api.after.gcash = wrap("gc-cash", drawCash);
   api.VIEWS.gsetup = () => api.head("Stations & pricing", "Stations, happy hours, bill settings and WhatsApp bills") + `<div id="gu-view">${spin}</div>`;
   api.after.gsetup = wrap("gu-view", drawSetup);
 }

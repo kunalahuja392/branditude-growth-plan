@@ -24,7 +24,7 @@ const waOn = () => !!D.biz?.wa_enabled;
 
 // Which module each page belongs to. Pages without an entry are in every plan.
 const ROUTE_MOD = { offers: "loyalty", loyalty: "loyalty", templates: "bulk_whatsapp", alerts: "campaigns", seo: "seo", replies: "google_replies", orders: "menu", menu: "menu", staff: "attendance", salary: "attendance", accounts: "accounting",
-  gboard: "gaming", gbookings: "gaming", gbills: "gaming", gstock: "gaming", gmembers: "gaming", greports: "gaming", gsetup: "gaming" };
+  gboard: "gaming", gbookings: "gaming", gbills: "gaming", gstock: "gaming", gmembers: "gaming", gcash: "gaming", greports: "gaming", gsetup: "gaming" };
 // What this login may do: owner and admin everything, staff only the areas the owner ticked. The database checks the same.
 const can = (area) => ["owner", "admin"].includes(D.me?.role) || (D.me?.perms || []).includes(area);
 const allowed = (r) => r === "signout" || can(AREA_OF[r] || "customers");
@@ -33,7 +33,7 @@ const item = (r, label, icon, badge = "") => [r, label, icon, lockBadge(r, badge
 const ROUTES = () => [
   // Gaming clubs: station timers, LP bills, bookings (business type "Gaming Club" only)
   ...((modInfo("gaming")?.categories || []).includes(D.biz?.categories?.slug) ? [{ label: "Gaming", items: [item("gboard", "Live board", "grid"), item("gbookings", "Bookings", "clock"), item("gbills", "Bills", "receipt"),
-    item("gstock", "Snacks & stock", "box"), item("gmembers", "Memberships", "card"), item("greports", "Gaming reports", "chart"), item("gsetup", "Stations & pricing", "cog")] }] : []),
+    item("gstock", "Snacks & stock", "box"), item("gmembers", "Memberships", "card"), item("gcash", "Cash & day close", "rupee"), item("greports", "Gaming reports", "chart"), item("gsetup", "Stations & pricing", "cog")] }] : []),
   { label: "Daily", items: [item("dashboard", "Dashboard", "dash"), item("customers", "Customers", "users"), item("feedback", "Reviews & feedback", "star", openComplaints() || ""), item("alerts", "Alerts", "bell", hasMod("campaigns") ? alerts().length || "" : ""),
     ...(fitsBiz("menu") ? [item("orders", "Orders", "receipt", hasMod("menu") ? D.newOrders || "" : ""), item("menu", "QR menu", "food")] : []), item("staff", "Staff & attendance", "clock")] },
   { label: "Grow", items: [item("offers", "Offers & coupons", "tag"), item("loyalty", "Loyalty card", "card"), item("whatsapp", "WhatsApp", "wa"), item("seo", "Keywords & SEO", "spark")] },

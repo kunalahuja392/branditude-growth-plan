@@ -8,7 +8,7 @@ export const AREA_OF = {
   reviews: "reviews", seo: "reviews", replies: "reviews", whatsapp: "whatsapp", templates: "whatsapp",
   orders: "menu", menu: "menu", staff: "attendance", salary: "attendance", accounts: "accounts",
   plan: "settings", profile: "settings", team: "settings",
-  gboard: "gaming", gbookings: "gaming", gbills: "gaming", gstock: "gaming", gmembers: "gaming", greports: "g_reports", gsetup: "settings",
+  gboard: "gaming", gbookings: "gaming", gbills: "gaming", gstock: "gaming", gmembers: "gaming", gcash: "gaming", greports: "g_reports", gsetup: "settings",
 };
 export const AREAS = [
   ["customers", "Customers & visits", "Log visits, scan loyalty cards, customers, offers, feedback"],
