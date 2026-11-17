@@ -110,7 +110,7 @@ function drawBoard() {
     <div id="gb-cnt"></div>
     ${b.low_stock.length ? `<div class="card" style="margin-top:10px;border-color:var(--warn)">⚠️ <b>Low stock:</b> ${b.low_stock.map((p) => `${esc(p.name)} (${p.stock})`).join(", ")}</div>` : ""}
     <div class="row" style="justify-content:space-between;margin:18px 0 10px"><h2 style="margin:0">Stations</h2>
-      <div class="row">${w ? `<button class="btn" data-g="sale">🧾 Counter sale</button><button class="btn" data-g="book">📅 New booking</button>` : ""}${owner() ? `<a class="btn" href="#gsetup">＋ Station</a>` : ""}</div></div>
+      <div class="row">${w ? `<button class="btn" data-g="sale">🧾 Counter sale</button><button class="btn" data-g="book">📅 New booking</button>` : ""}${owner() ? `<button class="btn" data-g="past" title="Add a game that wasn't started on time">＋ Past entry</button>` : ""}${owner() ? `<a class="btn" href="#gsetup">＋ Station</a>` : ""}</div></div>
     ${b.stations.length ? `<div class="gc-board">${b.stations.map((st) => card(st, by[st.id], w)).join("")}</div>`
       : `<div class="card empty">No stations yet. ${owner() ? `<a href="#gsetup">Add your PS5, PC, VR and pool stations →</a>` : "Ask the owner to add stations."}</div>`}`;
   drawCnt(); tick();
@@ -228,10 +228,58 @@ document.addEventListener("click", async (e) => {
   if (a === "more") return moreModal(s);
   if (a === "stop" || a === "bill") return checkout(s.id, b);
   if (a === "sale") return counterSale();
+  if (a === "past") return pastEntry();
   if (a === "book") return bookingModal();
 });
 
 // ---------- start: "Is this match an LP?" popup first ----------
+// ---------- owner: add a game that wasn't started on time (e.g. snooker 10–11 entered at 12) ----------
+async function pastEntry() {
+  if (!G.board) await loadBoard().catch(err); const sts = G.board?.stations || []; if (!sts.length) return toast("Add stations first", "error");
+  const prods = (await q(sb.from("gc_products").select("id,name,price,stock,track_stock,category").eq("business_id", BID()).eq("active", true).order("category").order("name")).catch(() => [])) || [];
+  const now = new Date(Date.now() + 5.5 * 36e5), hh = now.getUTCHours(), d = now.toISOString().slice(0, 10), pad = (n) => String(n).padStart(2, "0");
+  const items = []; let qt = null, own = null;
+  const m = openModal(`<div class="modal-head"><h2>＋ Add past entry</h2><button class="btn ghost" data-close>Close</button></div>
+    <p class="muted small" style="margin-top:-4px">For a game that wasn't started on the app. The price is worked out from your rates at that time, and the bill is dated when it was played.</p>
+    <div class="fields"><div class="field"><label>Station</label><select id="pe-st">${sts.map((x) => `<option value="${x.id}">${esc(x.name)} (${esc(x.type)})</option>`).join("")}</select></div>
+      <div class="field"><label>Date</label><input id="pe-d" type="date" value="${d}" max="${d}"></div>
+      <div class="field"><label>From</label><input id="pe-a" type="time" value="${pad((hh + 22) % 24)}:00"></div><div class="field"><label>To</label><input id="pe-z" type="time" value="${pad((hh + 23) % 24)}:00"></div>
+      <div class="field"><label>Players</label><input id="pe-pl" type="number" min="1" max="32" value="1"></div><div class="field"><label>Customer name</label><input id="g-cname"></div>
+      <div class="field"><label>WhatsApp number</label>${phoneInput("g-cph")}</div><div class="field"><label>Note</label><input id="pe-n" placeholder="e.g. power cut, entered later"></div></div>
+    <div class="card" style="margin-top:10px;padding:10px 12px" id="pe-q"></div>
+    ${prods.length ? `<div class="field" style="margin-top:10px"><label>Snacks (optional)</label><div class="row" style="flex-wrap:nowrap;gap:6px"><select id="pe-p" style="flex:1"><option value="">Add a snack…</option>${prods.map((x) => `<option value="${x.id}">${esc(x.name)} · ${inr(x.price)}</option>`).join("")}</select><input id="pe-pq" type="number" min="1" value="1" style="width:70px"><button class="btn" id="pe-pa">Add</button></div><div id="pe-il" class="small" style="margin-top:6px"></div></div>` : ""}
+    <div class="fields" style="margin-top:6px">${discField()}</div>
+    <table class="gc-tot" style="width:100%;margin-top:8px"><tbody id="g-tots"></tbody></table><div id="g-pays"></div>
+    <label class="check" id="pe-ovl" hidden style="margin-top:8px"><input type="checkbox" id="pe-ok"> <span>Add anyway</span></label><p class="err" id="pe-err"></p>
+    <div class="modal-foot"><button class="btn" data-close>Cancel</button><button class="btn primary" id="pe-go">✓ Add & make bill</button></div>`, { wide: true });
+  const times = () => { const day = $("#pe-d", m).value, a = new Date(`${day}T${$("#pe-a", m).value || "00:00"}:00+05:30`); let z = new Date(`${day}T${$("#pe-z", m).value || "00:00"}:00+05:30`); if (z <= a) z = new Date(z.getTime() + 864e5); return [a, z]; };
+  const game = () => (own != null ? own : qt ? +qt.amount : 0), snacks = () => items.reduce((t, x) => t + x.qty * x.price, 0), sub = () => +(game() + snacks()).toFixed(2);
+  const draw = () => { const t = totals(sub(), discOf(m, sub()));
+    $("#g-tots", m).innerHTML = `<tr><td>Gaming</td><td class="num">${inr2(game())}</td></tr>${snacks() ? `<tr><td>Snacks</td><td class="num">${inr2(snacks())}</td></tr>` : ""}${discRow(m, sub())}${t.t ? `<tr><td>GST ${t.t}%${t.incl ? " (included)" : ""}</td><td class="num">${inr2(t.tax)}</td></tr>` : ""}${Math.abs(t.round) >= 0.01 ? `<tr><td>Round off</td><td class="num">${inr2(t.round)}</td></tr>` : ""}<tr class="g"><td>Total</td><td class="num">${inr(t.total)}</td></tr>`;
+    const il = $("#pe-il", m); if (il) il.innerHTML = items.map((x, i) => `<span class="pill">${esc(x.name)} × ${x.qty} · ${inr(x.qty * x.price)} <a href="javascript:void 0" data-rmi="${i}">✕</a></span>`).join(" ");
+    m.syncPay && m.syncPay(); };
+  const quote = async () => { const [a, z] = times(); own = null;
+    try { qt = await rpc("gc_past_quote", { p_business: BID(), p_station: $("#pe-st", m).value, p_from: a.toISOString(), p_to: z.toISOString(), p_players: +$("#pe-pl", m).value || 1 }); }
+    catch (e) { qt = null; $("#pe-q", m).innerHTML = `<span class="err">${esc(e.message)}</span>`; draw(); return; }
+    const ov = qt.overlap; $("#pe-ovl", m).hidden = !ov;
+    $("#pe-q", m).innerHTML = `<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:6px"><div><b>${tm(a.toISOString())} – ${tm(z.toISOString())}</b> · ${mins(qt.minutes)}${qt.charged_minutes !== qt.minutes ? ` (charged ${qt.charged_minutes} min)` : ""}
+        <div class="muted small">${qt.by_rule.map((r) => `${esc(r.rule)} ${mins(r.minutes)}`).join(" · ")}</div></div>
+      <div class="row" style="flex-wrap:nowrap;gap:6px">Gaming ₹ <input id="pe-amt" type="number" min="0" step="1" value="${Math.round(qt.amount * 100) / 100}" style="width:100px"></div></div>
+      ${ov ? `<p class="small" style="color:var(--bad);margin:6px 0 0">⚠️ This station already has a game recorded at that time (${ov.map((o) => `${tm(o.from)}–${tm(o.to)}${o.customer ? " " + esc(o.customer) : ""}`).join(", ")}).</p>` : ""}`;
+    $("#pe-amt", m).oninput = (e) => { own = e.target.value === "" ? null : +e.target.value; draw(); };
+    draw(); };
+  const getPays = payBox(m, { total: () => totals(sub(), discOf(m, sub())).total }); wireDisc(m, draw);
+  ["#pe-st", "#pe-d", "#pe-a", "#pe-z", "#pe-pl"].forEach((x) => $(x, m).addEventListener("change", quote));
+  const pa = $("#pe-pa", m); if (pa) pa.onclick = () => { const p = prods.find((x) => x.id === $("#pe-p", m).value); if (!p) return; items.push({ product_id: p.id, name: p.name, price: +p.price, qty: Math.max(1, +$("#pe-pq", m).value || 1) }); $("#pe-p", m).value = ""; draw(); };
+  m.addEventListener("click", (e) => { const r = e.target.closest("[data-rmi]"); if (r) { items.splice(+r.dataset.rmi, 1); draw(); } });
+  await quote();
+  $("#pe-go", m).onclick = () => guard($("#pe-go", m), async () => { const [a, z] = times(); if (z > new Date(Date.now() + 120000)) throw new Error("The end time is in the future. Use Start session for a game that is still on.");
+    const bl = await rpc("gc_past_entry", { p_business: BID(), p: { station_id: $("#pe-st", m).value, start_at: a.toISOString(), end_at: z.toISOString(), players: +$("#pe-pl", m).value || 1,
+      customer_name: $("#g-cname", m).value.trim(), customer_phone: readPhone("g-cph", m), amount: own != null ? own : null, items: items.map(({ product_id, qty }) => ({ product_id, qty })),
+      discount: discOf(m, sub()), payments: getPays(), notes: $("#pe-n", m).value.trim(), allow_overlap: $("#pe-ok", m).checked } });
+    closeModal(); toast("Past entry added"); if ($("#gi-view")) drawBills(); else refresh(); billDone(bl, false); });
+}
+
 // Walk-in on a station booked within the hour: check first
 function clashModal(st, k) {
   const m = openModal(`<div class="modal-head"><h2>⚠️ ${esc(st.name)} is booked soon</h2><button class="btn ghost" data-close>Close</button></div>
@@ -716,7 +764,7 @@ async function drawBills() {
   if (f.status === "due") qy = qy.in("status", ["partial", "unpaid"]); else if (f.status) qy = qy.eq("status", f.status);
   const rows = await q(qy), live = rows.filter((r) => r.status !== "void");
   const pend = await q(sb.from("gc_bills").select("customer_id,customer_name,customer_phone,due").eq("business_id", BID()).gte("due", 0.01).in("status", ["partial", "unpaid"])).catch(() => []);
-  el.innerHTML = `<div class="grid g4">${A.kpi("Bills", live.length, "in these dates")}${canSales() ? A.kpi("Sales", inr(live.reduce((t, r) => t + +r.total, 0))) : ""}${A.kpi("Pending (all time)", inr(pend.reduce((t, r) => t + +r.due, 0)), `${new Set(pend.map((p) => p.customer_id)).size} customers`)}
+  el.innerHTML = `${owner() ? `<div class="row" style="justify-content:flex-end;margin-bottom:10px"><button class="btn" data-g="past">＋ Add past entry</button></div>` : ""}<div class="grid g4">${A.kpi("Bills", live.length, "in these dates")}${canSales() ? A.kpi("Sales", inr(live.reduce((t, r) => t + +r.total, 0))) : ""}${A.kpi("Pending (all time)", inr(pend.reduce((t, r) => t + +r.due, 0)), `${new Set(pend.map((p) => p.customer_id)).size} customers`)}
       ${A.kpi("WhatsApp follow-ups", hasWA() ? (G.board?.settings?.wa_followup !== false ? "Automatic" : "Off") : "Add-on", hasWA() ? "every few days until paid" : `<a href="#gsetup?wa">Turn on</a>`)}</div>
     <div class="row" style="justify-content:space-between;margin:14px 0 10px"><div class="row"><input type="date" id="gi-f" value="${f.from}"><input type="date" id="gi-t" value="${f.to}">
       <select id="gi-s"><option value="">All</option><option value="due" ${f.status === "due" ? "selected" : ""}>Pending</option><option value="paid" ${f.status === "paid" ? "selected" : ""}>Paid</option><option value="void" ${f.status === "void" ? "selected" : ""}>Cancelled</option></select></div>
