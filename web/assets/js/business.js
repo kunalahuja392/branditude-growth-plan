@@ -624,7 +624,7 @@ after.plan = async () => {
   <div class="grid g2">
     <div class="card"><div class="card-head"><h2>Your plan</h2>${statusPill(b.status)}</div>
       <div class="row" style="align-items:baseline;gap:8px"><b style="font:800 26px var(--display)">${esc(b.packages?.name || "No plan")}</b><span class="muted">${esc(b.billing)}</span></div>
-      <p class="muted small" style="margin-top:4px">${b.subscription_ends ? "Paid until " + fmtDate(b.subscription_ends) : "Not paid yet"}${b.wa_enabled ? " · WhatsApp add-on on" : ""}</p>
+      <p class="muted small" style="margin-top:4px">${b.subscription_ends ? "Paid until " + fmtDate(b.subscription_ends) : b.status === "active" ? "Lifetime access, no renewal needed" : "Not paid yet"}${b.wa_enabled ? " · WhatsApp add-on on" : ""}</p>
       ${b.packages ? `<ul class="small" style="padding-left:18px">${b.packages.features.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : ""}
       <div class="row" style="margin-top:12px">${b.package_id ? `<button class="btn primary" data-a="renew" data-id="${b.package_id}" data-bill="${b.billing}">Renew ${esc(b.billing)} · ${inr(price(b.packages, b.billing))}${plusGst()}</button>` : ""}</div></div>
     <div class="card"><div class="card-head"><h2>Not paid yet</h2><span class="pill ${unpaid.length ? "warn" : "good"}">${unpaid.length}</span></div>
