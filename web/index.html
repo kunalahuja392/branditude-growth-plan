@@ -868,7 +868,7 @@ document.addEventListener("click", async (e) => {
     if (a === "next2") { const email = $("#a-email").value.trim(), password = $("#a-pass").value;
       if (!/^\S+@\S+\.\S+$/.test(email)) return err("Enter a valid email."); if (password.length < 8) return err("Password needs at least 8 characters.");
       el.disabled = true; co.biz.email = co.biz.email || email;
-      const r = co.mode === "signup" ? await sb.auth.signUp({ email, password, options: { data: { full_name: co.biz.contact_name }, emailRedirectTo: new URL("app.html", location.href).href } })
+      const r = co.mode === "signup" ? await sb.auth.signUp({ email, password, options: { data: { full_name: co.biz.contact_name, signup_as: "business", pending_registration: regPayload() }, emailRedirectTo: new URL("app.html", location.href).href } })
                                      : await sb.auth.signInWithPassword({ email, password });
       if (r.error) { el.disabled = false; return err(/registered/i.test(r.error.message) ? "This email already has an account. Sign in instead." : /Invalid login/i.test(r.error.message) ? "Wrong email or password." : friendly(r.error)); }
       if (!r.data.session) { try { localStorage.setItem("bgp_pending_registration", JSON.stringify(regPayload())); } catch {} co.pendingConfirm = true; co.step = 4; return draw(); }

@@ -21,7 +21,7 @@
       if (this.mode === "maybe") d = d && d.length ? d[0] : null;
       return { data: d, error: null }; }).then(res, rej); }
   }
-  const sess = (user) => { const s = { user, access_token: "fake" }; localStorage.setItem("fake_sess", JSON.stringify(s)); listeners.forEach((f) => f("SIGNED_IN", s)); return s; };
+  const sess = (user) => { if (user && !user.user_metadata) user = { ...user, user_metadata: user.raw_user_meta_data || {} }; const s = { user, access_token: "fake" }; localStorage.setItem("fake_sess", JSON.stringify(s)); listeners.forEach((f) => f("SIGNED_IN", s)); return s; };
   window.__BGP_FAKE_SB__ = {
     from: (t) => new Q(t),
     rpc: (fn, args) => post("/__q", { user: getSess()?.user?.id || null, op: { kind: "rpc", fn, args } }).then((r) => (r.error ? { data: null, error: r.error } : { data: r.data, error: null })),
