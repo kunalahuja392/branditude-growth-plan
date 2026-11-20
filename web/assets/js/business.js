@@ -52,6 +52,8 @@ export async function mount(ctx) {
   const m = await q(sb.from("business_members").select("business_id,role,perms").eq("user_id", C.user.id).order("created_at").limit(1));
   if (!m.length) { $("#main").innerHTML = `<div class="auth-wrap"><div class="auth"><h2>No business yet</h2><p>Choose a plan to set up your business.</p><a class="btn primary" href="index.html#pricing">See plans</a></div></div>`; return; }
   BID = m[0].business_id; D.me = { role: m[0].role, perms: m[0].perms || [] };
+  const pre = await q(sb.from("businesses").select("needs_setup,email").eq("id", BID).single()).catch(() => ({}));
+  if (pre.needs_setup) return setupForm(m[0].role === "owner");
   window.addEventListener("hashchange", () => { if (location.hash === "#signout") return C.signOut(); if (location.hash === "#templates") { WA.tab = "templates"; return (location.hash = "#whatsapp"); } render(); });
   if (location.hash === "#templates") { WA.tab = "templates"; location.hash = "#whatsapp"; }
   await loadAll(); render(); mountAssistant();
@@ -59,6 +61,33 @@ export async function mount(ctx) {
     const tick = async () => { if (route() === "orders") return; try { const n = await newOrderCount(BID); if (n !== (D.newOrders || 0)) { D.newOrders = n; nav(); } } catch {} };
     tick(); setInterval(tick, 30000);
   }
+}
+
+// First sign-in for an account Branditude created: collect the business details
+async function setupForm(isOwner) {
+  if (!isOwner) { $("#main").innerHTML = `<div class="auth-wrap"><div class="auth"><h2>Almost ready</h2><p>The owner needs to finish setting up this business. Try again after they sign in.</p><button class="btn" id="su-out">Sign out</button></div></div>`; $("#su-out").onclick = C.signOut; return; }
+  const cats = await q(sb.from("categories").select("id,name").eq("active", true).order("sort")).catch(() => []);
+  $("#main").innerHTML = `<div class="auth-wrap"><form class="auth" id="su-f" style="max-width:460px">
+    <h2>Welcome! Tell us about your business</h2>
+    <p class="muted small">Sorry for the mix-up at sign-up. Your account is ready; add these details once to open your dashboard.</p>
+    <div class="field"><label for="su-name">Business name</label><input id="su-name" required autocomplete="organization"></div>
+    <div class="field"><label for="su-cat">Type of business</label><select id="su-cat" required><option value="">Choose…</option>${cats.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select></div>
+    <div class="field"><label for="su-contact">Your name</label><input id="su-contact" autocomplete="name" value="${esc(C.profile?.full_name || "")}"></div>
+    <div class="field"><label for="su-phone">Business phone (WhatsApp)</label>${phoneInput("su-phone", { cc: "91", required: true })}</div>
+    <div class="field"><label for="su-city">City</label><input id="su-city" autocomplete="address-level2"></div>
+    <div class="field"><label for="su-addr">Address</label><textarea id="su-addr" rows="2" autocomplete="street-address"></textarea></div>
+    <p class="err" id="su-err" role="alert"></p>
+    <button class="btn primary" type="submit" style="width:100%;justify-content:center">Open my dashboard</button>
+    <button class="btn ghost sm" type="button" id="su-out" style="margin-top:8px">Sign out</button></form></div>`;
+  $("#su-out").onclick = C.signOut;
+  $("#su-f").onsubmit = async (e) => {
+    e.preventDefault(); const btn = e.submitter; const phone = readPhone("su-phone");
+    if (!phoneOk(phone)) { $("#su-err").textContent = "Enter a valid phone number"; return; }
+    btn.disabled = true; $("#su-err").textContent = "";
+    try { await q(sb.rpc("finish_business_setup", { p_business: BID, p: { name: $("#su-name").value, category_id: $("#su-cat").value, contact_name: $("#su-contact").value, phone, city: $("#su-city").value, address: $("#su-addr").value } }));
+      location.hash = "#profile"; location.reload(); }
+    catch (err) { $("#su-err").textContent = err.message; btn.disabled = false; }
+  };
 }
 
 async function loadAll() {

@@ -117,13 +117,20 @@ async function openLead(id) {
 VIEWS.businesses = async () => {
   await cats(); await pkgs();
   D.biz = await q(sb.from("businesses").select("*, categories(name), packages(name), wa_wallets(balance,utility_balance)").order("created_at", { ascending: false }));
-  return head("Businesses", "All client accounts. Open one to see its report, change its plan, or switch WhatsApp on.") + `
+  return head("Businesses", "All client accounts. Open one to see its report, change its plan, or switch WhatsApp on.", `<button class="btn" id="biz-convert">Turn a login into a business</button>`) + `
   <div class="row" style="margin-bottom:12px"><input id="bf-q" type="search" placeholder="Search name, city or phone" style="flex:2;min-width:200px" aria-label="Search businesses">
     <select id="bf-cat" style="flex:1;min-width:150px" aria-label="Category"><option value="">All categories</option>${D.cats.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select>
     <select id="bf-st" style="flex:1;min-width:150px" aria-label="Status"><option value="">All statuses</option>${["trial", "active", "pending_payment", "paused", "cancelled"].map((s) => `<option value="${s}">${s.replace("_", " ")}</option>`).join("")}</select></div>
   <div class="table-wrap"><table><thead><tr><th>Business</th><th>Category</th><th>Package</th><th>Status</th><th>Renews</th><th>WhatsApp</th><th>Joined</th></tr></thead><tbody id="biz-rows"></tbody></table></div>`;
 };
 after.businesses = () => {
+  $("#biz-convert").onclick = () => formModal({ title: "Turn a login into a business", submitLabel: "Make business",
+    values: { package_id: (D.pkgs.find((p) => /^pro$/i.test(p.name)) || {}).id, lifetime: true },
+    fields: [{ key: "email", label: "Their login email", type: "email", required: true, full: true, help: "For someone who signed up but landed as a customer. They'll fill in their business details next time they sign in." },
+      { key: "package_id", label: "Plan", type: "select", options: D.pkgs.map((p) => [p.id, p.name]) },
+      { key: "lifetime", label: "Lifetime free access (no payment)", type: "checkbox", full: true }],
+    onSave: async (v) => { await q(sb.rpc("admin_make_business", { p_email: v.email, p_package: v.package_id || null, p_lifetime: !!v.lifetime }));
+      toast("Done. They'll be asked for their business details when they sign in."); location.reload(); } });
   const draw = () => {
     const qv = $("#bf-q").value.trim().toLowerCase(), cat = $("#bf-cat").value, st = $("#bf-st").value;
     const rows = D.biz.filter((b) => (!cat || b.category_id === cat) && (!st || b.status === st) && (!qv || [b.name, b.city, b.phone].join(" ").toLowerCase().includes(qv)));
