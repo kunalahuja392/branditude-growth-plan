@@ -59,7 +59,7 @@ else {
     <p class="mut" style="text-align:center;margin-top:16px">${esc(z.footer || "")}</p>
     ${upi ? `<p style="text-align:center"><a href="${esc(upi)}">Pay ${rs(b.due)} by UPI (${esc(z.upi_id)})</a></p>` : ""}
     <p class="mut" style="text-align:center;font-size:11px">Powered by Branditude</p></div>
-    <div class="acts"><button class="btn p" onclick="print()">🖨️ Print / save PDF</button><a class="btn" href="?t=${encodeURIComponent(qs.get("t"))}${th ? "" : "&print=thermal"}">${th ? "A4 layout" : "Receipt (80 mm)"}</a>
+    <div class="acts">${(opener || (document.referrer && new URL(document.referrer).origin === location.origin)) ? `<button class="btn" onclick="history.length > 1 ? history.back() : (location.href = '/app.html#gbills')">← Back</button>` : ""}<button class="btn p" onclick="print()">🖨️ Print / save PDF</button><a class="btn" href="?t=${encodeURIComponent(qs.get("t"))}${th ? "" : "&print=thermal"}">${th ? "A4 layout" : "Receipt (80 mm)"}</a>
       ${upi ? `<a class="btn w" href="${esc(upi)}">Pay by UPI</a>` : ""}<a class="btn" href="f.html?b=${encodeURIComponent(z.slug)}">⭐ Rate your visit</a></div>`;
 }
 </script>
