@@ -241,7 +241,7 @@ document.addEventListener("click", async (e) => {
 // ---------- owner: add a game that wasn't started on time (e.g. snooker 10–11 entered at 12) ----------
 async function pastEntry() {
   if (!G.board) await loadBoard().catch(err); const sts = G.board?.stations || []; if (!sts.length) return toast("Add stations first", "error");
-  const prods = (await q(sb.from("gc_products").select("id,name,price,stock,track_stock,category").eq("business_id", BID()).eq("active", true).order("category").order("name")).catch(() => [])) || [];
+  const prods = (await q(sb.from("gc_products").select("id,name,price,stock,track_stock,category,active").eq("business_id", BID()).order("category").order("name")).catch(() => [])) || [];
   const now = new Date(Date.now() + 5.5 * 36e5), hh = now.getUTCHours(), d = now.toISOString().slice(0, 10), pad = (n) => String(n).padStart(2, "0");
   const items = []; let qt = null, own = null;
   const m = openModal(`<div class="modal-head"><h2>＋ Add past entry</h2><button class="btn ghost" data-close>Close</button></div>
@@ -252,7 +252,10 @@ async function pastEntry() {
       <div class="field"><label>Players</label><input id="pe-pl" type="number" min="1" max="32" value="1"></div><div class="field"><label>Customer name</label><input id="g-cname"></div>
       <div class="field"><label>WhatsApp number</label>${phoneInput("g-cph")}</div><div class="field"><label>Note</label><input id="pe-n" placeholder="e.g. power cut, entered later"></div></div>
     <div class="card" style="margin-top:10px;padding:10px 12px" id="pe-q"></div>
-    ${prods.length ? `<div class="field" style="margin-top:10px"><label>Snacks (optional)</label><div class="row" style="flex-wrap:nowrap;gap:6px"><select id="pe-p" style="flex:1"><option value="">Add a snack…</option>${prods.map((x) => `<option value="${x.id}">${esc(x.name)} · ${inr(x.price)}</option>`).join("")}</select><input id="pe-pq" type="number" min="1" value="1" style="width:70px"><button class="btn" id="pe-pa">Add</button></div><div id="pe-il" class="small" style="margin-top:6px"></div></div>` : ""}
+    <div class="field" style="margin-top:10px"><label>Food, drinks & other items (optional)</label>
+      ${prods.length ? `<div class="row" style="flex-wrap:nowrap;gap:6px"><select id="pe-p" style="flex:1"><option value="">Pick from your items…</option>${[...new Set(prods.map((x) => x.category || "Other"))].map((c) => `<optgroup label="${esc(c)}">${prods.filter((x) => (x.category || "Other") === c).map((x) => `<option value="${x.id}">${esc(x.name)} · ${inr(x.price)}${x.active ? "" : " (hidden)"}</option>`).join("")}</optgroup>`).join("")}</select><input id="pe-pq" type="number" min="1" value="1" style="width:70px" title="Qty"><button class="btn" id="pe-pa">Add</button></div>` : ""}
+      <div class="row" style="flex-wrap:nowrap;gap:6px;margin-top:6px"><input id="pe-on" placeholder="Something else, e.g. Maggi, cue rent" style="flex:1"><input id="pe-op" type="number" min="0" step="1" placeholder="₹ each" style="width:90px"><input id="pe-oq" type="number" min="1" value="1" style="width:70px" title="Qty"><button class="btn" id="pe-oa">Add</button></div>
+      <div id="pe-il" class="small" style="margin-top:6px"></div></div>
     <div class="fields" style="margin-top:6px">${discField()}</div>
     <table class="gc-tot" style="width:100%;margin-top:8px"><tbody id="g-tots"></tbody></table><div id="g-pays"></div>
     <label class="check" id="pe-ovl" hidden style="margin-top:8px"><input type="checkbox" id="pe-ok"> <span>Add anyway</span></label><p class="err" id="pe-err"></p>
@@ -275,12 +278,14 @@ async function pastEntry() {
     draw(); };
   const getPays = payBox(m, { total: () => totals(sub(), discOf(m, sub())).total }); wireDisc(m, draw);
   ["#pe-st", "#pe-d", "#pe-a", "#pe-z", "#pe-pl"].forEach((x) => $(x, m).addEventListener("change", quote));
-  const pa = $("#pe-pa", m); if (pa) pa.onclick = () => { const p = prods.find((x) => x.id === $("#pe-p", m).value); if (!p) return; items.push({ product_id: p.id, name: p.name, price: +p.price, qty: Math.max(1, +$("#pe-pq", m).value || 1) }); $("#pe-p", m).value = ""; draw(); };
+  const pa = $("#pe-pa", m); if (pa) pa.onclick = () => { const p = prods.find((x) => x.id === $("#pe-p", m).value); if (!p) return; items.push({ product_id: p.id, name: p.name, price: +p.price, qty: Math.max(1, +$("#pe-pq", m).value || 1) }); $("#pe-p", m).value = ""; $("#pe-pq", m).value = 1; draw(); };
+  $("#pe-oa", m).onclick = () => { const n = $("#pe-on", m).value.trim(), pr = +$("#pe-op", m).value; if (!n) return toast("Type what it was", "error"); if (!(pr > 0)) return toast("Enter the price", "error");
+    items.push({ name: n, price: pr, qty: Math.max(1, +$("#pe-oq", m).value || 1) }); $("#pe-on", m).value = ""; $("#pe-op", m).value = ""; $("#pe-oq", m).value = 1; draw(); };
   m.addEventListener("click", (e) => { const r = e.target.closest("[data-rmi]"); if (r) { items.splice(+r.dataset.rmi, 1); draw(); } });
   await quote();
   $("#pe-go", m).onclick = () => guard($("#pe-go", m), async () => { const [a, z] = times(); if (z > new Date(Date.now() + 120000)) throw new Error("The end time is in the future. Use Start session for a game that is still on.");
     const bl = await rpc("gc_past_entry", { p_business: BID(), p: { station_id: $("#pe-st", m).value, start_at: a.toISOString(), end_at: z.toISOString(), players: +$("#pe-pl", m).value || 1,
-      customer_name: $("#g-cname", m).value.trim(), customer_phone: readPhone("g-cph", m), amount: own != null ? own : null, items: items.map(({ product_id, qty }) => ({ product_id, qty })),
+      customer_name: $("#g-cname", m).value.trim(), customer_phone: readPhone("g-cph", m), amount: own != null ? own : null, items: items.map(({ product_id, name, price, qty }) => (product_id ? { product_id, qty } : { name, price, qty })),
       discount: discOf(m, sub()), payments: getPays(), notes: $("#pe-n", m).value.trim(), allow_overlap: $("#pe-ok", m).checked } });
     closeModal(); toast("Past entry added"); if ($("#gi-view")) drawBills(); else refresh(); billDone(bl, false); });
 }
@@ -320,6 +325,7 @@ function custHint(m, id, onFound) {
   });
 }
 function startForm(st, lp, booking) {
+  const late = booking ? Math.floor((Date.now() - Date.parse(booking.start_at)) / 60000) : 0;
   const m = openModal(`<div class="modal-head"><h2>${lp ? "🏆 LP match" : "🎮 New session"} · ${esc(st.name)}</h2><button class="btn ghost" data-close>Close</button></div>
     <form id="g-sf"><div class="fields">
     ${lp ? `<div class="field" style="grid-column:1/-1"><label>Player names <b style="color:var(--bad)">· required for LP</b></label><div class="grid" id="g-lpp" style="grid-template-columns:1fr 1fr;gap:8px">
@@ -331,14 +337,17 @@ function startForm(st, lp, booking) {
     ${lp ? `<div class="field"><label>Bill to (optional)</label><input id="g-name" placeholder="Player 1 vs Player 2"></div>` : "<div></div>"}
     <div id="g-cinfo" class="row" style="grid-column:1/-1"></div>
     ${durPick(booking?.minutes || 60)}
+    ${late ? `<div class="field" style="grid-column:1/-1"><label>⏰ They came ${mins(late)} late. Start the timer from</label><div class="chips" id="g-from">${chips([["now", `Now · ${tm(new Date().toISOString())}`], ["booking", `Booked time · ${tm(booking.start_at)}`]], ["now"])}</div>
+      <div class="muted small" style="margin-top:4px">Booked time charges the ${mins(late)} they missed too.</div></div>` : ""}
     <div class="field" style="grid-column:1/-1"><label>Notes</label><input id="g-notes" value="${esc([booking?.notes, booking?._early ? `Started ${mins(booking._early)} before the booking` : ""].filter(Boolean).join(" · "))}"></div></div>
     <div class="modal-foot"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary">▶ Start timer</button></div></form>`, { wide: true });
   pick($("#g-dur", m), { onChange: () => ($("#g-durc", m).value = "") });
+  let from = "now"; if (late > 0) pick($("#g-from", m), { onChange: (v) => (from = v[0] || "now") });
   custHint(m, "g-ph", (c) => { const n = $("#g-name", m); if (n && !n.value && !lp) n.value = c.name; });
   if (lp) $("#g-addp", m).onclick = () => { const i = document.createElement("input"); i.className = "g-lpn"; i.placeholder = `Player ${$$(".g-lpn", m).length + 1}`; $("#g-lpp", m).appendChild(i); i.focus(); };
   $("#g-sf", m).onsubmit = (e) => { e.preventDefault(); guard($("button.primary", m), async () => {
     const p = { station_id: st.id, customer_name: $("#g-name", m)?.value.trim() || "", customer_phone: readPhone("g-ph", m) || "", players: +($("#g-pl", m)?.value || 1),
-      booked_minutes: readDur(m), notes: $("#g-notes", m).value, booking_id: booking?.id || null };
+      booked_minutes: readDur(m), notes: $("#g-notes", m).value, booking_id: booking?.id || null, start_from: late > 0 ? from : "now" };
     if (lp) { p.is_lp = true; p.lp_players = $$(".g-lpn", m).map((i) => i.value.trim()).filter(Boolean); if (p.lp_players.length < 2) throw new Error("Enter at least 2 player names for an LP match"); }
     await rpc("gc_start", { p_business: BID(), p }); closeModal(); toast(`${st.name} started`);
     if (A.isRoute("gboard")) await refresh(); else location.hash = "#gboard";
@@ -355,16 +364,21 @@ async function splitModal(sid) {
     <h3 style="margin-top:14px">Who won?</h3><div class="chips" id="g-win">${chips([...pp, ["Draw", "🤝 Draw"]])}</div>
     <h3 style="margin-top:14px">Put this time on</h3><div class="chips" id="g-pay">${chips(pp)}</div>
     <p class="muted small">Picking a winner selects the other player(s). Pick more than one to share it equally.</p>
+    <div class="field" style="max-width:260px;margin-top:10px"><label>Charge for this frame (₹)</label><input id="g-fp" type="number" min="0" step="1" value="${Math.round(c.tail?.amount || 0)}"><div class="muted small">Timer price ${inr(c.tail?.amount || 0)}. Change it to charge more or less.</div></div>
     <div class="modal-foot"><button class="btn" data-close>Cancel</button><button class="btn primary" id="g-go">Save split</button></div>
     ${done.length ? `<h3 style="margin-top:16px">Games so far</h3><div class="table-wrap"><table><thead><tr><th>#</th><th>Time</th><th>Winner</th><th>Paid by</th><th class="num">Amount</th></tr></thead><tbody>
-      ${done.map((g, i) => `<tr><td>${i + 1}</td><td>${tm(g.from_at)}–${tm(g.to_at)} (${mins(g.minutes)})</td><td>${esc(g.winner || "—")}</td><td>${esc(g.payers.join(" + "))}</td><td class="num">${inr(g.amount)}</td></tr>`).join("")}</tbody></table></div>
+      ${done.map((g, i) => `<tr><td>${i + 1}</td><td>${tm(g.from_at)}–${tm(g.to_at)} (${mins(g.minutes)})</td><td>${esc(g.winner || "—")}</td><td>${esc(g.payers.join(" + "))}</td><td class="num">${inr(g.amount)}${g.price_set ? ` <span class="pill warn" title="Timer price ${inr(g.auto_amount)}">set</span>` : ""} <button class="btn sm ghost" data-fp="${g.id}" data-a="${g.amount}" data-auto="${g.auto_amount}" title="Change price">✎</button></td></tr>`).join("")}</tbody></table></div>
       <div class="row" style="justify-content:space-between;margin-top:10px"><div class="chips">${Object.entries(c.per_player).map(([p, a]) => `<span class="pill acc">${esc(p)}: ${inr(a)}</span>`).join("")}</div><button class="btn sm" id="g-undo">↶ Undo last split</button></div>` : ""}`, { wide: true });
   const win = $("#g-win", m), pay = $("#g-pay", m);
   pick(win, { onChange: (w) => $$("button", pay).forEach((x) => x.setAttribute("aria-pressed", !!w[0] && w[0] !== "Draw" && x.dataset.v !== w[0])) });
   pick(pay, { multi: true });
   $("#g-go", m).onclick = () => guard($("#g-go", m), async () => {
     const payers = picked(pay); if (!payers.length) throw new Error("Pick who pays for this time");
-    await rpc("gc_lp_split", { p_session: sid, p_winner: picked(win)[0] || "", p_payers: payers }); closeModal(); toast("Split saved"); await refresh(); });
+    const fp = $("#g-fp", m).value.trim(), price = fp === "" || Math.round(+fp) === Math.round(c.tail?.amount || 0) ? null : +fp;
+    await rpc("gc_lp_split", { p_session: sid, p_winner: picked(win)[0] || "", p_payers: payers, p_price: price }); closeModal(); toast("Split saved"); await refresh(); });
+  $$("[data-fp]", m).forEach((b) => (b.onclick = () => formModal({ title: "Frame price", submitLabel: "Save", values: { price: Math.round(+b.dataset.a) },
+    fields: [{ key: "price", label: `Charge for this frame (₹) · timer price ${inr(b.dataset.auto)}`, type: "number", step: "1", help: "Leave empty to go back to the timer price." }],
+    onSave: async (v) => { await rpc("gc_lp_price", { p_segment: +b.dataset.fp, p_price: v.price === "" || v.price == null ? null : +v.price }); toast("Frame price saved"); refresh(); splitModal(sid); } })));
   const u = $("#g-undo", m); if (u) u.onclick = () => guard(u, async () => { await rpc("gc_lp_undo", { p_session: sid }); closeModal(); toast("Last split removed"); await refresh(); });
 }
 
@@ -527,7 +541,7 @@ async function checkout(sid, btn) {
   if (!s) return; refresh().catch(() => {});
   let c = s.calc; const pl = s.lp_players || [], needTail = s.is_lp && c.tail && c.tail.minutes >= 1, mem = { id: null, bucket: 0, opts: [] };
   const headLine = () => `${esc(s.customer_name || "Walk-in")} · ${tm(s.start_at)}–${tm(s.end_at)} · played ${mins(c.active_minutes)} · charging <b>${c.charged_minutes} min</b>`;
-  const gameRow = () => `<td>🎮 ${esc(c.station.name)} · ${c.charged_minutes} min ${c.by_rule.length > 1 || c.by_rule[0]?.rule !== "Standard" ? c.by_rule.map((r) => `<span class="pill ${r.rule === "Standard" ? "" : "warn"}">${esc(r.rule)} ${mins(r.minutes)}</span>`).join(" ") : ""}</td><td class="num"><b>${inr2(c.amount)}</b></td>`;
+  const gameRow = (adj = 0) => `<td>🎮 ${esc(c.station.name)} · ${c.charged_minutes} min ${c.by_rule.length > 1 || c.by_rule[0]?.rule !== "Standard" ? c.by_rule.map((r) => `<span class="pill ${r.rule === "Standard" ? "" : "warn"}">${esc(r.rule)} ${mins(r.minutes)}</span>`).join(" ") : ""}</td><td class="num"><b>${inr2(c.amount + adj)}</b></td>`;
   const modeOf = () => c.bill_mode === "custom" ? "custom" : c.bill_mode === "played" ? "played" : c.bill_mode === "booked" ? "booked" : (c.charged_minutes > c.played_minutes && s.booked_minutes && c.charged_minutes === Math.max(s.booked_minutes, c.played_minutes) ? "booked" : "played");
   const memCover = () => { const o = mem.opts.find((x) => x.id === mem.id), b = o?.buckets[mem.bucket]; if (!b || !c.charged_minutes) return { min: 0, amt: 0 }; const min = Math.min(b.left, c.charged_minutes); return { min, amt: +(c.amount * min / c.charged_minutes).toFixed(2) }; };
   const m = openModal(`<div class="modal-head"><h2>🧾 Bill · ${esc(c.station.name)}</h2><button class="btn ghost" data-close>Close</button></div>
@@ -537,7 +551,8 @@ async function checkout(sid, btn) {
     ${owner() ? `<div id="g-own" class="small" style="margin-top:6px"></div>` : ""}
     ${s.is_lp ? "" : `<div id="g-mem"></div>`}
     ${needTail ? `<div class="gc-lp" style="margin-top:12px;font-size:14px"><b>🏆 Last LP game (${mins(c.tail.minutes)} · ${inr(c.tail.amount)}): who won and who pays?</b>
-      <div class="chips" id="g-tw" style="margin-top:8px">${chips([...pl.map((p) => [p, p]), ["Draw", "Draw"]])}</div><div class="muted small" style="margin-top:8px">Put this time on:</div><div class="chips" id="g-tp">${chips(pl.map((p) => [p, p]))}</div></div>` : ""}
+      <div class="chips" id="g-tw" style="margin-top:8px">${chips([...pl.map((p) => [p, p]), ["Draw", "Draw"]])}</div><div class="muted small" style="margin-top:8px">Put this time on:</div><div class="chips" id="g-tp">${chips(pl.map((p) => [p, p]))}</div>
+      <div class="row" style="margin-top:8px;gap:8px;align-items:center"><span class="muted small">Charge for this frame ₹</span><input id="g-tpr" type="number" min="0" step="1" value="${Math.round(c.tail.amount)}" style="width:100px"><span class="muted small">timer price ${inr(c.tail.amount)}</span></div></div>` : ""}
     <div class="table-wrap" style="margin-top:12px"><table><tbody>
       <tr id="g-gr">${gameRow()}</tr><tr id="g-mr" hidden></tr>
       ${c.items.map((i) => `<tr><td>🍿 ${+i.qty}× ${esc(i.name)} ${i.assigned_to ? `<span class="pill acc">${esc(i.assigned_to)}</span>` : ""}</td><td class="num">${inr2(i.qty * i.price)}</td></tr>`).join("")}</tbody></table></div>
@@ -550,17 +565,18 @@ async function checkout(sid, btn) {
     <div id="g-pays" style="margin-top:8px"></div>
     <label class="check" style="margin-top:10px"><input type="checkbox" id="g-sendwa" ${G.board?.settings?.wa_bill !== false ? "checked" : ""}> Send the bill and feedback link on WhatsApp${hasWA() ? " (1 credit, from the Branditude number)" : ""}</label>
     <div class="modal-foot"><button class="btn" id="g-res">↺ Resume timer</button><button class="btn primary" id="g-go">✓ Create bill</button></div>`, { wide: true });
-  const tail = { winner: null, payers: [] };
-  const sub = () => +(c.amount - memCover().amt + c.items_total).toFixed(2);
+  const tail = { winner: null, payers: [], price: needTail ? Math.round(c.tail.amount) : 0 };
+  const tailAdj = () => (needTail && tail.price !== Math.round(c.tail.amount) ? tail.price - c.tail.amount : 0);
+  const sub = () => +(c.amount + tailAdj() - memCover().amt + c.items_total).toFixed(2);
   const disc = () => discOf(m, sub());
   const shares = () => {
-    const pp = { ...c.per_player }; if (needTail) tail.payers.forEach((p) => (pp[p] = (pp[p] || 0) + c.tail.amount / tail.payers.length));
+    const pp = { ...c.per_player }; if (needTail) tail.payers.forEach((p) => (pp[p] = (pp[p] || 0) + (c.tail.amount + tailAdj()) / tail.payers.length));
     const common = c.items.filter((i) => !i.assigned_to).reduce((t, i) => t + i.qty * i.price, 0);
     const rows = pl.map((p) => ({ player: p, game: pp[p] || 0, items: c.items.filter((i) => i.assigned_to === p).reduce((t, i) => t + i.qty * i.price, 0) + common / pl.length }));
     const T = totals(sub(), disc()).total; let acc = 0;
     rows.forEach((r, i) => { r.amount = i === rows.length - 1 ? T - acc : sub() > 0 ? Math.round((T * (r.game + r.items)) / sub()) : 0; acc += r.amount; }); return rows;
   };
-  const draw = () => { const t = totals(sub(), disc()), mc = memCover(), mr = $("#g-mr", m);
+  const draw = () => { const t = totals(sub(), disc()), mc = memCover(), mr = $("#g-mr", m), gr = $("#g-gr", m); if (gr && needTail) gr.innerHTML = gameRow(tailAdj());
     if (mr) { mr.hidden = !mc.min; mr.innerHTML = mc.min ? `<td>🎟️ Membership hours: ${mc.min} min used</td><td class="num">−${inr2(mc.amt)}</td>` : ""; }
     $("#g-tots", m).innerHTML = `<tr><td>Subtotal</td><td class="num">${inr2(sub())}</td></tr>${discRow(m, sub())}${t.t ? `<tr><td>GST ${t.t}%${t.incl ? " (included)" : ""}</td><td class="num">${inr2(t.tax)}</td></tr>` : ""}${Math.abs(t.round) >= 0.01 ? `<tr><td>Round off</td><td class="num">${inr2(t.round)}</td></tr>` : ""}<tr class="g"><td>Total</td><td class="num">${inr(t.total)}</td></tr>`;
     if (s.is_lp) $("#g-lpb", m).innerHTML = `<div class="table-wrap"><table><thead><tr><th>Player</th><th class="num">Game time</th><th class="num">Snacks</th><th class="num">Pays</th></tr></thead><tbody>${shares().map((r) => `<tr><td>${esc(r.player)}</td><td class="num">${inr2(r.game)}</td><td class="num">${inr2(r.items)}</td><td class="num"><b>${inr(r.amount)}</b></td></tr>`).join("")}</tbody></table></div>${needTail && !tail.payers.length ? `<p class="small" style="color:var(--warn)">Pick who pays for the last game above.</p>` : ""}`;
@@ -593,6 +609,7 @@ async function checkout(sid, btn) {
   if (needTail) {
     pick($("#g-tw", m), { onChange: (w) => { tail.winner = w[0]; $$("#g-tp button", m).forEach((b) => b.setAttribute("aria-pressed", !!w[0] && w[0] !== "Draw" && b.dataset.v !== w[0])); tail.payers = picked($("#g-tp", m)); draw(); } });
     pick($("#g-tp", m), { multi: true, onChange: (p) => { tail.payers = p; draw(); } });
+    $("#g-tpr", m).addEventListener("input", (e) => { tail.price = Math.max(0, Math.round(+e.target.value || 0)); draw(); });
   }
   // Loyalty card add-on: show the reward this visit earns, so staff can give it as a discount
   if (A.hasMod("loyalty") && s.customer_phone) rpc("preview_visit", { p_business: BID(), p_phone: s.customer_phone, p_gross: sub(), p_coupon: null }).then((pv) => {
@@ -604,7 +621,7 @@ async function checkout(sid, btn) {
   $("#g-go", m).onclick = () => guard($("#g-go", m), async () => {
     if (needTail && !tail.payers.length) throw new Error("Pick who pays for the last LP game");
     const bl = await rpc("gc_checkout", { p_session: sid, p: { customer_name: $("#g-cname", m).value.trim(), customer_phone: readPhone("g-cph", m) || "", discount: +disc().toFixed(2), payments: getPays(),
-      lp_final: needTail ? { winner: tail.winner, payers: tail.payers } : null, membership: mem.id ? { id: mem.id, bucket: mem.bucket } : null } });
+      lp_final: needTail ? { winner: tail.winner, payers: tail.payers, price: tail.price !== Math.round(c.tail.amount) ? tail.price : null } : null, membership: mem.id ? { id: mem.id, bucket: mem.bucket } : null } });
     const wa = $("#g-sendwa", m).checked; closeModal(); billDone(bl, wa); refresh().catch(() => {});
   });
 }
@@ -788,7 +805,7 @@ async function drawBills() {
 async function billModal(b) {
   const pays = await q(sb.from("gc_payments").select("*").eq("bill_id", b.id).order("created_at")).catch(() => []);
   const url = `${await site()}/g.html?t=${b.token}`;
-  const m = openModal(`<div class="modal-head"><h2>${esc(b.number)}</h2><span class="pill ${{ paid: "good", partial: "warn", unpaid: "warn", void: "bad" }[b.status]}">${b.status}</span></div>
+  const m = openModal(`<div class="modal-head"><h2>${esc(b.number)} <span class="pill ${{ paid: "good", partial: "warn", unpaid: "warn", void: "bad" }[b.status]}">${b.status}</span></h2><button class="btn ghost" data-close>← Back</button></div>
     <p class="muted" style="margin-top:0">${fmtDT(b.created_at)} · ${esc(b.customer_name || "Walk-in")} ${esc(prettyPhone(b.customer_phone || ""))}</p>
     <div class="table-wrap"><table><tbody>${b.lines.map((l) => `<tr><td>${esc(l.desc)}</td><td class="num">${+l.qty}</td><td class="num">${inr2(l.amount)}</td></tr>`).join("")}</tbody></table></div>
     <table class="gc-tot" style="width:100%;min-width:0"><tbody><tr><td>Subtotal</td><td class="num">${inr2(b.subtotal)}</td></tr>${+b.discount ? `<tr><td>Discount</td><td class="num">−${inr2(b.discount)}</td></tr>` : ""}<tr><td>GST</td><td class="num">${inr2(b.tax)}</td></tr><tr class="g"><td>Total</td><td class="num">${inr(b.total)}</td></tr>
@@ -904,7 +921,7 @@ async function drawStock() {
   wireCountCard(el, drawStock);
   const edit = (p = {}) => formModal({ title: p.id ? "Edit item" : "New item", submitLabel: "Save",
     fields: [{ key: "name", label: "Name", required: true }, { key: "category", label: "Category", type: "select", options: [...new Set([...cats, ...(p.category ? [p.category] : [])])] }, { key: "price", label: "Selling price", type: "number", required: true, step: "0.01" }, { key: "cost", label: "Cost price", type: "number", step: "0.01" },
-      ...(p.id ? [] : [{ key: "stock", label: "Opening stock", type: "number" }]), { key: "low_stock", label: "Warn when stock is at", type: "number" }, { key: "track_stock", label: "Track stock", type: "checkbox" }, { key: "daily_count", label: "Count opening & closing stock every day", type: "checkbox", full: true }, { key: "active", label: "Show to staff", type: "checkbox" }],
+      ...(p.id ? [] : [{ key: "stock", label: "Opening stock", type: "number" }]), { key: "low_stock", label: "Warn when stock is at", type: "number" }, { key: "track_stock", label: "Track stock", type: "checkbox" }, { key: "daily_count", label: "Count opening & closing stock every day", type: "checkbox", full: true }, { key: "active", label: "Available to sell (untick to hide it from billing)", type: "checkbox", full: true }],
     extraFoot: `<button type="button" class="btn ghost" id="gs-newcat" style="margin-right:auto">＋ New category</button>`,
     values: { category: G.stockCat || cats[0] || "Snacks", low_stock: 5, track_stock: true, daily_count: false, active: true, stock: 0, cost: 0, ...p },
     onSave: async (v) => { if (p.id) await q(sb.from("gc_products").update(v).eq("id", p.id)); else await q(sb.from("gc_products").insert({ ...v, business_id: BID() })); G.products = null; drawStock(); } });
