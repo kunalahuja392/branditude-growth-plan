@@ -91,7 +91,7 @@ def pic(k, cls="photo", eager=False):
     n = IMG.get(k)
     if not n: return ""
     return (f'<img class="{cls}" src="/assets/img/photos/{n}.jpg" srcset="/assets/img/photos/{n}-800.jpg 800w, /assets/img/photos/{n}.jpg 1280w" '
-            f'sizes="(max-width:900px) 100vw, 560px" width="1280" height="853" alt="{ALT[k]}"{"" if eager else " loading=\"lazy\""} decoding="async">')
+            f'sizes="{'(max-width:1200px) 100vw, 1140px' if cls == 'wide' else '(max-width:900px) 100vw, 560px'}" width="1280" height="853" alt="{ALT[k]}"{"" if eager else " loading=\"lazy\""} decoding="async">')
 def stage(k):
     if IMG.get(k):
         return f'<div class="stage has-photo">{pic(k)}</div>'
