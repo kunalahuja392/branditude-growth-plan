@@ -2,6 +2,7 @@
 """Builds the public store pages (home, 4 product pages, gaming) from one template."""
 import sys, html, json, os
 OUT = sys.argv[1]
+PRICE = {"review-feedback":"₹299","loyalty-card":"₹199","staff-attendance":"₹299","qr-menu-6":"₹249"}
 IMG = json.load(open(os.path.join(os.path.dirname(__file__), "images.json"))) if os.path.exists(os.path.join(os.path.dirname(__file__), "images.json")) else {}
 
 ICON = {
@@ -112,7 +113,7 @@ def head(title, desc, theme="#ffffff"):
 </head>'''
 
 def header(cur=""):
-    menu = "".join(f'<a href="/{P[k]["file"]}" class="{P[k]["cls"]}"{" aria-current=page" if cur==k else ""}><span class="dot" style="background:var(--soft);color:var(--cd)">{ICON[k]}</span><span><b>{P[k]["name"]}</b><span>{P[k]["short"]} · from <span data-price="{P[k]["slug"]}">…</span>/month</span></span></a>' for k in ORDER)
+    menu = "".join(f'<a href="/{P[k]["file"]}" class="{P[k]["cls"]}"{" aria-current=page" if cur==k else ""}><span class="dot" style="background:var(--soft);color:var(--cd)">{ICON[k]}</span><span><b>{P[k]["name"]}</b><span>{P[k]["short"]} · from <span data-price="{P[k]["slug"]}">{PRICE[P[k]["slug"]]}</span>/month</span></span></a>' for k in ORDER)
     return f'''<a class="skip" href="#main">Skip to content</a>
 <header class="top" id="topbar"><div class="wrap">
   <a class="brand" href="/"><img src="/assets/img/branditude-mark.svg" alt="" width="40" height="35"><span>Branditude<small>Growth tools for local business</small></span></a>
@@ -145,7 +146,7 @@ CONTACT = '''<section class="contact" id="contact"><div class="wrap">
   <div class="cinfo" data-cinfo></div></div></section>'''
 
 def home():
-    tiles = "".join(f'<a class="pick {P[k]["cls"]}" href="/{P[k]["file"]}"><span class="dot">{ICON[k]}</span><b>{P[k]["name"]}</b><span>{P[k]["tile"]}</span><i>From <span data-price="{P[k]["slug"]}">…</span>/month</i></a>' for k in ORDER)
+    tiles = "".join(f'<a class="pick {P[k]["cls"]}" href="/{P[k]["file"]}"><span class="dot">{ICON[k]}</span><b>{P[k]["name"]}</b><span>{P[k]["tile"]}</span><i>From <span data-price="{P[k]["slug"]}">{PRICE[P[k]["slug"]]}</span>/month</i></a>' for k in ORDER)
     rows = ""
     for i, k in enumerate(ORDER):
         p = P[k]
@@ -153,7 +154,7 @@ def home():
         rows += f'''<div class="prod {p["cls"]}{" flip" if i % 2 else ""}" id="{p["slug"]}">{stage(k)}
   <div><span class="kicker"><span class="dot" style="background:var(--c);color:#fff;width:32px;height:32px;border-radius:10px">{ICON[k]}</span>{p["name"]}</span>
   <h2>{p["h1"]}</h2><p class="lede" style="margin-top:16px">{p["lede"]}</p><ul class="ticks">{ticks}</ul>
-  <div class="price-line"><b class="num" data-price="{p["slug"]}">…</b><span data-per>/month</span>{"<span>for up to 6 tables</span>" if k=="qr" else ""}</div>
+  <div class="price-line"><b class="num" data-price="{p["slug"]}">{PRICE[p["slug"]]}</b><span data-per>/month</span>{"<span>for up to 6 tables</span>" if k=="qr" else ""}</div>
   <div class="row-cta"><button class="btn primary" data-buy="{p["slug"]}">Buy {p["name"]}</button><a class="btn line" href="/{p["file"]}">See how it works</a></div></div></div>'''
     body = f'''<body data-page="home">
 {header()}
@@ -218,13 +219,13 @@ def product(k):
     ticks = "".join(f"<li><span>{t}</span></li>" for t in p["ticks"])
     if k == "qr":
         buy = '''<div class="tables" data-tables><label id="tl">Your tables</label><div class="stepper" role="group" aria-labelledby="tl"><button type="button" data-tstep="-1" aria-label="Fewer tables">−</button><output data-tables-out>Up to 6 tables</output><button type="button" data-tstep="1" aria-label="More tables">+</button></div></div>
-<div class="row"><div class="amt"><b class="num" data-tables-price>…</b> <span data-tables-per>/month</span></div><button class="btn primary" data-tables-buy data-buy="qr-menu-6">Get QR Menu</button></div>
+<div class="row"><div class="amt"><b class="num" data-tables-price>₹249</b> <span data-tables-per>/month</span></div><button class="btn primary" data-tables-buy data-buy="qr-menu-6">Get QR Menu</button></div>
 <p class="note">₹249 a month for every 6 tables. Pay yearly and get 2 months free.</p>'''
     else:
-        buy = f'''<div class="row"><div class="amt"><b class="num" data-price="{p["slug"]}">…</b> <span data-per>/month</span></div><button class="btn primary" data-buy="{p["slug"]}">Buy {p["name"]}</button></div>
+        buy = f'''<div class="row"><div class="amt"><b class="num" data-price="{p["slug"]}">{PRICE[p["slug"]]}</b> <span data-per>/month</span></div><button class="btn primary" data-buy="{p["slug"]}">Buy {p["name"]}</button></div>
 <p class="note">Pay monthly, cancel any month. Pay yearly and get 2 months free.</p>'''
     toggle = '<div class="bill-toggle" role="group" aria-label="Billing" style="margin:0 0 14px"><button type="button" data-bill="monthly" aria-pressed="true">Monthly</button><button type="button" data-bill="yearly" aria-pressed="false">Yearly <em>2 months free</em></button></div>'
-    others = "".join(f'<a class="pick {P[o]["cls"]}" href="/{P[o]["file"]}"><span class="dot">{ICON[o]}</span><b>{P[o]["name"]}</b><span>{P[o]["tile"]}</span><i>From <span data-price="{P[o]["slug"]}">…</span>/month</i></a>' for o in ORDER if o != k)
+    others = "".join(f'<a class="pick {P[o]["cls"]}" href="/{P[o]["file"]}"><span class="dot">{ICON[o]}</span><b>{P[o]["name"]}</b><span>{P[o]["tile"]}</span><i>From <span data-price="{P[o]["slug"]}">{PRICE[P[o]["slug"]]}</span>/month</i></a>' for o in ORDER if o != k)
     photo = IMG.get(k + "_wide")
     shot = f'<section style="padding-top:0"><div class="wrap"><figure style="margin:0;border-radius:28px;overflow:hidden"><img src="{photo}" alt="" loading="lazy" style="width:100%;aspect-ratio:16/7;object-fit:cover"></figure></div></section>' if photo else ""
     body = f'''<body data-page="product" class="{p["cls"]}">
@@ -256,7 +257,7 @@ def product(k):
 <section style="padding-top:0"><div class="wrap"><div class="sec-head"><h2>Our other tools</h2></div><div class="picker" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">{others}</div></div></section>
 {CONTACT}
 </main>
-<div class="mbar" id="mbar" aria-hidden="true"><button class="btn primary" data-buy="{p["slug"]}">Buy · <span data-price="{p["slug"]}">…</span></button><a class="btn wa" data-wa="Hi Branditude, I'd like to know more about {p["name"]}." href="#contact" target="_blank" rel="noopener">WhatsApp</a></div>
+<div class="mbar" id="mbar" aria-hidden="true"><button class="btn primary" data-buy="{p["slug"]}">Buy · <span data-price="{p["slug"]}">{PRICE[p["slug"]]}</span></button><a class="btn wa" data-wa="Hi Branditude, I'd like to know more about {p["name"]}." href="#contact" target="_blank" rel="noopener">WhatsApp</a></div>
 {footer()}'''
     desc = f'{p["name"]} by Branditude: {p["tile"]} From ₹{ {"rev":299,"loy":199,"stf":299,"qr":249}[k] }/month, set up for you in 48 hours.'
     return head(f'{p["name"]} for your business · Branditude', desc) + "\n" + body
