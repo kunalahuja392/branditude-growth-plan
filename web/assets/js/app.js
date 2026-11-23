@@ -23,7 +23,7 @@ sb.auth.onAuthStateChange((event) => {
 function noBusiness(user) {
   main.innerHTML = `<div class="auth-wrap"><div class="auth"><h2>Finish setting up your business</h2>
     <p>You're signed in as <b>${esc(user.email || user.phone || "")}</b>, but there's no business on this login yet. Choose a plan and add your business details to get your dashboard.</p>
-    <div style="display:grid;gap:8px;margin-top:14px"><a class="btn primary" href="index.html#pricing" style="justify-content:center">Set up my business</a>
+    <div style="display:grid;gap:8px;margin-top:14px"><a class="btn primary" href="/#products" style="justify-content:center">Set up my business</a>
     <button class="btn" id="as-cust" style="justify-content:center">I'm a customer: show my loyalty cards</button>
     <button class="btn ghost sm" id="nb-out">Sign out</button></div>
     <p class="small muted" style="margin-top:12px">Staff of a business? Ask the owner to add this email under Team &amp; logins, then sign in again.</p></div></div>`;
@@ -35,7 +35,7 @@ function noTeam(user) {
   main.innerHTML = `<div class="auth-wrap"><div class="auth"><h2>No team invite found</h2>
     <p>No business has added <b>${esc(user.email || "")}</b> to its team yet. Ask the owner to add this exact email under <b>Team &amp; logins</b>, then sign in again.</p>
     <div style="display:grid;gap:8px;margin-top:14px"><button class="btn primary" id="nt-retry" style="justify-content:center">I've been added: check again</button>
-    <a class="btn" href="index.html#pricing" style="justify-content:center">Register my own business instead</a>
+    <a class="btn" href="/#products" style="justify-content:center">Register my own business instead</a>
     <button class="btn ghost sm" id="nt-out">Sign out</button></div></div></div>`;
   $("#nt-retry").onclick = () => location.reload();
   $("#nt-out").onclick = signOut;

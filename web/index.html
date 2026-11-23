@@ -2,948 +2,108 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Branditude · Reviews, loyalty card, staff attendance &amp; QR menu for local business</title>
+<meta name="description" content="Get more Google reviews, a digital loyalty card, staff attendance &amp; salary, and a QR menu with table orders. From ₹199/month. Set up for you in 48 hours.">
+<meta property="og:title" content="Branditude · Reviews, loyalty card, staff attendance &amp; QR menu for local business"><meta property="og:description" content="Get more Google reviews, a digital loyalty card, staff attendance &amp; salary, and a QR menu with table orders. From ₹199/month. Set up for you in 48 hours."><meta property="og:image" content="https://scale.branditudeglobal.com/assets/img/branditude-logo.png">
+<meta name="theme-color" content="#ffffff">
 <link rel="manifest" href="/manifest.webmanifest">
-<meta name="theme-color" content="#10183a">
 <link rel="icon" type="image/png" href="/assets/icons/favicon-64.png">
 <link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Branditude">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Branditude">
 <script src="/assets/js/pwa.js" defer></script>
-<title>Branditude Growth Plan Store</title>
-<meta name="description" content="Get more Google reviews, repeat customers and WhatsApp sales for your local business. Plans from ₹599/month by Branditude. Use code NEW75 for 75% off.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;900&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-<style>
-/* Layout: dark ink hero band with a live "phone" proof moment, then light sections stacked on a 1120px column; pricing is the centre of gravity. */
-:root{
-  --ink:#10183a; --ink-2:#464f6c; --ink-3:#7a829c;
-  --paper:#f4f5f9; --card:#ffffff; --line:#e2e4ec; --soft:#eceef4;
-  --accent:#f07a1a; --accent-ink:#ffffff; --accent-soft:#fde9d6;
-  --band:#10183a; --band-ink:#f6f7fb; --band-2:#aab2cc; --band-line:#2a3460;
-  --wa:#128c5e; --wa-soft:#dcf3e8; --gold:#f4b400; --marigold:#ffc233;
-  --display:"Unbounded", "Arial Black", system-ui, sans-serif;
-  --body:"Hanken Grotesk", "Segoe UI", system-ui, -apple-system, sans-serif;
-  color-scheme:light;
-}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --ink:#eef0f6; --ink-2:#b6bdcf; --ink-3:#8790a6;
-    --paper:#0f131c; --card:#181d29; --line:#2a3141; --soft:#202634;
-    --accent:#f28a3a; --accent-ink:#1a1206; --accent-soft:#3a2614;
-    --band:#0a0e18; --band-ink:#f4f1ea; --band-2:#9aa3bb; --band-line:#232c45;
-    --wa:#3cc489; --wa-soft:#163527;
-    color-scheme:dark;
-  }
-}
-:root[data-theme="dark"]{
-  --ink:#eef0f6; --ink-2:#b6bdcf; --ink-3:#8790a6;
-  --paper:#0f131c; --card:#181d29; --line:#2a3141; --soft:#202634;
-  --accent:#f28a3a; --accent-ink:#1a1206; --accent-soft:#3a2614;
-  --band:#0a0e18; --band-ink:#f4f1ea; --band-2:#9aa3bb; --band-line:#232c45;
-  --wa:#3cc489; --wa-soft:#163527;
-  color-scheme:dark;
-}
-*{box-sizing:border-box}
-html{scroll-behavior:smooth;overflow-x:hidden}
-body{margin:0;overflow-x:hidden;background:var(--paper);color:var(--ink);font:17px/1.6 var(--body);-webkit-font-smoothing:antialiased}
-h1,h2,h3{margin:0;font-family:var(--display);text-wrap:balance;letter-spacing:-.025em;line-height:1.08}
-p{margin:0}
-a{color:inherit}
-.wrap{max-width:1120px;margin:0 auto;padding:0 clamp(16px,4vw,32px)}
-.num{font-variant-numeric:tabular-nums}
-:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
-.btn{font:700 16px var(--body);border-radius:12px;padding:13px 20px;border:1.5px solid transparent;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;white-space:nowrap;transition:transform .15s, filter .15s}
-.btn:hover{transform:translateY(-1px)}
-.btn.primary{background:var(--accent);color:var(--accent-ink)}
-.btn.primary:hover{filter:brightness(1.06)}
-.btn.line{border-color:currentColor;background:transparent;color:inherit}
-.btn.wa{background:var(--wa);color:#fff}
-.btn.sm{padding:8px 14px;font-size:14px;border-radius:9px}
-.btn svg{width:18px;height:18px}
-.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
-
-/* top bar: glass over the hero, solid once you scroll */
-header.top{position:sticky;top:0;z-index:20;color:var(--band-ink);background:rgba(16,24,58,.55);backdrop-filter:saturate(1.4) blur(14px);-webkit-backdrop-filter:saturate(1.4) blur(14px);border-bottom:1px solid rgba(255,255,255,.08);transition:background .3s}
-header.top.solid{background:rgba(16,24,58,.94)}
-.top .wrap{display:flex;align-items:center;gap:24px;height:66px}
-.logo{display:flex;align-items:center;gap:10px;text-decoration:none}
-.logo-mark{width:36px;height:36px;border-radius:10px;background:#fff;display:grid;place-items:center;box-shadow:0 4px 14px rgba(0,0,0,.25)}.logo-mark img{width:28px;height:28px;display:block}
-.foot-logo{display:block;height:92px;width:auto;margin-bottom:10px}
-.logo b{font:700 16px var(--display);letter-spacing:-.02em}
-.top nav{display:flex;gap:4px;margin-left:auto}
-.top nav a{text-decoration:none;color:var(--band-2);font-weight:600;font-size:15px;padding:7px 12px;border-radius:99px;transition:background .2s,color .2s}
-.top nav a:hover{color:var(--band-ink);background:rgba(255,255,255,.08)}
-.top .actions{display:flex;gap:10px}
-.top .btn.line{border-color:rgba(255,255,255,.3)}
-
-/* hero: a live stage */
-.hero{background:var(--band);color:var(--band-ink);padding:72px 0 104px;overflow:hidden;position:relative;margin-top:-66px;padding-top:138px;isolation:isolate}
-.aurora{position:absolute;inset:-20%;z-index:-2;filter:blur(70px);opacity:.75;pointer-events:none}
-.aurora i{position:absolute;border-radius:50%;mix-blend-mode:screen}
-.aurora i:nth-child(1){width:46vw;height:46vw;left:48%;top:4%;background:radial-gradient(circle,#f07a1a 0,transparent 65%);animation:drift1 18s ease-in-out infinite alternate}
-.aurora i:nth-child(2){width:38vw;height:38vw;left:62%;top:38%;background:radial-gradient(circle,#ffc233 0,transparent 62%);opacity:.6;animation:drift2 22s ease-in-out infinite alternate}
-.aurora i:nth-child(3){width:40vw;height:40vw;left:6%;top:46%;background:radial-gradient(circle,#2b4cff 0,transparent 62%);opacity:.55;animation:drift3 26s ease-in-out infinite alternate}
-.dots{position:absolute;inset:0;z-index:-1;background-image:radial-gradient(rgba(255,255,255,.09) 1px,transparent 1px);background-size:26px 26px;mask-image:linear-gradient(180deg,#000 30%,transparent 95%);-webkit-mask-image:linear-gradient(180deg,#000 30%,transparent 95%)}
-@keyframes drift1{to{transform:translate(-8vw,6vh) scale(1.15)}}
-@keyframes drift2{to{transform:translate(-12vw,-8vh) scale(.9)}}
-@keyframes drift3{to{transform:translate(10vw,-6vh) scale(1.1)}}
-.hero .wrap{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:40px;align-items:center}
-.hero .wrap>*{min-width:0}
-.pill-tag{max-width:100%;white-space:normal;line-height:1.3}
-.pill-tag{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:99px;padding:6px 14px 6px 8px;font-size:14px;font-weight:600;color:var(--band-ink)}
-.pill-tag b{background:var(--wa);color:#fff;border-radius:99px;font-size:12px;padding:2px 8px}
-.hero h1{font-size:clamp(40px,6vw,76px);font-weight:900;margin:22px 0 22px;line-height:1.02}
-.hero h1 .w{display:inline-block;white-space:normal;max-width:100%}
-.hero h1{overflow-wrap:break-word}
-.hero p.lede{font-size:19px;color:var(--band-2);max-width:50ch}
-.hero .cta{display:flex;gap:12px;flex-wrap:wrap;margin-top:32px}
-.hero .fine{margin-top:20px;color:var(--band-2);font-size:14px;display:flex;gap:16px;flex-wrap:wrap}
-.hero .fine span::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--wa);margin-right:7px;vertical-align:1px}
-.hero .signin{margin-top:14px;font-size:15px;color:var(--band-2)}
-.hero .signin a{color:var(--band-ink);font-weight:700;text-underline-offset:3px}
-.btn.glow{position:relative;box-shadow:0 10px 30px -8px rgba(240,122,26,.8)}
-.btn.glow:hover{box-shadow:0 14px 34px -8px rgba(240,122,26,.95)}
-.btn.ghost-light{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.22);color:#fff}
-.btn.ghost-light:hover{background:rgba(255,255,255,.14)}
-
-.stage{position:relative;height:540px;perspective:1200px}
-.phone{position:absolute;left:50%;top:50%;width:300px;transform:translate(-50%,-50%) rotateY(var(--ry,-10deg)) rotateX(var(--rx,4deg));transform-style:preserve-3d;transition:transform .4s ease-out;background:#0b0f1a;border:1px solid rgba(255,255,255,.12);border-radius:38px;padding:12px;box-shadow:0 40px 90px rgba(0,0,0,.55),inset 0 0 0 1px rgba(255,255,255,.04)}
-.screen{background:#e9e3d8;border-radius:28px;overflow:hidden;color:#16203a}
-.chat-head{background:#0f5c45;color:#fff;padding:12px 14px;display:flex;gap:10px;align-items:center;font-weight:700;font-size:15px}
-.chat-head i{width:30px;height:30px;border-radius:50%;background:var(--accent);display:grid;place-items:center;font:900 13px var(--display);font-style:normal;color:#fff}
-.chat-head small{display:block;font-weight:500;opacity:.8;font-size:12px}
-.chat{padding:14px;display:flex;flex-direction:column;gap:10px;min-height:250px}
-.msg{background:#fff;border-radius:12px 12px 12px 3px;padding:10px 12px;font-size:14px;line-height:1.45;max-width:88%;box-shadow:0 1px 1px rgba(0,0,0,.08)}
-.msg.me{background:#d6f5c8;align-self:flex-end;border-radius:12px 12px 3px 12px}
-.msg a{color:#0b6bcb;word-break:break-all}
-.msg .t{display:block;text-align:right;font-size:11px;color:#6b7280;margin-top:3px}
-.typing{display:inline-flex;gap:4px;background:#fff;border-radius:12px;padding:12px 14px;width:max-content}
-.typing i{width:6px;height:6px;border-radius:50%;background:#9aa3b5;animation:blink 1s infinite}
-.typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
-@keyframes blink{0%,80%,100%{opacity:.25;transform:none}40%{opacity:1;transform:translateY(-2px)}}
-.rating{background:#fff;margin:0 14px 14px;border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:12px}
-.rating .big{font:900 30px var(--display)}
-.stars{color:var(--gold);letter-spacing:2px;font-size:16px}
-.rating small{color:#6b7280;font-size:12px;display:block}
-.chipf{position:absolute;z-index:3;display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.96);color:#16203a;border-radius:16px;padding:10px 14px 10px 10px;box-shadow:0 18px 40px -12px rgba(0,0,0,.5);font-size:13.5px;line-height:1.3;max-width:240px}
-.chipf b{display:block;font-size:14px}
-.chipf small{color:#6b7280}
-.chipf .ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;font-size:18px;flex:none}
-.chipf.c1{left:-14%;top:4%}.chipf.c1 .ic{background:#fff4d6}
-.chipf.c2{right:-16%;top:36%}.chipf.c2 .ic{background:#ffe8d6}
-.chipf.c3{left:-8%;bottom:26%}.chipf.c3 .ic{background:#e2f2ff}
-.chipf.c4{right:-12%;bottom:2%}.chipf.c4 .ic{background:#dcf3e8}
-.anim{opacity:1;transform:none}
-@media (prefers-reduced-motion:no-preference){
-  .js .anim{opacity:0;transform:translateY(12px);transition:opacity .55s ease, transform .55s cubic-bezier(.2,.8,.2,1)}
-  .js .anim.in{opacity:1;transform:none}
-  .js .chipf.anim{transform:translateY(14px) scale(.92)}
-  .js .chipf.anim.in{transform:none;animation:bob 6s ease-in-out infinite}
-  .js .chipf.c2.in{animation-delay:-1.5s}.js .chipf.c3.in{animation-delay:-3s}.js .chipf.c4.in{animation-delay:-4.5s}
-  .js .hero h1 .w{opacity:0;transform:translateY(.45em) rotate(2deg);transition:opacity .6s ease, transform .7s cubic-bezier(.2,.8,.2,1)}
-  .js .hero h1.in .w{opacity:1;transform:none}
-}
-@keyframes bob{0%,100%{translate:0 0}50%{translate:0 -8px}}
-
-/* mobile menu + sticky bottom bar (shown under 900px) */
-.menu-btn{display:none;place-items:center;width:42px;height:42px;border-radius:12px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:#fff;cursor:pointer;margin-left:6px}
-.menu-btn span{display:block;width:18px;height:2px;background:currentColor;border-radius:2px;position:relative;transition:background .2s}
-.menu-btn span::before,.menu-btn span::after{content:"";position:absolute;left:0;width:18px;height:2px;background:currentColor;border-radius:2px;transition:transform .25s}
-.menu-btn span::before{top:-6px}.menu-btn span::after{top:6px}
-.top.open .menu-btn span{background:transparent}
-.top.open .menu-btn span::before{transform:translateY(6px) rotate(45deg)}
-.top.open .menu-btn span::after{transform:translateY(-6px) rotate(-45deg)}
-.mbar-cta{display:none;position:fixed;z-index:15;left:12px;right:12px;bottom:max(12px,env(safe-area-inset-bottom));gap:10px;padding:8px;border-radius:18px;background:rgba(16,24,58,.92);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.1);box-shadow:0 18px 40px rgba(0,0,0,.35);transform:translateY(140%);transition:transform .35s cubic-bezier(.2,.8,.2,1)}
-.mbar-cta.show{transform:none}
-.mbar-cta .btn{flex:1;justify-content:center;text-align:center}
-.mbar-cta .btn.wa{flex:0 0 auto;padding-left:16px;padding-right:16px}
-
-/* get the app */
-.getapp{background:var(--card);border-top:1px solid var(--line)}
-.ga-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
-.ga{border:1px solid var(--line);border-radius:20px;padding:22px;display:flex;flex-direction:column;gap:12px;background:var(--paper)}
-.ga-top{display:flex;align-items:center;gap:10px}
-.ga-top h3{font-size:18px;font-weight:700}
-.ga-ic{width:40px;height:40px;border-radius:12px;background:var(--card);border:1px solid var(--line);display:grid;place-items:center;font-size:20px}
-.ga-this{display:none;white-space:nowrap;margin-left:auto;font-size:12px;font-weight:700;color:var(--wa);background:var(--wa-soft);border-radius:99px;padding:3px 9px}
-.ga.mine{background:var(--band);color:var(--band-ink);border-color:transparent;box-shadow:0 24px 50px -24px rgba(16,24,58,.6)}
-.ga.mine .ga-this{display:inline-block}
-.ga.mine ol{color:var(--band-2)}
-.ga.mine .ga-ic{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.14)}
-.ga.mine .btn.line{color:#fff;border-color:rgba(255,255,255,.3)}
-.ga ol{margin:0;padding-left:20px;color:var(--ink-2);font-size:15px;display:grid;gap:6px}
-.ga-btn{justify-content:center;text-align:center}
-.ga-note{font-size:13px;color:var(--ink-3)}
-.ga.mine .ga-note{color:var(--band-2)}
-.ga-status{margin:-20px 0 22px;font-weight:600;color:var(--wa)}
-@media (max-width:1100px){.ga-grid{grid-template-columns:1fr 1fr}}
-@media (max-width:620px){.ga-grid{grid-template-columns:1fr}}
-
-[hidden]{display:none!important}
-section[id]{scroll-margin-top:72px}
-.top.open ~ .mbar-cta{display:none}
-/* marquee */
-.who{padding:22px 0;background:var(--card);border-bottom:1px solid var(--line);overflow:hidden;position:relative}
-.who .track{display:flex;gap:14px;width:max-content;animation:marquee 38s linear infinite}
-.who:hover .track{animation-play-state:paused}
-.who span{white-space:nowrap;border:1px solid var(--line);background:var(--paper);border-radius:99px;padding:8px 16px;font-weight:600;color:var(--ink-2);font-size:15px}
-.who::before,.who::after{content:"";position:absolute;top:0;bottom:0;width:80px;z-index:1;pointer-events:none}
-.who::before{left:0;background:linear-gradient(90deg,var(--card),transparent)}
-.who::after{right:0;background:linear-gradient(-90deg,var(--card),transparent)}
-@keyframes marquee{to{transform:translateX(-50%)}}
-
-/* sections */
-section{padding:96px 0}
-/* founder */
-.founder{background:var(--card);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
-.founder .wrap{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:56px;align-items:center}
-.f-photo{position:relative;margin:0}
-.f-photo img{width:100%;aspect-ratio:4/5;object-fit:cover;object-position:50% 20%;border-radius:28px;display:block;background:var(--soft)}
-.f-photo::before{content:"";position:absolute;inset:18px -18px -18px 18px;border-radius:28px;border:2px solid var(--accent);z-index:-1}
-.f-photo{z-index:0}
-.f-photo.noimg img{visibility:hidden}.f-photo.noimg::after{content:"KA";position:absolute;inset:0;display:grid;place-items:center;font:800 72px var(--display);color:var(--accent);border-radius:28px;background:var(--accent-soft)}
-.f-photo figcaption{position:absolute;left:16px;bottom:16px;background:rgba(16,24,58,.88);color:#fff;border-radius:14px;padding:10px 14px;line-height:1.3;backdrop-filter:blur(6px)}
-.f-photo figcaption b{display:block;font:700 16px var(--display)}
-.f-photo figcaption small{color:#c9cfe2;font-size:13px}
-.f-body h2{font-size:clamp(28px,3.6vw,44px);font-weight:700;letter-spacing:-.02em;max-width:18ch}
-.f-body p{color:var(--ink-2);font-size:17.5px;line-height:1.65;margin-top:16px;max-width:62ch}
-.f-body blockquote{margin:24px 0 0;padding:4px 0 4px 20px;border-left:4px solid var(--accent);font-size:19px;line-height:1.5;color:var(--ink);font-weight:600;max-width:56ch}
-.f-stats{display:flex;flex-wrap:wrap;gap:28px;margin-top:28px}
-.f-stats div{min-width:110px}.f-stats b{display:block;font:800 30px var(--display);color:var(--ink)}.f-stats span{color:var(--ink-3);font-size:14px}
-.f-sign{margin-top:22px;color:var(--ink-3);font-size:15px}.f-sign b{color:var(--ink)}
-@media (max-width:820px){.f-stats{gap:14px;display:grid;grid-template-columns:repeat(3,1fr)}.f-stats div{min-width:0}.f-stats b{font-size:24px}.f-stats span{font-size:12.5px}.founder .wrap{grid-template-columns:1fr;gap:40px}.f-photo{max-width:320px;margin:0 auto}.f-body blockquote{font-size:17px}}
-
-.sec-head{max-width:720px;margin-bottom:44px}
-.sec-head h2{font-size:clamp(30px,4vw,48px);font-weight:700}
-.sec-head p{color:var(--ink-2);margin-top:14px;font-size:18px}
-
-/* features: bento */
-.bento{display:grid;grid-template-columns:repeat(6,1fr);gap:16px}
-.tile{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:26px;display:flex;flex-direction:column;gap:10px;position:relative;overflow:hidden}
-.tile h3{font-size:20px;font-weight:700;letter-spacing:-.015em}
-.tile p{color:var(--ink-2);font-size:16px;max-width:46ch}
-.tile.t-lg{grid-column:span 4}.tile.t-sm{grid-column:span 2}.tile.t-md{grid-column:span 3}
-.tile.dark{background:var(--band);color:var(--band-ink);border-color:transparent}
-.tile.dark p{color:var(--band-2)}
-.viz{margin-top:auto;padding-top:14px}
-.meter{display:flex;align-items:center;gap:14px}
-.meter .score{font:900 54px var(--display);letter-spacing:-.04em;line-height:1}
-.meter .bars{flex:1;display:grid;gap:5px}
-.meter .bars div{display:grid;grid-template-columns:14px 1fr;gap:8px;align-items:center;font-size:12px;color:var(--ink-3)}
-.meter .bars span{height:7px;border-radius:9px;background:var(--soft);overflow:hidden}
-.tile.dark .meter .bars span{background:rgba(255,255,255,.12)}
-.tile.dark .meter .bars div{color:var(--band-2)}
-.meter .bars span i{display:block;height:100%;background:var(--gold);border-radius:9px;width:var(--w)}
-.stamps{display:flex;gap:7px;flex-wrap:wrap}
-.stamps i{width:30px;height:30px;border-radius:50%;border:2px dashed var(--line);display:grid;place-items:center;font-size:14px;font-style:normal}
-.stamps i.on{border:0;background:var(--accent);color:#fff}
-.stamps i.gift{border-color:var(--accent);border-style:solid}
-.mini-menu{display:grid;gap:8px}
-.mini-menu div{display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:8px 12px;font-size:14px}
-.mini-menu em{font-style:normal;font-weight:700;font-size:12px;background:var(--accent);color:#fff;border-radius:8px;padding:3px 9px}
-.punch{display:flex;gap:10px;align-items:center;font-size:14px}
-.punch .clock{font:900 30px var(--display);letter-spacing:-.03em}
-.tag-row{display:flex;gap:6px;flex-wrap:wrap}
-.tag-row span{font-size:12.5px;font-weight:600;border-radius:99px;padding:4px 10px;background:var(--soft);color:var(--ink-2)}
-.tag-row span.hot{background:var(--wa-soft);color:var(--wa)}
-
-/* main features */
-.main4{display:grid;grid-template-columns:1fr 1fr;gap:18px}
-.m4{position:relative;border-radius:26px;padding:30px;display:flex;flex-direction:column;gap:12px;overflow:hidden;border:1px solid var(--line);background:var(--card);min-height:300px}
-.m4 h3{font-size:clamp(22px,2.4vw,28px);font-weight:800;letter-spacing:-.02em;max-width:18ch}
-.m4 p{color:var(--ink-2);max-width:44ch}
-.m4-plan{align-self:flex-start;font-size:13px;font-weight:700;border-radius:99px;padding:5px 12px;background:var(--wa-soft);color:var(--wa)}
-.m4-rev{background:var(--band);color:var(--band-ink);border-color:transparent}
-.m4-rev p{color:var(--band-2)}
-.m4-rev .m4-plan{background:rgba(255,255,255,.1);color:#fff}
-.m4-rev .meter .bars span{background:rgba(255,255,255,.12)}.m4-rev .meter .bars div{color:var(--band-2)}
-.m4-loy{background:linear-gradient(160deg,#fff7ec,#ffe9d1);border-color:#f8d9b6}
-.m4-att{background:linear-gradient(160deg,#eef3ff,#e2eaff);border-color:#cfdaf8}
-.m4-menu{background:var(--band);color:var(--band-ink);border-color:transparent}
-.m4-menu p{color:var(--band-2)}.m4-menu .m4-plan{background:var(--accent);color:#fff}
-.m4 .viz{margin-top:auto}
-.also{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:18px}
-.also div{border:1px solid var(--line);border-radius:18px;padding:18px;background:var(--card);display:flex;flex-direction:column;gap:6px}
-.also b{font-size:15.5px}.also span{color:var(--ink-2);font-size:14.5px}
-.plan li.key{font-weight:700}
-.plan li.key::before{background-color:var(--accent-soft);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23f07a1a'%3E%3Cpath d='M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7-6.2-3.7-6.2 3.7 1.6-7L2 9.2l7.1-.6z'/%3E%3C/svg%3E")}
-.cmp tr.key td:first-child b::after{content:"Main feature";margin-left:8px;font-size:11.5px;font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:99px;padding:2px 8px;vertical-align:2px}
-@media (max-width:900px){.main4{grid-template-columns:1fr}.also{grid-template-columns:1fr 1fr}}
-@media (max-width:520px){.also{grid-template-columns:1fr}.m4{padding:24px;min-height:0}}
-
-/* steps: a real sequence, with a progress line */
-.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:28px;position:relative;padding-top:30px}
-.steps::before,.steps::after{content:"";position:absolute;top:22px;left:22px;right:22px;height:3px;border-radius:3px;background:var(--line)}
-.steps::after{background:linear-gradient(90deg,var(--accent),var(--marigold));transform-origin:left;transform:scaleX(var(--p,1))}
-.step{position:relative}
-.step .d{width:46px;height:46px;border-radius:50%;background:var(--card);border:3px solid var(--accent);display:grid;place-items:center;font:900 18px var(--display);color:var(--accent);position:relative;z-index:1;margin-top:-24px}
-.step h3{font-size:20px;margin:18px 0 8px;font-weight:700}
-.step p{color:var(--ink-2)}
-
-/* pricing */
-#pricing{background:var(--card);border-block:1px solid var(--line)}
-.toggle{display:inline-flex;background:var(--soft);border:1px solid var(--line);border-radius:99px;padding:4px;gap:4px;margin-top:22px}
-.toggle button{font:700 14px var(--body);border:0;background:transparent;color:var(--ink-2);padding:8px 16px;border-radius:99px;cursor:pointer}
-.toggle button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
-.save{color:var(--wa);font-weight:700;font-size:13px;margin-left:4px}
-.plans{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;align-items:stretch}
-.plan{border:1.5px solid var(--line);border-radius:20px;padding:28px;display:flex;flex-direction:column;gap:18px;background:var(--paper);position:relative}
-.plan{transition:transform .25s cubic-bezier(.2,.8,.2,1),box-shadow .25s}
-.plan:hover{transform:translateY(-4px);box-shadow:0 22px 50px -24px rgba(16,24,58,.35)}
-.plan.pop{border-color:transparent;background:linear-gradient(var(--card),var(--card)) padding-box,conic-gradient(from var(--ang,0deg),var(--accent),var(--marigold),var(--wa),var(--accent)) border-box;box-shadow:0 24px 60px -20px rgba(240,122,26,.45)}
-@property --ang{syntax:"<angle>";inherits:false;initial-value:0deg}
-@media (prefers-reduced-motion:no-preference){.plan.pop{animation:spin 6s linear infinite}}
-@keyframes spin{to{--ang:360deg}}
-.plan .badge{position:absolute;top:-13px;left:28px;background:var(--accent);color:var(--accent-ink);font:700 12px var(--body);letter-spacing:.06em;text-transform:uppercase;padding:4px 12px;border-radius:99px}
-.plan h3{font-size:22px;font-weight:700}
-.plan .for{color:var(--ink-2);font-size:15px;margin-top:6px}
-.price{display:flex;align-items:baseline;gap:6px}
-.price b{font:900 42px var(--display);letter-spacing:-.03em}
-.price span{color:var(--ink-3);font-size:15px}
-.plan .bill{color:var(--ink-3);font-size:14px;margin-top:-12px}
-.plan ul{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px;flex:1}
-.plan li{display:flex;gap:10px;font-size:15.5px}
-.plan li::before{content:"";flex:none;width:18px;height:18px;margin-top:3px;border-radius:50%;background:var(--wa-soft) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23128c5e' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5L20 7'/%3E%3C/svg%3E") center/11px no-repeat}
-.plan .btn{justify-content:center;width:100%}
-.addons{margin-top:36px;display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
-.addon{border:1px dashed var(--ink-3);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:4px}
-.addon b{font-size:15.5px}
-.addon span{color:var(--ink-2);font-size:14px;flex:1}
-.addon i{font-style:normal;font-weight:700;color:var(--accent);margin-top:6px}
-.gst{color:var(--ink-3);font-size:14px;margin-top:18px}
-
-.compare-wrap{margin-top:56px}
-.cmp-title{font-size:22px;font-weight:700}
-.cmp-scroll{overflow-x:auto;margin-top:18px;border:1px solid var(--line);border-radius:18px;background:var(--paper)}
-.cmp{width:100%;border-collapse:collapse;min-width:640px;font-size:15px}
-.cmp th,.cmp td{padding:14px 16px;text-align:center;border-bottom:1px solid var(--line)}
-.cmp tr:last-child td{border-bottom:0}
-.cmp th{font:700 15px var(--body);background:var(--card);position:sticky;top:0}
-.cmp th small{display:block;font-weight:600;color:var(--ink-3);font-size:13px}
-.cmp th.pop{color:var(--accent)}
-.cmp td:first-child,.cmp th:first-child{text-align:left}
-.cmp td:first-child b{display:block;font-weight:700}
-.cmp td:first-child span{color:var(--ink-3);font-size:13px}
-.cmp .yes{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--wa-soft);color:var(--wa);font-weight:900}
-.cmp .add{font-size:13px;font-weight:700;color:var(--ink-2);background:var(--soft);border-radius:99px;padding:4px 10px;white-space:nowrap}
-.cmp td.popc{background:rgba(240,122,26,.05)}
-.plan .mods{display:flex;flex-wrap:wrap;gap:6px;margin-top:-6px}
-.plan .mods span{font-size:12.5px;font-weight:600;border-radius:99px;padding:4px 10px;background:var(--soft);color:var(--ink-2)}
-
-/* faq */
-.faq{display:grid;gap:12px;max-width:820px}
-details{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 20px;transition:border-color .2s,box-shadow .2s}
-details[open]{border-color:var(--accent);box-shadow:0 10px 30px -18px rgba(240,122,26,.6)}
-details[open] p{animation:open .35s ease}
-@keyframes open{from{opacity:0;transform:translateY(-6px)}}
-summary{cursor:pointer;font-weight:700;padding:14px 0;list-style:none;display:flex;justify-content:space-between;gap:12px}
-summary::after{content:"+";font:700 22px var(--display);color:var(--accent);line-height:1;transition:transform .25s}
-details[open] summary::after{transform:rotate(45deg)}
-details p{color:var(--ink-2);padding-bottom:16px}
-
-/* contact / footer */
-.contact{background:radial-gradient(60% 80% at 85% 10%,rgba(240,122,26,.35),transparent 70%),radial-gradient(50% 70% at 0% 100%,rgba(43,76,255,.3),transparent 70%),var(--band);color:var(--band-ink)}
-.contact .wrap{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:start}
-.contact h2{font-size:clamp(28px,4vw,46px);font-weight:900}
-.contact p.lede{color:var(--band-2);margin-top:16px;max-width:46ch}
-.cinfo{display:grid;gap:14px;background:rgba(255,255,255,.04);border:1px solid var(--band-line);border-radius:18px;padding:24px}
-.cinfo div{display:flex;flex-direction:column}
-.cinfo small{color:var(--band-2);font-size:13px;text-transform:uppercase;letter-spacing:.08em;font-weight:600}
-.cinfo a,.cinfo span{font-weight:600;font-size:17px;text-decoration:none}
-.ph{outline:1.5px dashed var(--accent);outline-offset:3px;border-radius:3px}
-footer{background:var(--band);color:var(--band-2);border-top:1px solid var(--band-line);font-size:14px}
-footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;padding-block:22px}
-
-/* checkout */
-.back{position:fixed;inset:0;background:rgba(8,12,22,.6);z-index:50;display:flex;justify-content:center;align-items:flex-start;padding:5vh 14px;overflow-y:auto}
-.sheet{background:var(--card);color:var(--ink);width:100%;max-width:620px;border-radius:20px;border:1px solid var(--line);box-shadow:0 30px 80px rgba(0,0,0,.3)}
-.sheet-head{display:flex;justify-content:space-between;align-items:center;padding:20px 24px;border-bottom:1px solid var(--line)}
-.sheet-head h2{font-size:20px;font-weight:700}
-.prog{display:flex;gap:6px;padding:14px 24px 0}
-.prog i{flex:1;height:4px;border-radius:4px;background:var(--line)}
-.prog i.on{background:var(--accent)}
-.sheet-body{padding:22px 24px}
-.sheet-foot{display:flex;justify-content:space-between;gap:10px;padding:16px 24px 22px;flex-wrap:wrap}
-.x{background:none;border:0;font-size:26px;line-height:1;cursor:pointer;color:var(--ink-2);padding:4px 8px}
-.fields{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.field{display:flex;flex-direction:column;gap:5px}
-.field.full{grid-column:1/-1}
-label{font-size:14px;font-weight:600;color:var(--ink-2)}
-.phone-in{display:flex;gap:6px;width:100%}.phone-in select{width:auto;flex:0 0 auto;min-width:84px;max-width:96px;padding-right:6px}.phone-in input{flex:1;min-width:0}
-input,select{font:16px var(--body);color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:11px 12px;width:100%}
-input:focus,select:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
-.err{color:#c2402f;font-size:14px;font-weight:600;margin-top:10px}
-.summary{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:18px}
-.srow{display:flex;justify-content:space-between;gap:12px;padding:5px 0;font-size:15px}
-.srow.total{border-top:1px solid var(--line);margin-top:6px;padding-top:10px;font-weight:700;font-size:18px}
-.opt{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer}
-.opt:last-child{border-bottom:0}
-.opt input{width:18px;height:18px;margin-top:3px;accent-color:var(--accent);flex:none}
-.opt div{flex:1}
-.opt b{display:block;font-size:15px}
-.opt span{color:var(--ink-3);font-size:13.5px}
-.opt em{font-style:normal;font-weight:700;white-space:nowrap}
-.pay{display:grid;grid-template-columns:auto 1fr;gap:22px;align-items:center}
-.qrbox{background:#fff;padding:12px;border-radius:12px;border:1px solid var(--line)}
-.qrbox img,.qrbox canvas{display:block}
-.upi{font:700 18px var(--display);letter-spacing:-.01em;word-break:break-all}
-.note{background:var(--wa-soft);border-radius:12px;padding:12px 14px;font-size:14.5px}
-.done-mark{width:56px;height:56px;border-radius:50%;background:var(--wa);display:grid;place-items:center;color:#fff;margin-bottom:14px}
-.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 18px;border-radius:10px;font-weight:600;z-index:70}
-
-@media (max-width:900px){
-  .hero .wrap,.contact .wrap{grid-template-columns:1fr}
-  .stage{height:520px;max-width:420px;margin:0 auto;width:100%}
-  .tile.t-lg,.tile.t-sm,.tile.t-md{grid-column:1/-1}
-  .plans{grid-template-columns:1fr}
-  .steps{grid-template-columns:1fr;padding-top:0;padding-left:30px}
-  .steps::before,.steps::after{top:8px;bottom:8px;left:21px;right:auto;width:3px;height:auto}
-  .steps::after{transform-origin:top;transform:scaleY(var(--p,1))}
-  .steps{padding-left:0;gap:22px}
-  .step{display:grid;grid-template-columns:46px 1fr;column-gap:16px}
-  .step .d{margin:0;grid-row:span 2;background:var(--paper)}
-  .step h3{margin:10px 0 6px}
-  .addons{grid-template-columns:1fr 1fr}
-  .menu-btn{display:grid}
-  .top nav{position:fixed;left:12px;right:12px;top:74px;flex-direction:column;gap:2px;padding:10px;margin:0;background:#0e1535;border:1px solid rgba(255,255,255,.1);border-radius:18px;box-shadow:0 24px 60px rgba(0,0,0,.45);opacity:0;visibility:hidden;transform:translateY(-8px) scale(.98);transform-origin:top right;transition:opacity .2s,transform .25s cubic-bezier(.2,.8,.2,1),visibility 0s .25s}
-  .top.open nav{opacity:1;visibility:visible;transform:none;transition:opacity .2s,transform .25s cubic-bezier(.2,.8,.2,1)}
-  .top nav a{padding:14px 16px;font-size:17px;border-radius:12px}
-  .top .actions{margin-left:auto}
-  .hero{padding-top:110px}
-  .mbar-cta{display:flex}
-}
-@media (max-width:520px){
-  .addons,.fields{grid-template-columns:1fr}
-  .pay{grid-template-columns:1fr;justify-items:center;text-align:center}
-  .top .actions{gap:6px}
-  .top .actions .btn{padding:7px 11px;font-size:13px}
-  .top .actions .get-btn{display:none}
-  .top .actions #signin-btn{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
-  section{padding:56px 0}
-  .wrap{padding-left:18px;padding-right:18px}
-  .hero h1{font-size:clamp(30px,9.2vw,42px);margin:18px 0 16px}
-  .hero p.lede{font-size:17px}
-  .hero .cta .btn{flex:1 1 100%;justify-content:center;text-align:center}
-  .stage{height:480px}
-  .phone{width:min(280px,76vw)}
-  .sec-head{margin-bottom:28px}
-  .sec-head p{font-size:16px}
-  .tile{padding:22px;border-radius:18px}
-  .who{padding:16px 0}.who span{font-size:14px;padding:7px 13px}
-  footer .wrap{flex-direction:column;gap:8px;text-align:center}
-  .chipf{max-width:200px;font-size:12.5px}.chipf.c1{left:0;top:0}.chipf.c4{right:0;bottom:0}.chipf.c2,.chipf.c3{display:none}
-  .hero{padding-bottom:64px}
-}
-@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
-.biz-pick{background:var(--card);border:2px solid var(--accent);border-radius:24px;padding:24px;margin:-6px 0 34px;box-shadow:0 18px 40px -24px rgba(240,122,26,.5)}
-.biz-pick h3{font-size:clamp(20px,2.4vw,26px);font-weight:800;letter-spacing:-.02em}
-.biz-pick>p{color:var(--ink-2);margin:4px 0 16px}
-.chips{display:flex;flex-wrap:wrap;gap:10px}
-.chip{display:inline-flex;align-items:center;gap:8px;border:1.5px solid var(--line);background:var(--paper);color:var(--ink);border-radius:14px;padding:12px 16px;font:600 16px var(--body);cursor:pointer;transition:border-color .15s,background .15s,transform .15s}
-.chip:hover{border-color:var(--accent)}
-.chip .e{font-size:20px;line-height:1}
-.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 8px 18px -8px rgba(240,122,26,.8)}
-.chip:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
-.for-note{font-size:13px;color:var(--ink-3);margin-top:-4px}
-.main4.three .m4-att{grid-column:1/-1}
-@media (max-width:520px){.biz-pick{padding:18px;border-radius:20px}.chips{display:grid;grid-template-columns:1fr 1fr;gap:8px}.chip{padding:12px;font-size:14.5px;justify-content:flex-start;text-align:left;line-height:1.25}}
-
-.price s{font:600 18px var(--body);color:var(--ink-3)}
-.sale{display:inline-block;background:var(--accent-soft);color:var(--accent);font-weight:700;font-size:13px;border-radius:99px;padding:3px 10px}
-.svc-list{display:flex;flex-direction:column;gap:2px;max-height:240px;overflow:auto}
-.row2{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-textarea{font:16px var(--body);color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:11px 12px;width:100%;min-height:80px}
-.ok-msg{color:var(--wa);font-weight:600}
-.link-btn{background:none;border:0;color:var(--accent);font:600 15px var(--body);cursor:pointer;padding:0;text-decoration:underline}
-</style>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/css/store.css?v=1">
 </head>
-<body>
-<script>document.documentElement.classList.add("js")</script>
+<body data-page="home">
+<a class="skip" href="#main">Skip to content</a>
+<header class="top" id="topbar"><div class="wrap">
+  <a class="brand" href="/"><img src="/assets/img/branditude-mark.svg" alt="" width="40" height="35"><span>Branditude<small>Growth tools for local business</small></span></a>
+  <nav class="nav" id="site-nav" aria-label="Main">
+    <div class="drop"><button class="navbtn" type="button" aria-expanded="false">Products ▾</button><div class="drop-menu"><a href="/reviews.html" class="p-rev"><span class="dot" style="background:var(--soft);color:var(--cd)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.8l2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 16.6l-5.4 2.9 1.1-6.1-4.5-4.2 6.1-.8z"/></svg></span><span><b>Review & Feedback</b><span>More 5-star Google reviews · from <span data-price="review-feedback">…</span>/month</span></span></a><a href="/loyalty-card.html" class="p-loy"><span class="dot" style="background:var(--soft);color:var(--cd)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="3"/><circle cx="8" cy="12.5" r="1.6" fill="currentColor"/><circle cx="12" cy="12.5" r="1.6" fill="currentColor"/><circle cx="16" cy="12.5" r="1.6"/></svg></span><span><b>Loyalty Card</b><span>Customers come back more · from <span data-price="loyalty-card">…</span>/month</span></span></a><a href="/staff-attendance.html" class="p-stf"><span class="dot" style="background:var(--soft);color:var(--cd)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span><b>Staff Attendance & Salary</b><span>Attendance and salary, done · from <span data-price="staff-attendance">…</span>/month</span></span></a><a href="/qr-menu.html" class="p-qr"><span class="dot" style="background:var(--soft);color:var(--cd)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1.5"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1.5"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1.5"/><path d="M14 14h3v3h-3zM17.5 17.5h3v3h-3z" fill="currentColor" stroke="none"/></svg></span><span><b>QR Menu</b><span>Menu and table orders · from <span data-price="qr-menu-6">…</span>/month</span></span></a></div></div>
+    <a href="/#plans">Plans</a><a href="/gaming.html">Gaming clubs</a><a href="/#faq">FAQ</a><a href="/login.html" data-signin>Login</a>
+  </nav>
+  <div class="actions"><a class="btn primary sm hide-m" href="/#plans">See prices</a><button class="menu-btn" id="menu-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><span></span></button></div>
+</div></header>
+<main id="main">
+<section class="hero"><div class="wrap">
+  <div><h1>Everything your shop needs to grow, from ₹199 a month.</h1>
+  <p class="lede">Get more Google reviews, bring customers back with a digital loyalty card, track staff attendance and salary, and take orders from a QR menu. Buy just the one you need, or save with a plan.</p>
+  <div class="cta"><a class="btn primary" href="#products">Pick a product</a><a class="btn line" href="#plans">See plans</a></div>
+  <p class="trust"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Set up for you in 48 hours</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Pay monthly, cancel any month</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>UPI, cards & netbanking</span><span data-trial hidden></span></p></div>
+  <div><p class="picker-h">Choose what you need</p><div class="picker"><a class="pick p-rev" href="/reviews.html"><span class="dot"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.8l2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 16.6l-5.4 2.9 1.1-6.1-4.5-4.2 6.1-.8z"/></svg></span><b>Review & Feedback</b><span>Happy customers post on Google. Unhappy ones talk to you first.</span><i>From <span data-price="review-feedback">…</span>/month</i></a><a class="pick p-loy" href="/loyalty-card.html"><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="3"/><circle cx="8" cy="12.5" r="1.6" fill="currentColor"/><circle cx="12" cy="12.5" r="1.6" fill="currentColor"/><circle cx="16" cy="12.5" r="1.6"/></svg></span><b>Loyalty Card</b><span>A stamp card on their phone that never gets lost.</span><i>From <span data-price="loyalty-card">…</span>/month</i></a><a class="pick p-stf" href="/staff-attendance.html"><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><b>Staff Attendance & Salary</b><span>Check-in with a PIN. Salary slips worked out for you.</span><i>From <span data-price="staff-attendance">…</span>/month</i></a><a class="pick p-qr" href="/qr-menu.html"><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1.5"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1.5"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1.5"/><path d="M14 14h3v3h-3zM17.5 17.5h3v3h-3z" fill="currentColor" stroke="none"/></svg></span><b>QR Menu</b><span>Guests scan, order and you see it on the kitchen board.</span><i>From <span data-price="qr-menu-6">…</span>/month</i></a></div></div>
+</div></section>
 
-<header class="top" id="topbar">
-  <div class="wrap">
-    <a class="logo" href="#top" aria-label="Branditude home"><span class="logo-mark"><img src="/assets/img/branditude-mark.svg" alt="" width="26" height="26"></span><b>Branditude</b></a>
-    <nav aria-label="Sections" id="site-nav"><a href="#features">What you get</a><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="#founder">Founder</a><a href="#faq">FAQ</a><a href="#get-app">Get the app</a></nav>
-    <div class="actions"><a class="btn sm line" href="login.html" id="signin-btn">Login</a><a class="btn sm primary get-btn" href="#pricing">Get started</a><button class="menu-btn" id="menu-btn" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="site-nav"><span></span></button></div>
-  </div>
-</header>
+<section id="products" style="padding-top:24px"><div class="wrap">
+  <div class="sec-head"><h2>Four tools. Buy one, or all of them.</h2><p class="lede">Each one works on its own, on any phone. Start with the one that matters most to you today.</p></div>
+  <div class="prod p-rev" id="review-feedback"><div class="stage"><div class="phone" aria-hidden="true"><div class="screen"><div class="sbar"><span>9:41</span><span>●●● 5G</span></div><div class="sc"><div class="bizhead"><div class="bizlogo">C</div><div><b>Chai Point Café</b><div class="sub">MG Road, Nagpur</div></div></div>
+<h4 style="margin-top:6px">How was your visit today?</h4><div class="stars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+<div class="bubble">We wrote this for you, edit if you like:<br><b>“Loved the masala chai and the quick service. Staff were really friendly. Will come again!”</b></div>
+<div class="sbtn b">Post on Google</div><div class="sub" style="text-align:center">Not happy? Tell the owner privately</div>
+<div class="kpis" style="margin-top:auto"><div><b>4.8 ★</b><span>Google rating</span></div><div><b>+46</b><span>New reviews this month</span></div></div></div></div></div></div>
+  <div><span class="kicker"><span class="dot" style="background:var(--c);color:#fff;width:32px;height:32px;border-radius:10px"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.8l2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 16.6l-5.4 2.9 1.1-6.1-4.5-4.2 6.1-.8z"/></svg></span>Review & Feedback</span>
+  <h2>More 5-star Google reviews, without asking twice.</h2><p class="lede" style="margin-top:16px">Customers scan a QR at your counter and rate their visit. Happy customers get a ready-written Google review to post in one tap. Unhappy ones send their complaint privately to you, so you can fix it before it reaches Google.</p><ul class="ticks"><li><span><b>Review QR</b> for the counter, tables and bills</span></li><li><span><b>AI writes the review</b> in the customer's own words, they just tap Post</span></li><li><span><b>Complaints come to you</b> in a private inbox, not on Google</span></li></ul>
+  <div class="price-line"><b class="num" data-price="review-feedback">…</b><span data-per>/month</span></div>
+  <div class="row-cta"><button class="btn primary" data-buy="review-feedback">Buy Review & Feedback</button><a class="btn line" href="/reviews.html">See how it works</a></div></div></div><div class="prod p-loy flip" id="loyalty-card"><div class="stage"><div class="phone" aria-hidden="true"><div class="screen"><div class="sbar"><span>9:41</span><span>●●● 5G</span></div><div class="sc"><div class="sub">Hi Priya</div><h4>Your loyalty card</h4>
+<div class="stamp-card"><b style="font-size:15px">Chai Point Café</b><div class="sub">7 of 10 visits</div>
+<div class="stamps" aria-hidden="true"><i class="on">★</i><i class="on">★</i><i class="on">★</i><i class="on">★</i><i class="on">★</i><i class="on">★</i><i class="on">★</i><i></i><i></i><i class="gift">🎁</i></div></div>
+<div class="bubble">3 more visits for a <b>free cold coffee</b></div>
+<div class="bubble" style="display:flex;justify-content:space-between;align-items:center"><span>Birthday coupon<br><b>BDAY20 · 20% off</b></span><span class="tag-s t-ok">Valid</span></div>
+<div class="sbtn" style="margin-top:auto">Show at the counter</div></div></div></div></div>
+  <div><span class="kicker"><span class="dot" style="background:var(--c);color:#fff;width:32px;height:32px;border-radius:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="3"/><circle cx="8" cy="12.5" r="1.6" fill="currentColor"/><circle cx="12" cy="12.5" r="1.6" fill="currentColor"/><circle cx="16" cy="12.5" r="1.6"/></svg></span>Loyalty Card</span>
+  <h2>A loyalty card your customers never lose.</h2><p class="lede" style="margin-top:16px">Replace paper stamp cards with a digital card on the customer's phone. Scan to add a stamp, set the reward, and the app reminds customers when they're close to a free item.</p><ul class="ticks"><li><span><b>Scan to stamp</b> in 2 seconds at the counter</span></li><li><span><b>Rewards you choose</b>, like a free coffee on the 10th visit</span></li><li><span><b>Birthday and festival coupons</b> that bring people back</span></li></ul>
+  <div class="price-line"><b class="num" data-price="loyalty-card">…</b><span data-per>/month</span></div>
+  <div class="row-cta"><button class="btn primary" data-buy="loyalty-card">Buy Loyalty Card</button><a class="btn line" href="/loyalty-card.html">See how it works</a></div></div></div><div class="prod p-stf" id="staff-attendance"><div class="stage"><div class="phone" aria-hidden="true"><div class="screen"><div class="sbar"><span>9:41</span><span>●●● 5G</span></div><div class="sc"><div class="sub">Today · Tuesday</div><h4>Staff attendance</h4><div class="kpis"><div><b>10</b><span>Present</span></div><div><b>2</b><span>Late</span></div></div><div class="listrow"><span class="av" style="background:#2f6bc4">RK</span><div class="g"><b>Ravi Kumar</b><span>In 9:02 am</span></div><span class="tag-s t-ok">On time</span></div><div class="listrow"><span class="av" style="background:#e5232b">SN</span><div class="g"><b>Sunita Naik</b><span>In 9:18 am</span></div><span class="tag-s t-late">18 min late</span></div><div class="listrow"><span class="av" style="background:#7c869f">AM</span><div class="g"><b>Amit More</b><span>Leave today</span></div><span class="tag-s t-off">Leave</span></div><div class="listrow"><span class="av" style="background:#5fa834">PS</span><div class="g"><b>Pooja Shah</b><span>In 8:55 am</span></div><span class="tag-s t-ok">On time</span></div><div class="sbtn" style="margin-top:auto">Salary slips for June are ready</div></div></div></div></div>
+  <div><span class="kicker"><span class="dot" style="background:var(--c);color:#fff;width:32px;height:32px;border-radius:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>Staff Attendance & Salary</span>
+  <h2>Staff attendance and salary, worked out for you.</h2><p class="lede" style="margin-top:16px">Staff check in and out with their PIN on the shop phone. Late marks, leave, advances and tips are counted automatically, and salary slips are ready at the end of the month.</p><ul class="ticks"><li><span><b>PIN check-in</b> on the shop phone or tablet</span></li><li><span><b>Late marks, half days and leave</b> counted for you</span></li><li><span><b>Salary slips</b> with advances and tips, every month</span></li></ul>
+  <div class="price-line"><b class="num" data-price="staff-attendance">…</b><span data-per>/month</span></div>
+  <div class="row-cta"><button class="btn primary" data-buy="staff-attendance">Buy Staff Attendance & Salary</button><a class="btn line" href="/staff-attendance.html">See how it works</a></div></div></div><div class="prod p-qr flip" id="qr-menu-6"><div class="stage"><div class="phone" aria-hidden="true"><div class="screen"><div class="sbar"><span>9:41</span><span>●●● 5G</span></div><div class="sc"><div style="display:flex;justify-content:space-between;align-items:center"><span class="chip-s">Table 4</span><span class="sub">Chai Point Café</span></div><h4>What would you like?</h4>
+<div class="tabs-s"><span class="on">All</span><span>Chai</span><span>Snacks</span><span>Desserts</span></div><div class="menu-it"><span class="ph" style="background:#fff1d6">🍵</span><div class="g"><b>Masala chai</b><span>Strong, with ginger</span><div><em>₹40</em></div></div><span class="add-s"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></div><div class="menu-it"><span class="ph" style="background:#e6f4dc">🥪</span><div class="g"><b>Bombay sandwich</b><span>Grilled, with chutney</span><div><em>₹110</em></div></div><span class="add-s"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></div><div class="menu-it"><span class="ph" style="background:#fde8e9">🍟</span><div class="g"><b>Peri peri fries</b><span>Crispy and spicy</span><div><em>₹90</em></div></div><span class="add-s"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></div><div class="menu-it"><span class="ph" style="background:#e3f2fc">🧋</span><div class="g"><b>Cold coffee</b><span>With ice cream</span><div><em>₹130</em></div></div><span class="add-s"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></div><div class="cartbar"><span>2 items · ₹220</span><span>Send to kitchen</span></div></div></div></div></div>
+  <div><span class="kicker"><span class="dot" style="background:var(--c);color:#fff;width:32px;height:32px;border-radius:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1.5"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1.5"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1.5"/><path d="M14 14h3v3h-3zM17.5 17.5h3v3h-3z" fill="currentColor" stroke="none"/></svg></span>QR Menu</span>
+  <h2>A QR menu that takes orders at every table.</h2><p class="lede" style="margin-top:16px">Guests scan the QR on their table to see your menu with photos and order straight from their phone. Orders appear on your kitchen board with the table number. Change prices or hide sold-out items in seconds.</p><ul class="ticks"><li><span><b>A QR for every table</b>, ready to print</span></li><li><span><b>Orders go to the kitchen board</b> with the table number</span></li><li><span><b>Change prices any time</b>, no reprinting menus</span></li></ul>
+  <div class="price-line"><b class="num" data-price="qr-menu-6">…</b><span data-per>/month</span><span>for up to 6 tables</span></div>
+  <div class="row-cta"><button class="btn primary" data-buy="qr-menu-6">Buy QR Menu</button><a class="btn line" href="/qr-menu.html">See how it works</a></div></div></div>
+</div></section>
 
-<main id="top">
-  <section class="hero">
-    <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div><div class="dots" aria-hidden="true"></div>
-    <div class="wrap">
-      <div>
-        <span class="pill-tag"><b>New</b> QR menus and staff attendance</span>
-        <h1 id="hero-h1"><span class="w">Turn every </span><span class="w">customer into </span><span class="w">a 5-star review.</span></h1>
-        <p class="lede">One simple system for local businesses. Collect Google reviews on WhatsApp, build your own customer list, send offers that bring people back, and see what's working. We set it all up for you.</p>
-        <div class="cta">
-          <a class="btn primary glow" href="#pricing" id="hero-cta">See plans</a>
-          <a class="btn ghost-light" data-wa="Hi Branditude, I'd like to know more about the Growth Plan for my business." href="#" target="_blank" rel="noopener">Talk to us on WhatsApp</a>
-        </div>
-        <p class="fine" id="hero-fine"><span>3-day free trial</span><span>No long contract</span><span>Cancel any month</span></p>
-        <p class="signin">Already a client? <a href="login.html" id="signin-hero">Sign in to your dashboard</a></p>
-      </div>
-      <div class="stage" id="stage" aria-label="Example: a café asks a customer for a Google review on WhatsApp">
-        <div class="chipf c1 anim" data-d="900"><span class="ic">⭐</span><div><b>New 5-star review</b><small>"Best filter coffee in town"</small></div></div>
-        <div class="chipf c2 anim" data-d="1500"><span class="ic">🎂</span><div><b>3 birthdays this week</b><small>Wishes ready to send</small></div></div>
-        <div class="chipf c3 anim" data-d="2200"><span class="ic">🔁</span><div><b>Rahul came back</b><small>Win-back offer used</small></div></div>
-        <div class="chipf c4 anim" data-d="3000"><span class="ic">💬</span><div><b>Broadcast sent</b><small>214 regulars reached</small></div></div>
-        <div class="phone" id="phone">
-          <div class="screen">
-            <div class="chat-head"><i>S</i><div>Spice Route Café<small>Business account</small></div></div>
-            <div class="chat">
-              <div class="msg anim" data-d="300">Hi Priya, thank you for visiting Spice Route Café today! 🙏 Your loyalty card now has 4 of 5 stamps, and here's 10% off your next visit: <b>THANKYOU10</b> 🎁<span class="t">7:42 pm</span></div>
-              <div class="msg me anim" data-d="1200">Thank you! Loved the filter coffee ☕<span class="t">7:46 pm ✓✓</span></div>
-              <div class="msg anim" data-d="2000">So glad you enjoyed it! If you have a minute, a Google review helps us a lot: <a href="#how">g.page/r/spice-route/review</a><span class="t">7:47 pm</span></div>
-            </div>
-            <div class="rating anim" data-d="2600"><div class="big num" id="rate">4.1</div><div><div class="stars" aria-hidden="true">★★★★★</div><small><span class="num" id="revs">38</span> Google reviews for this example café</small></div></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
+<section style="padding-top:0"><div class="wrap">
+  <div class="sec-head"><h2>Up and running in two days</h2></div>
+  <div class="steps"><div class="step"><h3>Choose and pay online</h3><p>Pick a product or plan and pay by UPI, card or netbanking. It takes two minutes.</p></div>
+  <div class="step"><h3>We set it up with you</h3><p>Our team adds your logo, menu, staff and rewards, and sends you the QR codes to print.</p></div>
+  <div class="step"><h3>Start using it</h3><p>Put the QR on your counter. Everything runs from your dashboard on your phone.</p></div></div>
+</div></section>
 
-  <div class="who" aria-label="Made for"><div class="track">
-    <span>☕ Cafés & restaurants</span><span>💇 Salons & spas</span><span>🦷 Clinics & dentists</span><span>🏋️ Gyms & studios</span><span>👗 Boutiques</span><span>📚 Coaching centres</span><span>🍰 Bakeries</span><span>🛍️ Retail stores</span>
-    <span aria-hidden="true">☕ Cafés & restaurants</span><span aria-hidden="true">💇 Salons & spas</span><span aria-hidden="true">🦷 Clinics & dentists</span><span aria-hidden="true">🏋️ Gyms & studios</span><span aria-hidden="true">👗 Boutiques</span><span aria-hidden="true">📚 Coaching centres</span><span aria-hidden="true">🍰 Bakeries</span><span aria-hidden="true">🛍️ Retail stores</span>
-  </div></div>
+<section class="plans-sec" id="plans"><div class="wrap">
+  <div class="sec-head c"><h2>Need more than one? A plan costs less.</h2><p class="lede" style="margin:16px auto 0">Plans bundle the tools together for less than buying them separately. Pay yearly and get 2 months free.</p>
+  <div class="bill-toggle" role="group" aria-label="Billing"><button type="button" data-bill="monthly" aria-pressed="true">Monthly</button><button type="button" data-bill="yearly" aria-pressed="false">Yearly <em>2 months free</em></button></div></div>
+  <div class="plans" data-plans="main"><p class="muted">Loading prices…</p></div>
+  <div class="addons"><div class="head"><h3>Add anything to your plan</h3><p>Every tool can be added to a plan on its own, from Plan & services in your dashboard.</p></div><div class="ad-list" data-addons></div></div>
+  <p class="gst-note" data-gst>Prices are in Indian rupees.</p>
+</div></section>
 
-  <section id="features">
-    <div class="wrap">
-      <div class="sec-head"><h2>Four tools that run a local shop, in one app.</h2><p>Set up by our team. Your staff learn it in ten minutes.</p></div>
-      <div class="main4">
-        <article class="m4 m4-rev">
-          <span class="m4-plan">Every plan</span>
-          <h3>Review QR and counter rating screen</h3>
-          <p>A 5-second rating screen at the counter and a QR on every table. Happy customers go straight to Google. Unhappy ones tell you privately first, so you fix it the same day.</p>
-          <div class="viz meter"><div class="score">4.8</div><div class="bars"><div>5<span><i style="--w:82%"></i></span></div><div>4<span><i style="--w:12%"></i></span></div><div>3<span><i style="--w:4%"></i></span></div><div>2<span><i style="--w:1%"></i></span></div><div>1<span><i style="--w:1%"></i></span></div></div></div>
-        </article>
-        <article class="m4 m4-loy">
-          <span class="m4-plan">Every plan</span>
-          <h3>Loyalty card and coupons</h3>
-          <p>Each customer gets their own card link on WhatsApp or email. They show its QR at the counter, you scan it, and the stamp and reward add themselves. Plus festival and birthday coupon codes.</p>
-          <div class="viz stamps" aria-hidden="true"><i class="on">✓</i><i class="on">✓</i><i class="on">✓</i><i class="on">✓</i><i class="gift">🎁</i><i></i><i></i><i></i><i></i><i>🍽️</i></div>
-        </article>
-        <article class="m4 m4-att">
-          <span class="m4-plan">Growth and Pro</span>
-          <h3>Staff attendance and salary</h3>
-          <p>Staff check in with a PIN on the shop phone. Late marks, leave, overtime and advances cut in monthly instalments go straight into each salary slip.</p>
-          <div class="viz punch"><span class="clock">09:58</span><span>Priya checked in<br><small style="color:var(--wa);font-weight:700">On time</small></span></div>
-        </article>
-        <article class="m4 m4-menu">
-          <span class="m4-plan">Pro</span>
-          <h3>QR menu and table orders</h3>
-          <p>Guests scan the table QR, see your menu with photos and order. The kitchen sees every order live, table by table.</p>
-          <div class="viz mini-menu"><div>Masala dosa <em>Table 4</em></div><div>Filter coffee ×2 <em>Table 7</em></div></div>
-        </article>
-      </div>
-      <div class="also">
-        <div><b>👥 Customer list</b><span>Every visit saves name, number, birthday and spend. Your list, not a delivery app's.</span></div>
-        <div><b>⏰ Automatic WhatsApp reminders</b><span>Optional birthday, reward and offer-ending reminders. Charged per message.</span></div>
-        <div><b>🔎 Google profile tools</b><span>Keywords, posts and review replies that help you show up in local search.</span></div>
-        <div><b>📣 Bulk WhatsApp (Pro)</b><span>One offer to hundreds of customers, with your own approved message templates.</span></div>
-        <div><b>📒 Accounts & GST (Pro)</b><span>Income and expenses by category, profit & loss, balance sheet, GST summary, and export to Tally.</span></div>
-        <div><b>🔐 Team logins</b><span>Your manager and cashier get their own login and see only what you allow.</span></div>
-      </div>
-    </div>
-  </section>
+<section class="gaming" id="gaming"><div class="wrap">
+  <div class="sec-head"><span class="kicker" style="color:#9fe07a"><span class="dot" style="background:#7cc242;color:#10200a;width:32px;height:32px;border-radius:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8h12a4 4 0 0 1 3.9 4.8l-1 4.6a2.3 2.3 0 0 1-4 1L15 16H9l-1.9 2.4a2.3 2.3 0 0 1-4-1l-1-4.6A4 4 0 0 1 6 8z"/><path d="M8 11v3M6.5 12.5h3"/><circle cx="16" cy="12" r=".8" fill="currentColor"/></svg></span>For gaming clubs</span><h2>Run a gaming café? It has its own two plans.</h2><p class="lede" style="margin-top:16px">Live timers for every PS5, PC, VR and pool table, LP splits, happy-hour pricing, snacks and bills. Everything is included in the plan.</p></div>
+  <div class="g-feats"><div><b>Live station timers</b><span>No double bookings, from any staff phone</span></div><div><b>LP (loser pays)</b><span>Split every game, bill each player</span></div><div><b>Happy hours</b><span>Prices by day and time, minute by minute</span></div><div><b>Bills & snacks</b><span>Cash, UPI, card, split or pay later</span></div></div>
+  <div class="plans" data-plans="gaming"></div>
+  <div class="row-cta"><a class="btn line" style="background:transparent;color:#fff;box-shadow:inset 0 0 0 1.5px #4a5577" href="/gaming.html">See everything for gaming clubs</a></div>
+</div></section>
 
-  <section id="how" style="padding-top:0">
-    <div class="wrap">
-      <div class="sec-head"><h2>Live in two days. Growing from week one.</h2></div>
-      <div class="steps" id="steps">
-        <div class="step"><span class="d">1</span><h3>Pick a plan and pay</h3><p>Choose a plan below, add your business details, and pay online by UPI, card or netbanking. Your plan switches on straight away.</p></div>
-        <div class="step"><span class="d">2</span><h3>We set you up in 48 hours</h3><p>We connect your Google review link, import your existing customer numbers, create your first offers, and train your staff on WhatsApp.</p></div>
-        <div class="step"><span class="d">3</span><h3>Log visits, earn reviews, send offers</h3><p>Log each visit in 10 seconds. The app does the rest: review requests, birthday wishes and win-back messages.</p></div>
-      </div>
-    </div>
-  </section>
-
-  <section id="pricing">
-    <div class="wrap">
-      <div class="sec-head"><h2>Plans that pay for themselves with a few extra visits a month.</h2>
-        <div class="toggle" role="group" aria-label="Billing period"><button type="button" data-bill="monthly" aria-pressed="true">Monthly</button><button type="button" data-bill="yearly" aria-pressed="false">Yearly <span class="save">2 months free</span></button></div>
-      </div>
-      <div class="biz-pick" role="group" aria-labelledby="biz-pick-t">
-        <h3 id="biz-pick-t">First, what kind of business do you run?</h3>
-        <p>We'll show only the features that fit your business.</p>
-        <div class="chips" id="cat-chips"><span class="gst">Loading…</span></div>
-        <select id="cat" hidden aria-hidden="true" tabindex="-1"><option value=""></option></select>
-      </div>
-      <div class="plans" id="plans"><p class="gst">Loading plans…</p></div>
-      <div class="compare-wrap" id="compare-wrap" hidden>
-        <h3 class="cmp-title">Compare what's in each plan</h3>
-        <p class="gst" style="margin-top:6px">Need just one extra feature? Add it to any plan for a small monthly price, from your dashboard.</p>
-        <div class="cmp-scroll"><table class="cmp" id="compare"></table></div>
-      </div>
-      <h3 style="font-size:20px;margin-top:56px" id="svc-title">Extra services</h3>
-      <p class="gst" style="margin-top:6px">Pick these at checkout. Services change with your business type.</p>
-      <div class="addons" id="addons"></div>
-      <p class="gst" id="gst-note">Prices are in Indian rupees.</p>
-    </div>
-  </section>
-
-  <section class="founder" id="founder" aria-labelledby="founder-h">
-    <div class="wrap">
-      <figure class="f-photo">
-        <img src="https://www.branditudeglobal.com/assets/images/teams/KA.png" alt="Kunal Ahuja, founder of Branditude" width="340" height="425" loading="lazy" onerror="this.parentNode.classList.add('noimg')">
-        <figcaption><b>Kunal Ahuja</b><small>Founder, Branditude Global · Nagpur</small></figcaption>
-      </figure>
-      <div class="f-body">
-        <h2 id="founder-h">Big-brand growth tools, at a local-shop price</h2>
-        <p>Kunal Ahuja started Branditude in Nagpur to help businesses grow online. Over 5+ years the team has delivered 150+ projects for 80+ clients, from local shops to names like Unacademy and HP, across branding, ads, SEO, websites and social media.</p>
-        <p>Along the way he saw the same thing again and again: the café down the road, the salon, the clinic, the gym all do great work, but they can't afford a marketing team. Their happy customers leave without a review, regulars forget to come back, and offers never reach the people who would use them.</p>
-        <blockquote>“Every local business deserves the same growth tools big brands use. The Growth Plan puts reviews, loyalty, offers and WhatsApp in one simple app.”</blockquote>
-        <div class="f-stats"><div><b>5+</b><span>years in digital growth</span></div><div><b>150+</b><span>projects delivered</span></div><div><b>80+</b><span>happy clients</span></div></div>
-        <p class="f-sign"><b>Kunal Ahuja</b>, founder · <a href="https://www.branditudeglobal.com/our-teams.html" target="_blank" rel="noopener" style="color:var(--accent)">Meet the team</a></p>
-      </div>
-    </div>
-  </section>
-
-  <section id="faq">
-    <div class="wrap">
-      <div class="sec-head"><h2>Before you buy</h2></div>
-      <div class="faq">
-        <details><summary>Do I need a Google Business Profile already?</summary><p>No. We can create and verify it for you with the Google Business Profile setup service, which you can add at checkout.</p></details>
-        <details><summary>How do WhatsApp messages and charges work?</summary><p>Messages go out from a verified WhatsApp business number using message templates approved by WhatsApp. Every plan can send single messages and turn on automatic reminders (birthday, loyalty reward, offer ending, win-back) if you want them. They're optional and off until you switch them on. Each message uses prepaid WhatsApp credits, so charges apply per message; failed messages are refunded. Sending one offer to many customers at once (bulk messaging), with your own message templates, is in the Pro plan.</p></details>
-        <details><summary>Is my customer data safe?</summary><p>Your customer list is private to your account. We never message your customers ourselves unless you ask us to, and you can export or delete your data at any time.</p></details>
-        <details><summary>Can I add just one feature without upgrading?</summary><p>Yes. Every feature that isn't in your plan can be added on its own for a monthly price (shown in the table above), from Plan &amp; services in your dashboard. If your add-ons cost more than the next plan, we'll show you the plan instead.</p></details>
-        <details><summary>Can I cancel?</summary><p>Monthly plans can be cancelled before the next billing date. Yearly plans are paid upfront and get two months free.</p></details>
-        <details><summary>Is there a free trial?</summary><p id="faq-trial">Yes. Every new business gets 3 days free with everything unlocked. Pay any time during the trial to keep going. If you don't pay, your account turns read-only and your data stays safe.</p></details>
-        <details><summary>How do I pay?</summary><p>Pay online through Razorpay with UPI (GPay, PhonePe, Paytm, BHIM), debit or credit card, netbanking or wallets. Your plan or add-on switches on as soon as the payment goes through.</p></details>
-      </div>
-    </div>
-  </section>
-
-  <section class="getapp" id="get-app">
-    <div class="wrap">
-      <div class="sec-head"><h2>Your dashboard, as an app on every device.</h2><p>Install Branditude Growth on your phone, tablet or computer. It gets its own icon, opens full-screen without the browser bar, and loads faster. Same sign-in, same data everywhere.</p></div>
-      <p class="ga-status" id="ga-status" hidden></p>
-      <div class="ga-grid" id="ga-grid">
-        <article class="ga" data-os="android">
-          <div class="ga-top"><span class="ga-ic" aria-hidden="true">🤖</span><h3>Android</h3><span class="ga-this">This device</span></div>
-          <button class="btn primary ga-btn" type="button" data-install hidden>Install app</button>
-          <ol><li>Open this page in Chrome.</li><li>Tap the <b>⋮</b> menu, then <b>Install app</b> (or <b>Add to Home screen</b>).</li><li>Open Branditude from your home screen and sign in.</li></ol>
-        </article>
-        <article class="ga" data-os="ios">
-          <div class="ga-top"><span class="ga-ic" aria-hidden="true">🍎</span><h3>iPhone & iPad</h3><span class="ga-this">This device</span></div>
-          <ol><li>Open this page in Safari.</li><li>Tap <b>Share</b> <span class="ga-share" aria-hidden="true">⬆︎</span> at the bottom of the screen.</li><li>Scroll down and tap <b>Add to Home Screen</b>, then <b>Add</b>.</li></ol>
-        </article>
-        <article class="ga" data-os="windows">
-          <div class="ga-top"><span class="ga-ic" aria-hidden="true">🪟</span><h3>Windows</h3><span class="ga-this">This device</span></div>
-          <button class="btn primary ga-btn" type="button" data-install hidden>Install app</button>
-          <a class="btn line ga-btn" href="download/BranditudeGrowth-Windows.zip" download>Download for Windows</a>
-          <ol><li>Unzip the download and double-click <b>Install Branditude Growth</b>.</li><li>If Windows asks, click <b>More info</b>, then <b>Run anyway</b>.</li><li>Find Branditude Growth on your Desktop and in the Start menu.</li></ol>
-          <p class="ga-note">Runs in its own window using Edge or Chrome, which most PCs already have.</p>
-        </article>
-        <article class="ga" data-os="mac">
-          <div class="ga-top"><span class="ga-ic" aria-hidden="true">💻</span><h3>Mac</h3><span class="ga-this">This device</span></div>
-          <button class="btn primary ga-btn" type="button" data-install hidden>Install app</button>
-          <ol><li>In Chrome or Edge, click the install icon at the right of the address bar.</li><li>In Safari, choose <b>File</b>, then <b>Add to Dock</b>.</li><li>Open Branditude from your Dock or Launchpad.</li></ol>
-        </article>
-      </div>
-    </div>
-  </section>
-
-  <section class="contact" id="contact">
-    <div class="wrap">
-      <div><h2>Not sure which plan fits?</h2><p class="lede">Tell us about your business and we'll suggest a plan. We usually reply within an hour during working hours.</p>
-        <div class="cta" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:26px"><a class="btn wa" data-wa="Hi Branditude, which Growth Plan is right for my business?" href="#" target="_blank" rel="noopener">Chat on WhatsApp</a><a class="btn line" href="#pricing">Compare plans</a></div></div>
-      <div class="cinfo" id="cinfo"></div>
-    </div>
-  </section>
+<section id="faq"><div class="wrap">
+  <div class="sec-head"><h2>Questions owners ask us</h2></div>
+  <div class="faq"><details><summary>Can I buy just one product?</summary><p>Yes. Review &amp; Feedback, Loyalty Card, Staff Attendance and QR Menu are each sold on their own. You can add more later or move to a plan any time.</p></details><details><summary>Is there a contract?</summary><p>No. Pay monthly and stop any month, or pay yearly and get 2 months free.</p></details><details><summary>Who sets it up?</summary><p>We do, with you. Within 48 hours we add your logo, menu, staff and rewards, and send you QR codes to print.</p></details><details><summary>Do my customers need to download an app?</summary><p>No. Customers scan a QR and everything opens in their phone&#x27;s browser.</p></details><details><summary>How do WhatsApp messages work?</summary><p>Reminders and offers go out on WhatsApp from a verified business number. Messages use WhatsApp credits, which you top up in the app.</p></details><details><summary>How do I pay?</summary><p>Online through Razorpay: UPI (GPay, PhonePe, Paytm), debit or credit card, netbanking or wallets. It switches on as soon as you pay.</p></details><details><summary>Is my customer data safe?</summary><p>Your data is private to your business. We never message your customers unless you ask, and you can export or delete it any time.</p></details></div>
+</div></section>
+<section class="contact" id="contact"><div class="wrap">
+  <div><h2>Not sure what you need?</h2><p class="lede" style="margin-top:16px">Tell us about your business on WhatsApp. We'll suggest the right product or plan and set it up with you. We usually reply within an hour in working hours.</p>
+  <div class="row-cta"><a class="btn wa" data-wa="Hi Branditude, I'd like to know which product fits my business." href="#contact" target="_blank" rel="noopener">Chat on WhatsApp</a><a class="btn line" href="/#plans">Compare plans</a></div></div>
+  <div class="cinfo" data-cinfo></div></div></section>
 </main>
-<footer><div class="wrap"><span><img class="foot-logo" src="/assets/img/branditude-logo-light.png" alt="Branditude — Correct attitude for your brand" width="128" height="92"><span id="foot-left"></span></span><span><a href="login.html" style="color:inherit">Sign in</a> · <a href="privacy.html" style="color:inherit">Privacy policy</a> · Branditude Growth Plan</span></div></footer>
-
-<div class="mbar-cta" id="mbar-cta" aria-hidden="true"><a class="btn primary" href="#pricing" tabindex="-1">See plans</a><a class="btn wa" data-wa="Hi Branditude, I'd like to know more about the Growth Plan for my business." href="#" target="_blank" rel="noopener" tabindex="-1">WhatsApp us</a></div>
+<div class="mbar" id="mbar" aria-hidden="true"><a class="btn line" href="#plans">See prices</a><a class="btn wa" data-wa="Hi Branditude, I'd like to know more." href="#contact" target="_blank" rel="noopener">WhatsApp us</a></div>
+<footer><div class="wrap">
+  <div><img class="flogo" src="/assets/img/branditude-logo-light.png" alt="Branditude, correct attitude for your brand" width="150" height="101"><p>Simple growth tools for cafés, salons, clinics, gyms and shops across India.</p><p data-year style="margin-top:14px"></p></div>
+  <div><b>Products</b><a href="/reviews.html">Review & Feedback</a><a href="/loyalty-card.html">Loyalty Card</a><a href="/staff-attendance.html">Staff Attendance & Salary</a><a href="/qr-menu.html">QR Menu</a><a href="/gaming.html">Gaming club software</a></div>
+  <div><b>Company</b><a href="/#plans">Plans & prices</a><a href="/#faq">FAQ</a><a href="/#contact">Contact</a><a href="/privacy.html">Privacy policy</a></div>
+  <div><b>Already a client?</b><a href="/login.html" data-signin>Login to dashboard</a><a href="#" data-install>Install the app</a><a href="/download/BranditudeGrowth-Windows.zip">Windows app</a></div>
+</div></footer>
 <div id="checkout-root"></div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script type="module">
-// Public store: plans, discounts and category services come live from the database (managed in the admin portal).
-import { sb, configured, friendly } from "./assets/js/sb.js";
-import { phoneInput, readPhone, phoneOk, phoneHint } from "./assets/js/ui.js";
-import { rzpOn, payOnline } from "./assets/js/razorpay.js";
-// Already signed in? Point the sign-in links straight at the dashboard.
-sb.auth.getSession().then(({ data }) => { if (!data?.session) return;
-  const b = document.getElementById("signin-btn"); if (b) { b.textContent = "My dashboard"; b.href = "app.html"; }
-  const h = document.getElementById("signin-hero"); if (h) { h.textContent = "Open your dashboard →"; h.href = "app.html"; } }).catch(() => {});
-
-const $ = (s, r = document) => r.querySelector(s);
-const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const inr = (n) => "₹" + new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(+n || 0);
-function toast(m) { const t = document.createElement("div"); t.className = "toast"; t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 2800); }
-
-const KEY_RX = /review qr|loyalty card|attendance|qr menu/i, KEY_MODS = ["reviews", "loyalty", "attendance", "menu"];
-let CATS = [], PKGS = [], PRODS = [], MODS = [], SET = {}, billing = "monthly", cat = "", TRIAL = 0;
-// gamingclubs.branditudeglobal.com (or ?for=gaming-club) is the same store, opened for gaming clubs only
-const GAMING = /^gamingclubs\./.test(location.hostname) || new URLSearchParams(location.search).get("for") === "gaming-club";
-// Plans can be for one business type only (packages.categories). A type with its own plans sees just those.
-const slugOf = (id) => CATS.find((x) => x.id === id)?.slug || "";
-const forPkg = (p, id = cat) => { const s = slugOf(id), own = s && PKGS.some((x) => (x.categories || []).includes(s));
-  return own ? (p.categories || []).includes(s) : !p.categories && !GAMING; };
-const shownPkgs = (id = cat) => PKGS.filter((p) => forPkg(p, id));
-const price = (p, b = billing) => (b === "yearly" ? p.yearly_price : p.monthly_price) * (1 - p.discount_percent / 100);
-const full = (p, b = billing) => (b === "yearly" ? p.yearly_price : p.monthly_price);
-const forCat = (p) => !p.product_categories.length || p.product_categories.some((x) => x.category_id === cat);
-const waNum = () => (SET.agency?.whatsapp || "").replace(/\D/g, "");
-const waLink = (t) => (waNum() ? "https://wa.me/" + waNum() + "?text=" + encodeURIComponent(t) : "#contact");
-
-async function load() {
-  if (!configured) { $("#plans").innerHTML = `<p class="gst">Setup needed: add the Supabase URL and anon key in assets/js/config.js.</p>`; return; }
-  const [c, p, pr, s, md] = await Promise.all([
-    sb.from("categories").select("*").order("sort"), sb.from("packages").select("*").order("sort"),
-    sb.from("products").select("*, product_categories(category_id)").order("sort"), sb.from("settings").select("key,value"),
-    sb.from("modules").select("*").eq("active", true).order("sort"),
-  ]);
-  if (c.error || p.error) { $("#plans").innerHTML = `<p class="gst">Couldn't load plans. ${esc(friendly(c.error || p.error))}</p>`; return; }
-  CATS = c.data; PKGS = p.data.filter((x) => x.active !== false); PRODS = pr.data || []; MODS = md?.data || [];
-  SET = Object.fromEntries((s.data || []).map((x) => [x.key, x.value]));
-  if (GAMING) gamingMode();
-  const lo = Math.min(...shownPkgs(GAMING ? CATS.find((x) => x.slug === "gaming-club")?.id : "").map((x) => price(x, "monthly"))); if (isFinite(lo)) $("#hero-cta").textContent = `See plans from ${inr(Math.round(lo))}/month`; SET = Object.fromEntries((s.data || []).map((x) => [x.key, x.value]));
-  const saved = (() => { try { return localStorage.getItem("bgp_cat") || ""; } catch { return ""; } })();
-  cat = GAMING ? CATS.find((x) => x.slug === "gaming-club")?.id || "" : CATS.some((x) => x.id === saved) ? saved : "";
-  $("#cat").innerHTML = `<option value="">Choose your business type</option>` + CATS.map((x) => `<option value="${x.id}" ${x.id === cat ? "selected" : ""}>${esc(x.icon)} ${esc(x.name)}</option>`).join("");
-  $("#cat").onchange = (e) => setCat(e.target.value);
-  $("#cat-chips").innerHTML = CATS.map((x) => `<button type="button" class="chip" data-cat="${x.id}" aria-pressed="${x.id === cat}"><span class="e" aria-hidden="true">${esc(x.icon)}</span>${esc(x.name)}</button>`).join("");
-  applyCat();
-  document.querySelectorAll("[data-wa]").forEach((a) => (a.href = waLink(a.dataset.wa)));
-  const a = SET.agency || {}, row = (label, val, href) => (val ? `<div><small>${label}</small>${href ? `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(val)}</a>` : `<span>${esc(val)}</span>`}</div>` : "");
-  $("#cinfo").innerHTML = row("WhatsApp", a.whatsapp ? "+" + a.whatsapp : "", a.whatsapp ? waLink("Hi Branditude!") : "") + row("Call", a.phone, a.phone ? "tel:" + a.phone : "") + row("Email", a.email, a.email ? "mailto:" + a.email : "") + row("Office", a.address) + row("Hours", a.hours) || `<div><small>Contact</small><span>Details coming soon</span></div>`;
-  $("#foot-left").textContent = "© " + new Date().getFullYear() + " " + (a.legal_name || "Branditude") + (a.website ? " · " + a.website : "");
-  TRIAL = Math.max(0, parseInt(SET.trial?.days ?? 0, 10) || 0);
-  if (TRIAL) { $("#hero-fine").innerHTML = `<span>${TRIAL}-day free trial</span><span>No long contract</span><span>Cancel any month</span>`; $("#faq-trial").textContent = `Yes. Every new business gets ${TRIAL} day${TRIAL > 1 ? "s" : ""} free with everything unlocked. Pay any time during the trial to keep going. If you don't pay, your account turns read-only and your data stays safe.`; }
-  else { $("#hero-fine").innerHTML = "<span>Live in 48 hours</span><span>No long contract</span><span>Cancel any month</span>"; $("#faq-trial").closest("details").remove(); }
-  const gr = +(SET.gst?.rate ?? 0); $("#gst-note").textContent = gr > 0 ? `Prices are in Indian rupees and exclude ${Math.round(gr * 100)}% GST, which is added at checkout.` : "Prices are in Indian rupees. No GST is charged.";
-  drawPlans(); drawServices();
-}
-function gamingMode() {
-  document.title = "Gaming Club Manager · Billing, timers & LP splits · Branditude";
-  document.documentElement.classList.add("gaming");
-  const set = (sel, html) => { const el = document.querySelector(sel); if (el) el.innerHTML = html; };
-  set(".pill-tag", "<b>New</b> LP (loser pays) splits");
-  // headline and line under it are editable in Admin → Settings → Gaming store
-  const g = SET.gaming || {}, words = (g.headline || "Run your gaming club on autopilot.").trim().split(/\s+/), third = Math.ceil(words.length / 3);
-  set("#hero-h1", [0, 1, 2].map((i) => words.slice(i * third, (i + 1) * third).join(" ")).filter(Boolean).map((w) => `<span class="w">${esc(w)} </span>`).join(""));
-  set(".hero .lede", esc(g.subline || "Live timers for every station, LP matches split game by game, happy-hour pricing, snacks and GST bills. Bills, reminders and reports on WhatsApp, Google reviews and a customer list built in. We set it up for you."));
-  document.querySelectorAll("#stage, #features, .who").forEach((el) => (el.hidden = true));
-  const f = document.getElementById("features");
-  if (f && !document.getElementById("gaming-features")) f.insertAdjacentHTML("afterend", `<section id="gaming-features"><div class="wrap"><div class="sec-head"><h2>Everything a gaming club runs on, in one app.</h2><p>PS5, Xbox, PC, VR, racing sims, pool and snooker.</p></div>
-    <div class="addons">${[["⏱️ Live station timers", "Start, pause, add time and move stations from any staff phone. No double bookings."],
-      ["🏆 LP (loser pays) matches", "Player names, a split after every game, the winner noted, and each player's share on the bill."],
-      ["⏰ 15-minute warning", "Staff get a popup with an alarm before booked time ends, with one-tap extend or WhatsApp reminder."],
-      ["💸 Happy hours & Sunday prices", "Prices by day and time, worked out minute by minute, so a session across 4 pm is billed right."],
-      ["🍿 Snacks & stock", "Drinks and snacks on the same bill, stock counted, low-stock alerts."],
-      ["🧾 GST bills", "Cash, UPI, card, split or pay later. Thermal and A4 bills with a UPI pay link."],
-      ["💬 WhatsApp bills (add-on)", "Bill + feedback link, payment reminders and a daily report, sent from Branditude's number."],
-      ["⭐ Reviews & regulars", "Feedback page, Google reviews, customer list, loyalty card and win-back messages."]]
-      .map(([t, d]) => `<div class="addon"><b>${t}</b><span>${d}</span></div>`).join("")}</div></div></section>`);
-  const pick = document.getElementById("biz-pick-t")?.parentElement; if (pick) pick.hidden = true;
-  set("#pricing .sec-head h2", "Plans for gaming clubs.");
-  document.querySelectorAll('#site-nav a[href="#features"]').forEach((a) => (a.href = "#gaming-features"));
-  document.querySelectorAll("[data-wa]").forEach((a) => (a.dataset.wa = "Hi Branditude, I'd like to know more about the Gaming Club software."));
-}
-// Features that only fit some businesses (e.g. table ordering for food places). modules.categories holds the slugs.
-const FEAT_RX = { menu: /qr menu|table order/i };
-const catSlug = () => CATS.find((x) => x.id === cat)?.slug || "";
-const fits = (m) => !m || !m.categories || !catSlug() || m.categories.includes(catSlug());
-const hiddenMods = () => MODS.filter((m) => !fits(m)).map((m) => m.key);
-function setCat(id) { cat = id; try { localStorage.setItem("bgp_cat", cat); } catch {} $("#cat").value = cat; applyCat(); }
-function applyCat() {
-  document.querySelectorAll("[data-cat]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.cat === cat));
-  const menuOff = hiddenMods().includes("menu"), card = document.querySelector(".m4-menu");
-  if (card) { card.hidden = menuOff; card.parentElement.classList.toggle("three", menuOff); }
-  drawPlans(); drawServices();
-}
-function drawPlans() {
-  $("#plans").innerHTML = (shownPkgs().length ? "" : `<p class="gst">Choose your business type to see plans for you.</p>`) + shownPkgs().map((p) => `<div class="plan${p.is_popular ? " pop" : ""}">${p.is_popular ? '<span class="badge">Most popular</span>' : ""}
-    <div><h3>${esc(p.name)}</h3><p class="for">${esc(p.tagline)}</p></div>
-    <div class="price"><b class="num">${inr(Math.round(price(p)))}</b><span>/${billing === "monthly" ? "month" : "year"}</span>${+p.discount_percent ? ` <s class="num">${inr(full(p))}</s>` : ""}</div>
-    <p class="bill">${+p.discount_percent ? `<span class="sale">${+p.discount_percent}% off${p.discount_label ? " · " + esc(p.discount_label) : ""}</span> ` : ""}${billing === "monthly" ? "Billed monthly" : "Works out to " + inr(Math.round(price(p) / 12)) + "/month"}</p>
-    <ul>${p.features.filter((f) => !hiddenMods().some((k) => FEAT_RX[k]?.test(f))).map((f) => `<li${KEY_RX.test(f) ? ' class="key"' : ""}>${esc(f)}</li>`).join("")}</ul>
-    <button class="btn ${p.is_popular ? "primary" : "line"}" data-buy="${p.id}">${TRIAL ? `Start ${TRIAL}-day free trial` : `Get ${esc(p.name)}`}</button></div>`).join("");
-  document.querySelectorAll("[data-bill]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.bill === billing));
-  drawCompare();
-}
-function drawCompare() {
-  const PKGS = shownPkgs(); if (!MODS.length || !PKGS.length) { $("#compare-wrap").hidden = true; return; }
-  const yr = billing === "yearly", unit = yr ? "/yr" : "/mo";
-  $("#compare").innerHTML = `<thead><tr><th scope="col">Feature</th>${PKGS.map((p) => `<th scope="col" class="${p.is_popular ? "pop" : ""}">${esc(p.name)}<small class="num">${inr(Math.round(price(p)))}${yr ? "/year" : "/month"}</small></th>`).join("")}</tr></thead>
-    <tbody>${MODS.filter(fits).sort((x, y) => (KEY_MODS.includes(y.key) - KEY_MODS.includes(x.key)) || x.sort - y.sort).map((m) => `<tr class="${KEY_MODS.includes(m.key) ? "key" : ""}"><td><b>${esc(m.icon)} ${esc(m.name)}</b><span>${esc(m.blurb)}</span></td>${PKGS.map((p) => {
-      const inc = m.core || (p.modules || []).includes(m.key);
-      return `<td class="${p.is_popular ? "popc" : ""}">${inc ? '<span class="yes" aria-label="Included">✓</span>' : m.addon_price != null ? (+m.addon_price ? `<span class="add num">+${inr(m.addon_price * (yr ? 10 : 1))}${unit}</span>` : '<span class="add">Free add-on</span>') : '<span aria-label="Not available">–</span>'}</td>`; }).join("")}</tr>`).join("")}
-    <tr><td><b>📍 Locations</b></td>${PKGS.map((p) => `<td class="${p.is_popular ? "popc" : ""}"><b class="num">${p.max_locations}</b></td>`).join("")}</tr></tbody>`;
-  $("#compare-wrap").hidden = false;
-}
-function drawServices() {
-  const c = CATS.find((x) => x.id === cat), list = PRODS.filter(forCat);
-  $("#svc-title").textContent = c ? `Extra services for ${c.name}` : "Extra services";
-  $("#addons").innerHTML = list.map((a) => `<div class="addon"><b>${esc(a.name)}</b><span>${esc(a.description)}</span><i class="num">${inr(a.price)}${a.billing === "monthly" ? "/month" : " one-time"}</i></div>`).join("") || `<p class="gst">Choose your business type to see services for you.</p>`;
-}
-document.addEventListener("click", (e) => {
-  const b = e.target.closest("[data-bill]"); if (b) { billing = b.dataset.bill; drawPlans(); }
-  const c = e.target.closest("[data-cat]"); if (c) setCat(c.dataset.cat === cat ? "" : c.dataset.cat);
-  const buy = e.target.closest("[data-buy]"); if (buy) openCheckout(buy.dataset.buy);
-});
-
-/* ---------- checkout ---------- */
-let co = null;
-function openCheckout(pkg) {
-  co = { step: 1, pkg, billing, cat, products: [], promo: (() => { try { return localStorage.getItem("bgp_ref") || ""; } catch { return ""; } })(), biz: {}, quote: null, mode: "signup" };
-  document.body.style.overflow = "hidden"; draw();
-}
-function close() { $("#checkout-root").innerHTML = ""; document.body.style.overflow = ""; co = null; }
-async function refreshQuote() {
-  const { data, error } = await sb.rpc("quote", { p_package: co.pkg, p_billing: co.billing, p_products: co.products, p_promo: co.promo || null, p_category: co.cat || null });
-  co.quote = error ? null : data; const el = $("#co-sum"); if (el) el.innerHTML = summary();
-}
-const summary = () => { const qt = co.quote; if (!qt) return `<p class="gst">Calculating…</p>`;
-  return `${qt.lines.map((l) => `<div class="srow"><span>${esc(l.label)}</span><span class="num">${inr(l.amount)}</span></div>`).join("")}${+qt.gst ? `<div class="srow"><span>GST</span><span class="num">${inr(qt.gst)}</span></div>` : ""}<div class="srow total"><span>Total</span><span class="num">${inr(qt.total)}</span></div>${qt.promo_message ? `<p class="${qt.promo_ok ? "ok-msg" : "err"}" style="font-size:14px;margin-top:6px">${esc(qt.promo_message)}</p>` : ""}`; };
-function readStep1() {
-  const v = (id) => ($("#" + id)?.value || "").trim();
-  co.biz = { name: v("b-name"), contact_name: v("b-owner"), phone: readPhone("b-phone"), email: v("b-email"), city: v("b-city") };
-  co.cat = v("b-cat"); co.pkg = v("b-plan"); co.billing = v("b-bill") || co.billing; co.promo = v("b-promo");
-}
-function draw() {
-  const steps = ["Your business", "Create your account", co.result?.trial ? "Your free trial has started" : "Pay", "Done"];
-  let body = "", foot = "";
-  if (co.step === 1) {
-    const prods = PRODS.filter((p) => !p.product_categories.length || p.product_categories.some((x) => x.category_id === co.cat));
-    co.products = co.products.filter((id) => prods.some((p) => p.id === id));
-    body = `<div class="fields">
-      <div class="field"><label for="b-name">Business name</label><input id="b-name" value="${esc(co.biz.name || "")}" autocomplete="organization"></div>
-      <div class="field"><label for="b-cat">Type of business</label><select id="b-cat"><option value="">Select one</option>${CATS.map((c) => `<option value="${c.id}" ${co.cat === c.id ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></div>
-      <div class="field"><label for="b-owner">Your name</label><input id="b-owner" value="${esc(co.biz.contact_name || "")}" autocomplete="name"></div>
-      <div class="field"><label for="b-phone">WhatsApp number</label>${phoneInput("b-phone", { value: co.biz.phone || "", placeholder: "98xxxxxxxx", label: "WhatsApp number" })}</div>
-      <div class="field"><label for="b-email">Email</label><input id="b-email" type="email" value="${esc(co.biz.email || "")}" autocomplete="email"></div>
-      <div class="field"><label for="b-city">City</label><input id="b-city" value="${esc(co.biz.city || "")}"></div>
-      <div class="field"><label for="b-plan">Plan</label><select id="b-plan">${shownPkgs(co.cat).map((p) => `<option value="${p.id}" ${co.pkg === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></div>
-      <div class="field"><label for="b-bill">Billing</label><select id="b-bill"><option value="monthly" ${co.billing === "monthly" ? "selected" : ""}>Monthly</option><option value="yearly" ${co.billing === "yearly" ? "selected" : ""}>Yearly (2 months free)</option></select></div></div>
-      ${prods.length ? `<div class="summary"><b style="font-size:15px">Services for your business</b><div class="svc-list">${prods.map((a) => `<label class="opt"><input type="checkbox" data-prod="${a.id}" ${co.products.includes(a.id) ? "checked" : ""}><div><b>${esc(a.name)}</b><span>${esc(a.description)}</span></div><em class="num">${inr(a.price)}${a.billing === "monthly" ? "/mo" : ""}</em></label>`).join("")}</div></div>` : ""}
-      <div class="row2" style="margin-top:14px"><input id="b-promo" placeholder="Promo code" value="${esc(co.promo)}" style="max-width:200px" aria-label="Promo code"><button class="btn sm line" data-co="promo">Apply</button></div>
-      <div class="summary" id="co-sum">${summary()}</div><p class="err" id="err"></p>`;
-    foot = `<button class="btn line sm" data-co="enquire">Just send an enquiry</button><button class="btn primary" data-co="next1">Continue</button>`;
-  } else if (co.step === 2) {
-    body = `<p style="color:var(--ink-2)">You'll use this to sign in to your Growth Plan dashboard.</p>
-      <div class="fields" style="margin-top:14px"><div class="field full"><label for="a-email">Email</label><input id="a-email" type="email" value="${esc(co.biz.email || "")}" autocomplete="email"></div>
-      <div class="field full"><label for="a-pass">${co.mode === "signup" ? "Create a password (8+ characters)" : "Password"}</label><input id="a-pass" type="password" minlength="8" autocomplete="${co.mode === "signup" ? "new-password" : "current-password"}"></div></div>
-      <p style="margin-top:10px;font-size:14px">${co.mode === "signup" ? `Already have an account? <button class="link-btn" data-co="mode">Sign in instead</button>` : `New here? <button class="link-btn" data-co="mode">Create an account</button>`}</p>
-      <div class="summary">${summary()}</div><p class="err" id="err"></p>`;
-    foot = `<button class="btn line sm" data-co="back">Back</button><button class="btn primary" data-co="next2">${co.mode === "signup" ? "Create account" : "Sign in"} and continue</button>`;
-  } else if (co.step === 3) {
-    const trialNote = co.result.trial ? `<div class="note" style="margin-bottom:18px"><b>Everything is unlocked until ${new Date(co.result.trial_ends + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "long" })}.</b> Pay now or any time before then to keep it running after the trial.</div>` : "";
-    body = trialNote + `<div style="margin-bottom:6px"><button class="btn primary" data-co="rzp" style="width:100%;justify-content:center">Pay ${inr(co.result.total)}</button><p style="color:var(--ink-3);font-size:13px;text-align:center;margin-top:6px">UPI, cards, netbanking or wallets. Your plan switches on as soon as you pay.</p></div><p class="err" id="err"></p>`;
-    foot = co.result.trial ? `<a class="btn line sm" href="app.html">Start my free trial first</a>` : `<a class="btn line sm" href="app.html#plan">Pay later</a>`;
-  } else {
-    body = `<div class="done-mark"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></div>
-      <h3 style="font-size:22px">${co.pendingConfirm ? "Check your email" : co.enquiry ? "Thanks! We'll be in touch" : "You're all set"}</h3>
-      <p style="color:var(--ink-2);margin-top:8px">${co.pendingConfirm ? "We've sent you a link to confirm your email. Open it, sign in, and your business will be set up automatically." : co.enquiry ? "Our team will call or WhatsApp you within one working day." : (co.paidOnline ? "Payment received. Your plan is active now. Open your dashboard to get started." : co.result?.trial ? "Thanks for paying. Your free trial carries on while we confirm the payment, and your plan starts as soon as it's confirmed." : "We'll confirm your payment and activate your plan within one working day. You can start setting up your dashboard now.")}</p>
-      ${co.ref ? `<p style="margin-top:10px">Reference: <b>${esc(co.ref)}</b></p>` : ""}`;
-    foot = co.enquiry || co.pendingConfirm ? `<button class="btn primary" data-co="close">Close</button>` : `<a class="btn primary" href="app.html">Go to my dashboard</a>`;
-  }
-  $("#checkout-root").innerHTML = `<div class="back" data-co="backdrop"><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="co-title">
-    <div class="sheet-head"><h2 id="co-title">${steps[co.step - 1]}</h2><button class="x" data-co="close" aria-label="Close">×</button></div>
-    <div class="prog">${steps.map((s, i) => `<i class="${i < co.step ? "on" : ""}"></i>`).join("")}</div><div class="sheet-body">${body}</div><div class="sheet-foot">${foot}</div></div></div>`;
-  if (co.step === 1 && !co.quote) refreshQuote();
-}
-const err = (m) => { const e = $("#err"); if (e) e.textContent = m; };
-const validStep1 = () => { const b = co.biz; return !b.name ? "Enter your business name." : !co.cat ? "Choose your type of business." : !b.contact_name ? "Enter your name." : !phoneOk(b.phone) ? phoneHint(b.phone).replace("mobile", "WhatsApp") : !b.city ? "Enter your city." : ""; };
-const regPayload = () => ({ name: co.biz.name, contact_name: co.biz.contact_name, phone: co.biz.phone ? "+" + co.biz.phone : "", email: co.biz.email, city: co.biz.city, category_id: co.cat, package_id: co.pkg, billing: co.billing, product_ids: co.products, promo_code: co.promo });
-document.addEventListener("click", async (e) => {
-  const el = e.target.closest("[data-co]"); if (!el || !co) return; const a = el.dataset.co;
-  if (a === "backdrop" && e.target !== el) return;
-  if (a === "close" || a === "backdrop") return close();
-  try {
-    if (a === "promo") { readStep1(); co.quote = null; draw(); }
-    if (a === "next1") { readStep1(); const m = validStep1(); if (m) return err(m);
-      const { data } = await sb.auth.getSession(); if (data?.session) { el.disabled = true; return register(); } co.step = 2; draw(); }
-    if (a === "enquire") { readStep1(); const m = validStep1(); if (m) return err(m); el.disabled = true;
-      const { data, error } = await sb.rpc("submit_lead", { p: { ...regPayload(), business_name: co.biz.name, source: "enquiry" } }); if (error) throw error; co.enquiry = true; co.ref = data.ref; co.step = 4; draw(); }
-    if (a === "mode") { co.mode = co.mode === "signup" ? "signin" : "signup"; draw(); }
-    if (a === "back") { co.step = 1; draw(); }
-    if (a === "next2") { const email = $("#a-email").value.trim(), password = $("#a-pass").value;
-      if (!/^\S+@\S+\.\S+$/.test(email)) return err("Enter a valid email."); if (password.length < 8) return err("Password needs at least 8 characters.");
-      el.disabled = true; co.biz.email = co.biz.email || email;
-      const r = co.mode === "signup" ? await sb.auth.signUp({ email, password, options: { data: { full_name: co.biz.contact_name, signup_as: "business", pending_registration: regPayload() }, emailRedirectTo: new URL("app.html", location.href).href } })
-                                     : await sb.auth.signInWithPassword({ email, password });
-      if (r.error) { el.disabled = false; return err(/registered/i.test(r.error.message) ? "This email already has an account. Sign in instead." : /Invalid login/i.test(r.error.message) ? "Wrong email or password." : friendly(r.error)); }
-      if (!r.data.session) { try { localStorage.setItem("bgp_pending_registration", JSON.stringify(regPayload())); } catch {} co.pendingConfirm = true; co.step = 4; return draw(); }
-      await register(); }
-    if (a === "rzp") { el.disabled = true; el.textContent = "Opening…";
-      try { const r = await payOnline(sb, co.payment_id); if (r === "paid") { co.paidOnline = true; co.step = 4; return draw(); } }
-      catch (x) { err(/switched on yet/.test(x.message) ? "Online payment is being set up. You can pay later from your dashboard." : x.message); }
-      el.disabled = false; el.textContent = `Pay ${inr(co.result.total)}`; return; }
-  } catch (x) { err(friendly(x)); el.disabled = false; }
-});
-async function register() {
-  const { data, error } = await sb.rpc("register_business", { p: regPayload() });
-  if (error) { err(friendly(error)); const b = document.querySelector("[data-co=next1],[data-co=next2]"); if (b) b.disabled = false; return; }
-  co.result = data; co.payment_id = data.payment_id; co.step = 3; draw();
-}
-document.addEventListener("change", (e) => {
-  if (!co || co.step !== 1) return;
-  if (e.target.dataset.prod) { const id = e.target.dataset.prod; co.products = e.target.checked ? [...co.products, id] : co.products.filter((x) => x !== id); readStep1(); refreshQuote(); }
-  if (["b-plan", "b-bill"].includes(e.target.id)) { readStep1(); refreshQuote(); }
-  if (e.target.id === "b-cat") { readStep1(); co.quote = null; draw(); }
-});
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && co) close(); });
-
-/* hero animation: one orchestrated sequence, plus light scroll/pointer touches */
-(function () { const items = [...document.querySelectorAll(".anim")]; const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const h1 = $("#hero-h1"), bar = $("#topbar"), steps = $("#steps"), phone = $("#phone"), stage = $("#stage");
-  const onScroll = () => { bar.classList.toggle("solid", scrollY > 40);
-    if (!reduce && steps) { const r = steps.getBoundingClientRect(), vh = innerHeight; steps.style.setProperty("--p", Math.max(0, Math.min(1, (vh * .85 - r.top) / (r.height + vh * .35))).toFixed(3)); } };
-  const mb = $("#menu-btn"), mcta = $("#mbar-cta"), hero = document.querySelector(".hero"), pricing = $("#pricing"), contact = $("#contact");
-  const setMenu = (o) => { bar.classList.toggle("open", o); mb.setAttribute("aria-expanded", o); mb.setAttribute("aria-label", o ? "Close menu" : "Open menu"); };
-  mb.addEventListener("click", () => setMenu(!bar.classList.contains("open")));
-  $("#site-nav").addEventListener("click", (e) => { if (e.target.closest("a")) setMenu(false); });
-  document.addEventListener("click", (e) => { if (bar.classList.contains("open") && !bar.contains(e.target)) setMenu(false); });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") setMenu(false); });
-  const ctaVis = () => { const inView = (el) => { const r = el.getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0; };
-    const show = hero.getBoundingClientRect().bottom < 0 && !inView(pricing) && !inView(contact) && !document.querySelector("#checkout-root .back");
-    mcta.classList.toggle("show", show); mcta.setAttribute("aria-hidden", !show); mcta.querySelectorAll("a").forEach((a) => (show ? a.removeAttribute("tabindex") : a.setAttribute("tabindex", "-1"))); };
-  addEventListener("scroll", () => { onScroll(); ctaVis(); }, { passive: true }); onScroll(); ctaVis();
-  const fin = () => { $("#rate").textContent = "4.8"; $("#revs").textContent = "312"; };
-  if (reduce) { h1.classList.add("in"); items.forEach((i) => i.classList.add("in")); if (steps) steps.style.setProperty("--p", 1); return fin(); }
-  [...h1.querySelectorAll(".w")].forEach((w, i) => (w.style.transitionDelay = i * 110 + "ms"));
-  requestAnimationFrame(() => h1.classList.add("in"));
-  items.forEach((i) => setTimeout(() => i.classList.add("in"), +i.dataset.d || 0));
-  setTimeout(() => { const t0 = performance.now(); (function tick(t) { const k = Math.min(1, (t - t0) / 1600), e = 1 - Math.pow(1 - k, 3); $("#rate").textContent = (4.1 + 0.7 * e).toFixed(1); $("#revs").textContent = Math.round(38 + 274 * e); if (k < 1) requestAnimationFrame(tick); })(t0); }, 2700);
-  setTimeout(() => items.forEach((i) => i.classList.add("in")), 4200);
-  if (matchMedia("(hover: hover)").matches && stage) {
-    stage.addEventListener("pointermove", (e) => { const r = stage.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
-      phone.style.setProperty("--ry", (x * 18).toFixed(1) + "deg"); phone.style.setProperty("--rx", (-y * 12).toFixed(1) + "deg"); });
-    stage.addEventListener("pointerleave", () => { phone.style.removeProperty("--ry"); phone.style.removeProperty("--rx"); }); }
-})();
-/* get the app: show the right steps for this device */
-(function () { const ua = navigator.userAgent, plat = navigator.userAgentData?.platform || navigator.platform || "";
-  const ios = /iPhone|iPad|iPod/.test(ua) || (/Mac/.test(plat) && navigator.maxTouchPoints > 1);
-  const os = ios ? "ios" : /Android/i.test(ua) ? "android" : /Win/i.test(plat) || /Windows/.test(ua) ? "windows" : /Mac/i.test(plat) ? "mac" : "";
-  const grid = $("#ga-grid"), mine = os && grid.querySelector(`[data-os="${os}"]`);
-  if (mine) { mine.classList.add("mine"); grid.prepend(mine); }
-  const status = $("#ga-status");
-  const apply = (st) => { grid.querySelectorAll("[data-install]").forEach((b) => (b.hidden = !st.canPrompt || b.closest(".ga") !== mine));
-    if (st.installed) { status.hidden = false; status.textContent = "You're using the installed app."; } };
-  const hook = () => window.bgpInstall ? bgpInstall.onChange(apply) : setTimeout(hook, 200); hook();
-  grid.addEventListener("click", async (e) => { const b = e.target.closest("[data-install]"); if (!b) return;
-    const r = await bgpInstall.prompt(); status.hidden = false;
-    status.textContent = r === "accepted" ? "Installed. Open Branditude Growth from your home screen or Start menu." : r === "dismissed" ? "No problem. You can install it any time from here." : "Use the steps below to install."; });
-})();
-// In-page links (#pricing, #faq…) scroll smoothly without adding "#…" to the address bar
-document.addEventListener("click", (e) => {
-  const a = e.target.closest('a[href^="#"]'); if (!a || e.defaultPrevented) return;
-  const id = a.getAttribute("href").slice(1), el = id ? document.getElementById(id) : document.body;
-  if (!el) return;
-  e.preventDefault(); el.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
-});
-if (location.hash) { const t = document.getElementById(location.hash.slice(1)); history.replaceState(null, "", location.pathname + location.search); if (t) addEventListener("load", () => setTimeout(() => t.scrollIntoView({ block: "start" }), 300)); }
-load();
-// Referral links: ?ref=CODE fills the promo code at sign-up
-try { const r = new URLSearchParams(location.search).get("ref"); if (r) localStorage.setItem("bgp_ref", r.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20)); } catch {}
-</script>
+<script type="module" src="/assets/js/store.js?v=1"></script>
 </body>
 </html>

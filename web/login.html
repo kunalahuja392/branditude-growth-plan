@@ -50,13 +50,13 @@ const emailForm = (who) => `
     <div class="row" style="justify-content:space-between"><button type="button" class="btn ghost sm" id="forgot">Forgot password?</button>
     ${who === "business" ? "" : `<span class="muted small">Branditude team logins are added by the super admin.</span>`}</div>
     ${who === "business" ? `<div class="signup-box"><b>New here?</b>
-      <a class="btn sm" href="index.html#pricing" style="justify-content:center">Register a new business</a>
+      <a class="btn sm" href="/#products" style="justify-content:center">Register a new business</a>
       <button type="button" class="btn ghost sm" id="to-join" style="justify-content:center">I work at a business that invited me</button>
       <p class="small muted" style="margin:0">Customers: use the <b>Customer</b> tab; no sign-up needed, just your mobile number.</p></div>` : ""}
   </form>`;
 // Team members invited by a business create their own login with the invited email
 const joinForm = () => `
-  <p class="muted small">For staff only: the business owner must first add your email under <b>Team &amp; logins</b>. Then create a password for that same email here. To register your own business, use <a href="index.html#pricing">Register a new business</a> instead.</p>
+  <p class="muted small">For staff only: the business owner must first add your email under <b>Team &amp; logins</b>. Then create a password for that same email here. To register your own business, use <a href="/#products">Register a new business</a> instead.</p>
   <form id="f-join" class="fields" style="grid-template-columns:1fr">
     <div class="field"><label for="j-email">Email you were invited with</label><input id="j-email" type="email" autocomplete="email" required value="${esc(QS.get("email") || "")}"></div>
     <div class="field"><label for="j-pw">Choose a password (8+ characters)</label><input id="j-pw" type="password" autocomplete="new-password" required minlength="8"></div>

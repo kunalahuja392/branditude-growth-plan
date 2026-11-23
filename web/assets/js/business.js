@@ -23,7 +23,7 @@ const canWrite = () => activeOpen() || trialOpen() || (["trial", "pending_paymen
 const waOn = () => !!D.biz?.wa_enabled;
 
 // Which module each page belongs to. Pages without an entry are in every plan.
-const ROUTE_MOD = { offers: "loyalty", loyalty: "loyalty", templates: "bulk_whatsapp", alerts: "campaigns", seo: "seo", replies: "google_replies", orders: "menu", menu: "menu", staff: "attendance", salary: "attendance", accounts: "accounting",
+const ROUTE_MOD = { feedback: "reviews", offers: "loyalty", loyalty: "loyalty", templates: "bulk_whatsapp", alerts: "campaigns", seo: "seo", replies: "google_replies", orders: "menu", menu: "menu", staff: "attendance", salary: "attendance", accounts: "accounting",
   gboard: "gaming", gbookings: "gaming", gbills: "gaming", gstock: "gaming", gmembers: "gaming", gcash: "gaming", greports: "gaming", gsetup: "gaming" };
 // What this login may do: owner and admin everything, staff only the areas the owner ticked. The database checks the same.
 const can = (area) => ["owner", "admin"].includes(D.me?.role) || (D.me?.perms || []).includes(area);
@@ -50,7 +50,7 @@ const route = () => { const h = location.hash.slice(1).split("?")[0], all = ROUT
 export async function mount(ctx) {
   C = ctx;
   const m = await q(sb.from("business_members").select("business_id,role,perms").eq("user_id", C.user.id).order("created_at").limit(1));
-  if (!m.length) { $("#main").innerHTML = `<div class="auth-wrap"><div class="auth"><h2>No business yet</h2><p>Choose a plan to set up your business.</p><a class="btn primary" href="index.html#pricing">See plans</a></div></div>`; return; }
+  if (!m.length) { $("#main").innerHTML = `<div class="auth-wrap"><div class="auth"><h2>No business yet</h2><p>Choose a plan to set up your business.</p><a class="btn primary" href="/#products">See plans</a></div></div>`; return; }
   BID = m[0].business_id; D.me = { role: m[0].role, perms: m[0].perms || [] };
   const pre = await q(sb.from("businesses").select("needs_setup,email").eq("id", BID).single()).catch(() => ({}));
   if (pre.needs_setup) return setupForm(m[0].role === "owner");
@@ -659,10 +659,10 @@ after.plan = async () => {
     <div class="card"><div class="card-head"><h2>Not paid yet</h2><span class="pill ${unpaid.length ? "warn" : "good"}">${unpaid.length}</span></div>
       ${unpaid.length ? `<div class="list">${unpaid.map((p) => `<div class="item"><div class="grow"><b>${esc(p.description)}</b><span class="muted small">Started ${fmtDT(p.created_at)}</span></div><b class="num">${inr2(p.total)}</b><button class="btn sm primary" data-a="pay" data-id="${p.id}">Pay</button><button class="btn sm ghost" data-a="pay-cancel" data-id="${p.id}" aria-label="Cancel this payment">✕</button></div>`).join("")}</div>` : `<div class="empty">Nothing to pay.</div>`}</div>
   </div>
-  <div class="card" style="margin-top:16px"><div class="card-head"><h2>Change plan</h2></div><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">
-    ${pkgs.map((p) => `<div class="coupon" style="border-style:solid;${p.id === b.package_id ? "border-color:var(--accent)" : ""}"><div class="row" style="justify-content:space-between"><b style="font-size:18px">${esc(p.name)}</b>${p.id === b.package_id ? '<span class="pill acc">Current</span>' : p.is_popular ? '<span class="pill">Popular</span>' : ""}</div>
+  ${[["Change plan", pkgs.filter((p) => (p.kind || "plan") === "plan")], ["Or pay for just one product", pkgs.filter((p) => p.kind === "single")]].filter(([, l]) => l.length).map(([title, list]) => `<div class="card" style="margin-top:16px"><div class="card-head"><h2>${title}</h2></div><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">
+    ${list.map((p) => `<div class="coupon" style="border-style:solid;${p.id === b.package_id ? "border-color:var(--accent)" : ""}"><div class="row" style="justify-content:space-between"><b style="font-size:18px">${esc(pkgTitle(p))}</b>${p.id === b.package_id ? '<span class="pill acc">Current</span>' : p.is_popular ? '<span class="pill">Popular</span>' : ""}</div>
       <div><b class="num" style="font-size:20px">${inr(price(p, "monthly"))}</b><span class="muted">/month</span>${+p.discount_percent ? ` <span class="pill warn">${+p.discount_percent}% off</span>` : ""}<div class="muted small num">or ${inr(price(p, "yearly"))}/year</div></div>
-      <p class="small muted">${esc(p.tagline)}</p>${p.id !== b.package_id ? `<div class="row"><button class="btn sm" data-a="renew" data-id="${p.id}" data-bill="monthly">Monthly</button><button class="btn sm" data-a="renew" data-id="${p.id}" data-bill="yearly">Yearly</button></div>` : ""}</div>`).join("")}</div></div>
+      <p class="small muted">${esc(p.tagline)}</p>${p.id !== b.package_id ? `<div class="row"><button class="btn sm" data-a="renew" data-id="${p.id}" data-bill="monthly">Monthly</button><button class="btn sm" data-a="renew" data-id="${p.id}" data-bill="yearly">Yearly</button></div>` : ""}</div>`).join("")}</div></div>`).join("")}
   ${addonsCard(pend)}
   <div class="card" style="margin-top:16px"><div class="card-head"><h2>Services for ${esc(b.categories?.name || "you")}</h2></div>
     ${services.length ? `<div class="list">${services.map((p) => `<div class="item"><div class="grow"><b>${esc(p.name)}</b><span class="muted small">${esc(p.description || "")}</span></div><b class="num">${inr(p.price)}${p.billing === "monthly" ? "/mo" : ""}</b><button class="btn sm" data-a="buy-product" data-id="${p.id}" ${b.status === "active" ? "" : "disabled"}>Buy</button></div>`).join("")}</div>` : `<div class="empty">No extra services right now.</div>`}</div>
@@ -684,7 +684,7 @@ async function referCard() {
 }
 function addonsCard(pend) {
   const b = D.biz, mods = (D.mods || []).filter((m) => !m.core && fitsBiz(m.key)), yr = b.billing === "yearly";
-  if (!mods.length) return "";
+  if (!mods.length || (b.packages?.categories || []).includes(b.categories?.slug)) return "";  // gaming clubs: plans only, no add-ons
   const inPlan = (k) => (b.packages?.modules || []).includes(k), bought = (k) => (b.addon_modules || []).includes(k);
   const waiting = (k) => pend.some((p) => p.kind === "module" && p.meta?.module === k);
   return `<div class="card" style="margin-top:16px"><div class="card-head"><h2>Features & add-ons</h2>${b.status === "trial" ? '<span class="pill acc">All unlocked on trial</span>' : ""}</div>
@@ -739,8 +739,11 @@ async function order(kind, ref, billing) {
 /* ---------- Locked feature: explain it and offer the add-on or the plan that has it ---------- */
 let PKGS_CACHE = null;
 // Plans offered to this business: a type with its own plans (e.g. Gaming Club) sees only those; others see the general plans
-const plansForBiz = (list) => { const sl = D.biz?.categories?.slug, own = sl && list.some((p) => (p.categories || []).includes(sl));
-  return list.filter((p) => (own ? (p.categories || []).includes(sl) : !p.categories || (p.categories || []).includes(sl))); };
+// Bundles: a business type with its own plans (gaming) sees only those. Single products: only where they fit, never for gaming.
+const plansForBiz = (list) => { const sl = D.biz?.categories?.slug, plans = list.filter((p) => (p.kind || "plan") === "plan"), own = sl && plans.some((p) => (p.categories || []).includes(sl));
+  return list.filter((p) => (p.kind || "plan") === "plan" ? (own ? (p.categories || []).includes(sl) : !p.categories)
+    : !own && (!p.categories || !sl || p.categories.includes(sl))); };
+const pkgTitle = (p) => p.name + (p.max_tables && p.kind === "single" ? ` · ${p.max_tables} tables` : "");
 function lockedView(key) {
   const md = modInfo(key) || { name: "This feature", blurb: "", icon: "🔒" };
   setTimeout(async () => {
