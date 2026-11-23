@@ -560,8 +560,12 @@ after.settings = () => {
   const host = $("#main"); if (host && !$("#pl-card")) { host.insertAdjacentHTML("beforeend", phoneLinkHTML(C.user)); bindPhoneLink(async () => { const { data } = await sb.auth.getUser(); if (data?.user) C.user = data.user; render(); }); }
   const f = $("#set-form"); if (!f) return;
   sb.functions.invoke("razorpay", { body: { action: "status" } }).then(({ data }) => { const el = $("#rzp-state"); if (!el) return;
-    el.className = "pill " + (data?.keys && data?.webhook ? "good" : "bad");
-    el.textContent = !data ? "Couldn't check Razorpay" : data.keys && data.webhook ? "Razorpay connected" : !data.keys ? "Razorpay keys missing: businesses can't pay yet" : "Razorpay webhook secret missing"; });
+    const ok = data?.keys && data?.webhook && data?.valid !== false;
+    el.className = "pill " + (ok ? "good" : "bad");
+    el.textContent = !data ? "Couldn't check Razorpay" : !data.keys ? "Razorpay keys missing: businesses can't pay yet"
+      : data.valid === false ? "Razorpay rejected the key ID / secret: check they're from the same pair"
+      : !data.webhook ? "Razorpay webhook secret missing"
+      : `Razorpay connected${data.valid ? " and keys verified" : ""}${data.mode === "test" ? " (TEST mode: no real money)" : data.mode === "live" ? " (live)" : ""}`; });
   f.onsubmit = async (e) => { e.preventDefault(); const v = (id) => $("#" + id).value.trim();
     const up = [
       { key: "agency", public: true, value: { name: v("s-name"), legal_name: v("s-legal"), website: v("s-web"), whatsapp: v("s-wa").replace(/\D/g, ""), phone: v("s-phone"), email: v("s-email"), hours: v("s-hours"), address: v("s-addr") } },

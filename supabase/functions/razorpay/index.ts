@@ -45,7 +45,15 @@ Deno.serve(async (req: Request) => {
   }
 
   // Setup check for the admin Settings page (only says whether the secrets exist)
-  try { if (JSON.parse(raw || "{}").action === "status") return json({ keys: !!(keyId && keySecret), webhook: !!env("RAZORPAY_WEBHOOK_SECRET") }); } catch { /* not JSON */ }
+  // also asks Razorpay (read-only) whether the key pair is accepted, so a wrong or old secret shows up here
+  try { if (JSON.parse(raw || "{}").action === "status") {
+    let valid: boolean | null = null, mode: string | null = null;
+    if (keyId && keySecret) {
+      mode = keyId.startsWith("rzp_live_") ? "live" : keyId.startsWith("rzp_test_") ? "test" : "unknown";
+      try { const r = await fetch("https://api.razorpay.com/v1/orders?count=1", { headers: { Authorization: "Basic " + btoa(`${keyId}:${keySecret}`) } }); valid = r.ok; } catch { valid = null; }
+    }
+    return json({ keys: !!(keyId && keySecret), valid, mode, webhook: !!env("RAZORPAY_WEBHOOK_SECRET") });
+  } } catch { /* not JSON */ }
 
   // 2. Signed-in user
   if (!keyId || !keySecret) return json({ error: "Online payment isn't switched on yet.", setup: true }, 503);
