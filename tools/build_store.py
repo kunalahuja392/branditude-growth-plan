@@ -3,7 +3,7 @@
 import sys, html, json, os
 OUT = sys.argv[1]
 PRICE = {"review-feedback":"₹299","loyalty-card":"₹199","staff-attendance":"₹299","qr-menu-6":"₹249"}
-IMG = json.load(open(os.path.join(os.path.dirname(__file__), "images.json"))) if os.path.exists(os.path.join(os.path.dirname(__file__), "images.json")) else {}
+IMG = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "images.json"))) if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), "images.json")) else {}
 
 ICON = {
  "rev": '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.8l2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 16.6l-5.4 2.9 1.1-6.1-4.5-4.2 6.1-.8z"/></svg>',
@@ -85,10 +85,16 @@ def phone(k):
             '<div class="cartbar"><span>2 items · ₹220</span><span>Send to kitchen</span></div>'
     return f'<div class="phone" aria-hidden="true"><div class="screen"><div class="sbar"><span>9:41</span><span>●●● 5G</span></div><div class="sc">{s}</div></div></div>'
 
+ALT = {"rev":"A customer scans the review QR at a restaurant counter and gives five stars","loy":"A café customer shows her digital loyalty card with stamps on her phone",
+       "stf":"A salon staff member checks in for her shift with a PIN on the reception tablet","qr":"A family scans the QR on their table to see the menu on a phone"}
+def pic(k, cls="photo", eager=False):
+    n = IMG.get(k)
+    if not n: return ""
+    return (f'<img class="{cls}" src="/assets/img/photos/{n}.jpg" srcset="/assets/img/photos/{n}-800.jpg 800w, /assets/img/photos/{n}.jpg 1280w" '
+            f'sizes="(max-width:900px) 100vw, 560px" width="1280" height="853" alt="{ALT[k]}"{"" if eager else " loading=\"lazy\""} decoding="async">')
 def stage(k):
-    ph = IMG.get(k)
-    if ph:
-        return f'<div class="stage has-photo"><img class="photo" src="{ph}" alt="" loading="lazy">{phone(k)}</div>'
+    if IMG.get(k):
+        return f'<div class="stage has-photo">{pic(k)}</div>'
     return f'<div class="stage">{phone(k)}</div>'
 
 FONTS = '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">'
@@ -226,8 +232,7 @@ def product(k):
 <p class="note">Pay monthly, cancel any month. Pay yearly and get 2 months free.</p>'''
     toggle = '<div class="bill-toggle" role="group" aria-label="Billing" style="margin:0 0 14px"><button type="button" data-bill="monthly" aria-pressed="true">Monthly</button><button type="button" data-bill="yearly" aria-pressed="false">Yearly <em>2 months free</em></button></div>'
     others = "".join(f'<a class="pick {P[o]["cls"]}" href="/{P[o]["file"]}"><span class="dot">{ICON[o]}</span><b>{P[o]["name"]}</b><span>{P[o]["tile"]}</span><i>From <span data-price="{P[o]["slug"]}">{PRICE[P[o]["slug"]]}</span>/month</i></a>' for o in ORDER if o != k)
-    photo = IMG.get(k + "_wide")
-    shot = f'<section style="padding-top:0"><div class="wrap"><figure style="margin:0;border-radius:28px;overflow:hidden"><img src="{photo}" alt="" loading="lazy" style="width:100%;aspect-ratio:16/7;object-fit:cover"></figure></div></section>' if photo else ""
+    shot = f'<section style="padding-top:0"><div class="wrap"><figure class="wide-shot">{pic(k, "wide")}</figure></div></section>' if IMG.get(k) else ""
     body = f'''<body data-page="product" class="{p["cls"]}">
 {header(k)}
 <main id="main">

@@ -361,3 +361,11 @@ footer .flogo{width:150px;margin-bottom:12px}
 .getapp .ga-row{display:flex;gap:12px;flex-wrap:wrap;margin-top:26px}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* photos */
+.stage.has-photo{padding:0;min-height:0;aspect-ratio:4/3.4;background:var(--soft)}
+.stage.has-photo::before{display:none}
+.stage.has-photo img.photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 30%}
+.wide-shot{margin:0;border-radius:var(--r-lg);overflow:hidden;background:var(--mist)}
+.wide-shot img{width:100%;height:auto;aspect-ratio:16/8;object-fit:cover;object-position:center 35%}
+@media (max-width:700px){.wide-shot img{aspect-ratio:4/3}.stage.has-photo{aspect-ratio:4/3}}
