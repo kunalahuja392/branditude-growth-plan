@@ -1,5 +1,5 @@
 // Business portal: everything a shop owner manages (customers, loyalty, reviews, offers, WhatsApp, billing)
-import { sb, q } from "./sb.js";
+import { sb, q, friendly } from "./sb.js";
 import { $, $$, esc, inr, inr2, nfmt, fmtDate, fmtShort, fmtDT, ago, daysSince, daysToBirthday, todayISO, normPhone, prettyPhone, phoneInput, readPhone, phoneOk, phoneHint, ccOptions, toast, copy,
   openModal, closeModal, modalOpen, confirmBox, formModal, ico, shell, barChart, statusPill, THEMES, rwLabel, rwShort, rewardAt, nextReward, loyaltyCard } from "./ui.js";
 import { registerStaff } from "./staff.js";
@@ -27,7 +27,7 @@ const ROUTE_MOD = { feedback: "reviews", offers: "loyalty", loyalty: "loyalty", 
   gboard: "gaming", gbookings: "gaming", gbills: "gaming", gstock: "gaming", gmembers: "gaming", gcash: "gaming", greports: "gaming", gsetup: "gaming" };
 // What this login may do: owner and admin everything, staff only the areas the owner ticked. The database checks the same.
 const can = (area) => ["owner", "admin"].includes(D.me?.role) || (D.me?.perms || []).includes(area);
-const allowed = (r) => r === "signout" || can(AREA_OF[r] || "customers");
+const allowed = (r) => r === "signout" || (r === "password" ? ["owner", "admin"].includes(D.me?.role) : can(AREA_OF[r] || "customers"));
 const lockBadge = (r, badge) => (ROUTE_MOD[r] && !hasMod(ROUTE_MOD[r]) ? "🔒" : badge);
 const item = (r, label, icon, badge = "") => [r, label, icon, lockBadge(r, badge)];
 const ROUTES = () => [
@@ -38,7 +38,7 @@ const ROUTES = () => [
     ...(fitsBiz("menu") ? [item("orders", "Orders", "receipt", hasMod("menu") ? D.newOrders || "" : ""), item("menu", "QR menu", "food")] : []), item("staff", "Staff & attendance", "clock")] },
   { label: "Grow", items: [item("offers", "Offers & coupons", "tag"), item("loyalty", "Loyalty card", "card"), item("whatsapp", "WhatsApp", "wa"), item("seo", "Keywords & SEO", "spark")] },
   { label: "Money", items: [item("salary", "Salary", "rupee"), item("accounts", "Accounts & GST", "chart")] },
-  { label: "Account", items: [["plan", "Plan & services", "box"], ["profile", "Business profile", "store"], ["team", "Team & logins", "shield"], ["signout", "Sign out", "out"]] },
+  { label: "Account", items: [["plan", "Plan & services", "box"], ["profile", "Business profile", "store"], ["team", "Team & logins", "shield"], ["password", "Change password", "shield"], ["signout", "Sign out", "out"]] },
 ].map((g) => ({ ...g, items: g.items.filter((i) => allowed(i[0])) })).filter((g) => g.items.length);
 // On when: core module, in the plan, bought as an add-on, or on the free trial (everything unlocked). The database checks the same rule.
 const hasMod = (m) => D.biz?.status === "trial" || (D.biz?.lifetime && D.biz?.status === "active") || !!(D.mods || []).find((x) => x.key === m && x.core) || (D.biz?.packages?.modules || []).includes(m) || (D.biz?.addon_modules || []).includes(m);
@@ -54,13 +54,49 @@ export async function mount(ctx) {
   BID = m[0].business_id; D.me = { role: m[0].role, perms: m[0].perms || [] };
   const pre = await q(sb.from("businesses").select("needs_setup,email").eq("id", BID).single()).catch(() => ({}));
   if (pre.needs_setup) return setupForm(m[0].role === "owner");
-  window.addEventListener("hashchange", () => { if (location.hash === "#signout") return C.signOut(); if (location.hash === "#templates") { WA.tab = "templates"; return (location.hash = "#whatsapp"); } render(); });
+  let lastRoute = location.hash === "#password" ? "" : location.hash;
+  window.addEventListener("hashchange", () => { if (location.hash === "#signout") return C.signOut();
+    if (location.hash === "#password") { history.replaceState(null, "", lastRoute || location.pathname); render(); return changePassword(); }
+    lastRoute = location.hash; if (location.hash === "#templates") { WA.tab = "templates"; return (location.hash = "#whatsapp"); } render(); });
   if (location.hash === "#templates") { WA.tab = "templates"; location.hash = "#whatsapp"; }
+  if (location.hash === "#password") { history.replaceState(null, "", location.pathname); setTimeout(changePassword, 300); }
   await loadAll(); render(); mountAssistant();
   if (hasMod("menu")) {
     const tick = async () => { if (route() === "orders") return; try { const n = await newOrderCount(BID); if (n !== (D.newOrders || 0)) { D.newOrders = n; nav(); } } catch {} };
     tick(); setInterval(tick, 30000);
   }
+}
+
+// Owner/admin changes their own password (checks the current one first when the login has an email)
+function changePassword() {
+  const email = C.user?.email || "";
+  const m = openModal(`<div class="modal-head"><h2>🔑 Change password</h2><button class="btn ghost" data-close>Close</button></div>
+    <form id="cp"><p class="muted small" style="margin-top:-4px">For <b>${esc(email || C.user?.phone || "this login")}</b>. Staff passwords are changed from Team &amp; logins.</p>
+      ${email ? `<div class="field"><label for="cp0">Current password</label><input id="cp0" type="password" required autocomplete="current-password"></div>` : ""}
+      <div class="field"><label for="cp1">New password (8+ characters)</label><input id="cp1" type="password" minlength="8" required autocomplete="new-password"></div>
+      <div class="field"><label for="cp2">New password again</label><input id="cp2" type="password" minlength="8" required autocomplete="new-password"></div>
+      <label class="small" style="display:inline-flex;gap:6px;align-items:center;margin-top:4px;cursor:pointer"><input type="checkbox" id="cp-show" style="width:auto;margin:0"> Show passwords</label>
+      <p class="err" id="cp-err"></p>
+      <div class="modal-foot"><button class="btn" type="button" data-close>Cancel</button><button class="btn primary" id="cp-go">Save new password</button></div></form>`);
+  const err = (t) => ($("#cp-err", m).textContent = t);
+  $("#cp-show", m).onchange = (e) => m.querySelectorAll("input[type=password],input[data-pw]").forEach((i) => { i.dataset.pw = 1; i.type = e.target.checked ? "text" : "password"; });
+  $("#cp", m).onsubmit = async (e) => {
+    e.preventDefault(); err("");
+    const a = $("#cp1", m).value, b = $("#cp2", m).value, btn = $("#cp-go", m);
+    if (a.length < 8) return err("Use at least 8 characters.");
+    if (a !== b) return err("The two new passwords don't match.");
+    btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      if (email) {
+        if ($("#cp0", m).value === a) throw new Error("The new password is the same as the current one.");
+        const { error } = await sb.auth.signInWithPassword({ email, password: $("#cp0", m).value });
+        if (error) throw new Error("The current password is wrong.");
+      }
+      const { error } = await sb.auth.updateUser({ password: a });
+      if (error) throw new Error(friendly(error));
+      closeModal(); toast("Password changed. Use the new one next time you sign in.");
+    } catch (x) { err(x.message); btn.disabled = false; btn.textContent = "Save new password"; }
+  };
 }
 
 // First sign-in for an account Branditude created: collect the business details
