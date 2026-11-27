@@ -1,4 +1,4 @@
--- Flat price options per club (set by Branditude, not by the club): e.g. Gaming Loft snooker: charge 1 frame ₹120 (₹130 after midnight) instead of time; pool: charge 30 min flat ₹100.
+-- Flat price options per club (set by Branditude, not by the club): e.g. Gaming Loft snooker: charge 1 frame ₹120 (₹130 after midnight) instead of time; PS5: charge 30 min ₹100.
 alter table public.gc_settings add column if not exists flat_opts jsonb not null default '[]';
 alter table public.gc_sessions add column if not exists bill_flat text;
 alter table public.gc_sessions add column if not exists bill_qty int check (bill_qty is null or bill_qty between 1 and 50);
@@ -203,5 +203,5 @@ end $$;
 -- Gaming Loft only
 update public.gc_settings set flat_opts = '[
   {"key":"frame","label":"1 frame","unit":"frame","types":["Snooker"],"amount":120,"night_amount":130,"night_from":"00:00","night_to":"06:00"},
-  {"key":"pool30","label":"30 min flat","unit":"half-hour","types":["Pool"],"amount":100}
+  {"key":"ps30","label":"30 min","unit":"half-hour","types":["PS5"],"amount":100}
 ]'::jsonb where business_id in (select id from public.businesses where name ilike 'gaming loft');
