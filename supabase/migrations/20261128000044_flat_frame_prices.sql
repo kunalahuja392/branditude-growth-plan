@@ -203,5 +203,5 @@ end $$;
 -- Gaming Loft only
 update public.gc_settings set flat_opts = '[
   {"key":"frame","label":"Per frame","unit":"frame","types":["Snooker"],"amount":120,"night_amount":130,"night_from":"00:00","night_to":"06:00"},
-  {"key":"pool30","label":"30 min","unit":"× 30 min","types":["Pool"],"amount":100}
+  {"key":"pool30","label":"30 min","unit":"half-hour","types":["Pool"],"amount":100}
 ]'::jsonb where business_id in (select id from public.businesses where name ilike 'gaming loft');
