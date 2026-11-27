@@ -540,16 +540,15 @@ async function checkout(sid, btn) {
   const s = await guard(btn, async () => { let x = await rpc("gc_session", { p_session: sid }); if (["running", "paused"].includes(x.status)) x = await rpc("gc_action", { p_session: sid, p_action: "stop", p: {} }); return x; });
   if (!s) return; refresh().catch(() => {});
   let c = s.calc; const pl = s.lp_players || [], needTail = s.is_lp && c.tail && c.tail.minutes >= 1, mem = { id: null, bucket: 0, opts: [] };
-  const headLine = () => `${esc(s.customer_name || "Walk-in")} · ${tm(s.start_at)}–${tm(s.end_at)} · played ${mins(c.active_minutes)} · charging <b>${c.bill_mode === "flat" && c.flat_label ? `${esc(c.flat_label)} × ${c.bill_qty || 1}` : c.charged_minutes + " min"}</b>`;
-  const gameRow = (adj = 0) => `<td>🎮 ${esc(c.station.name)} · ${c.bill_mode === "flat" && c.flat_label ? `${esc(c.flat_label)} × ${c.bill_qty || 1} (${mins(c.active_minutes)} played)` : c.charged_minutes + " min"} ${c.bill_mode === "flat" ? "" : c.by_rule.length > 1 || c.by_rule[0]?.rule !== "Standard" ? c.by_rule.map((r) => `<span class="pill ${r.rule === "Standard" ? "" : "warn"}">${esc(r.rule)} ${mins(r.minutes)}</span>`).join(" ") : ""}</td><td class="num"><b>${inr2(c.amount + adj)}</b></td>`;
+  const headLine = () => `${esc(s.customer_name || "Walk-in")} · ${tm(s.start_at)}–${tm(s.end_at)} · played ${mins(c.active_minutes)} · charging <b>${c.bill_mode === "flat" && c.flat_label ? esc(c.flat_label) : c.charged_minutes + " min"}</b>`;
+  const gameRow = (adj = 0) => `<td>🎮 ${esc(c.station.name)} · ${c.bill_mode === "flat" && c.flat_label ? `${esc(c.flat_label)} (${mins(c.active_minutes)} played)` : c.charged_minutes + " min"} ${c.bill_mode === "flat" ? "" : c.by_rule.length > 1 || c.by_rule[0]?.rule !== "Standard" ? c.by_rule.map((r) => `<span class="pill ${r.rule === "Standard" ? "" : "warn"}">${esc(r.rule)} ${mins(r.minutes)}</span>`).join(" ") : ""}</td><td class="num"><b>${inr2(c.amount + adj)}</b></td>`;
   const flats = s.flat_opts || [], nightNow = (o) => { const t = new Date(Date.parse(s.start_at) + 5.5 * 36e5).toISOString().slice(11, 16); return o.night_amount != null && t >= (o.night_from || "00:00") && t < (o.night_to || "06:00"); };
   const flatRate = (o) => (nightNow(o) ? +o.night_amount : +o.amount);
   const modeOf = () => c.bill_mode === "flat" && c.bill_flat ? "flat:" + c.bill_flat : c.bill_mode === "custom" ? "custom" : c.bill_mode === "played" ? "played" : c.bill_mode === "booked" ? "booked" : (c.charged_minutes > c.played_minutes && s.booked_minutes && c.charged_minutes === Math.max(s.booked_minutes, c.played_minutes) ? "booked" : "played");
   const memCover = () => { const o = mem.opts.find((x) => x.id === mem.id), b = o?.buckets[mem.bucket]; if (!b || !c.charged_minutes) return { min: 0, amt: 0 }; const min = Math.min(b.left, c.charged_minutes); return { min, amt: +(c.amount * min / c.charged_minutes).toFixed(2) }; };
   const m = openModal(`<div class="modal-head"><h2>🧾 Bill · ${esc(c.station.name)}</h2><button class="btn ghost" data-close>Close</button></div>
     <p class="muted" style="margin:0" id="g-hd">${headLine()}</p>
-    <div class="field" style="margin-top:10px"><label>Charge for</label><div class="row" style="gap:8px;flex-wrap:wrap"><div class="chips" id="g-bt">${chips([["played", `Time played (${c.played_minutes} min)`], ...(s.booked_minutes ? [["booked", `Full booking (${mins(s.booked_minutes)})`]] : []), ...flats.map((o) => ["flat:" + o.key, `${esc(o.label)} · ${inr(flatRate(o))}${nightNow(o) ? " (night)" : ""}`]), ...(owner() ? [["custom", "Other minutes"]] : [])], [modeOf()])}</div>
-      <span id="g-fq" ${c.bill_mode === "flat" ? "" : "hidden"}>× <input id="g-fqn" type="number" min="1" max="50" value="${c.bill_qty || 1}" style="width:64px"> <span class="muted small" id="g-fqu"></span></span>
+    <div class="field" style="margin-top:10px"><label>Charge for</label><div class="row" style="gap:8px;flex-wrap:wrap"><div class="chips" id="g-bt">${chips([["played", `Time played (${c.played_minutes} min)`], ...(s.booked_minutes ? [["booked", `Full booking (${mins(s.booked_minutes)})`]] : []), ...flats.map((o) => ["flat:" + o.key, `Charge ${esc(o.label)} · ${inr(flatRate(o))}${nightNow(o) ? " (night)" : ""}`]), ...(owner() ? [["custom", "Other minutes"]] : [])], [modeOf()])}</div>
       <span id="g-btc" ${c.bill_mode === "custom" ? "" : "hidden"}><input id="g-btm" type="number" min="0" max="1440" value="${c.bill_minutes ?? c.charged_minutes}" style="width:80px"> min <button class="btn sm" id="g-bts">Apply</button></span></div></div>
     ${owner() ? `<div id="g-own" class="small" style="margin-top:6px"></div>` : ""}
     ${s.is_lp ? "" : `<div id="g-mem"></div>`}
@@ -590,8 +589,7 @@ async function checkout(sid, btn) {
   const applyCalc = (v) => { c = v.calc; $("#g-hd", m).innerHTML = headLine(); $("#g-gr", m).innerHTML = gameRow(); drawOwn(); drawMem(); draw(); };
   const setTime = (mode, minutes, flat, qty) => guard(null, async () => applyCalc(await rpc("gc_bill_time", { p_session: sid, p_mode: mode, p_minutes: minutes ?? null, p_flat: flat ?? null, p_qty: qty ?? 1 })));
   let flatKey = c.bill_mode === "flat" ? c.bill_flat : null;
-  const fqUnit = () => { const o = flats.find((x) => x.key === flatKey); if ($("#g-fqu", m)) $("#g-fqu", m).textContent = o ? `${o.unit || ""} = ${inr(flatRate(o) * Math.max(1, +$("#g-fqn", m).value || 1))}` : ""; };
-  if ($("#g-fqn", m)) { fqUnit(); $("#g-fqn", m).addEventListener("change", () => { fqUnit(); if (flatKey) setTime("flat", null, flatKey, Math.min(50, Math.max(1, Math.round(+$("#g-fqn", m).value || 1)))); }); $("#g-fqn", m).addEventListener("input", fqUnit); }
+
   // owner only: change the gaming price on this bill (staff never see this)
   const drawOwn = () => { const el = $("#g-own", m); if (!el) return; const set = c.bill_amount != null;
     el.innerHTML = set ? `🔒 Price changed by owner: ${inr2(c.auto_amount)} → <b>${inr2(c.amount)}</b> <button type="button" class="btn sm ghost" id="g-pr0">Undo</button> <button type="button" class="btn sm ghost" id="g-pre">Change</button>`
@@ -603,8 +601,8 @@ async function checkout(sid, btn) {
       $("#g-prx", el).onclick = drawOwn; };
     const z = $("#g-pr0", el); if (z) z.onclick = () => guard(z, async () => applyCalc(await rpc("gc_bill_price", { p_session: sid, p_amount: null }))); };
   drawOwn();
-  pick($("#g-bt", m), { onChange: (v) => { $("#g-btc", m).hidden = v[0] !== "custom"; const fl = (v[0] || "").startsWith("flat:"); if ($("#g-fq", m)) $("#g-fq", m).hidden = !fl;
-    if (fl) { flatKey = v[0].slice(5); $("#g-fqn", m).value = 1; fqUnit(); return setTime("flat", null, flatKey, 1); } flatKey = null;
+  pick($("#g-bt", m), { onChange: (v) => { $("#g-btc", m).hidden = v[0] !== "custom"; const fl = (v[0] || "").startsWith("flat:");
+    if (fl) { flatKey = v[0].slice(5); return setTime("flat", null, flatKey, 1); } flatKey = null;
     if (v[0] === "custom") $("#g-btm", m).focus(); else setTime(v[0]); } });
   if ($("#g-bts", m)) $("#g-bts", m).onclick = () => setTime("custom", Math.max(0, Math.round(+$("#g-btm", m).value || 0)));
   if ($("#g-btm", m)) $("#g-btm", m).onkeydown = (e) => { if (e.key === "Enter") $("#g-bts", m).click(); };

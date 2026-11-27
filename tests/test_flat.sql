@@ -21,7 +21,7 @@ do $$ declare b uuid := current_setting('t.b')::uuid; ps uuid; pc uuid; s uuid; 
   assert (v->'calc'->>'amount')::numeric = case when night then 260 else 240 end, 'flat 2 frames: ' || (v->'calc'->>'amount');
   bl := gc_checkout(s, jsonb_build_object('payments', jsonb_build_array(jsonb_build_object('mode','cash','amount', case when night then 260 else 240 end))));
   assert (bl->>'total')::numeric = case when night then 260 else 240 end, 'bill ' || (bl->>'total');
-  assert (bl->'lines'->0->>'desc') like '%Per frame × 2%', 'line: ' || (bl->'lines'->0->>'desc');
+  assert (bl->'lines'->0->>'desc') like '%Per frame (%', 'line: ' || (bl->'lines'->0->>'desc');
   v := gc_start(b, jsonb_build_object('station_id', pc)); s := (v->>'id')::uuid;
   assert jsonb_array_length(v->'flat_opts') = 0, 'not on other stations';
   begin perform gc_bill_time(s, 'flat', null, 'frame', 1); exception when others then ok := true; end;
