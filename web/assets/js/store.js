@@ -232,4 +232,40 @@ document.addEventListener("submit", async (e) => {
 document.addEventListener("click", (e) => { const y = e.target.closest("button.yt[data-yt]"); if (!y) return;
   const f = document.createElement("iframe"); f.src = `https://www.youtube-nocookie.com/embed/${y.dataset.yt}?autoplay=1&rel=0&playsinline=1`;
   f.title = y.getAttribute("aria-label") || "Video"; f.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen"; f.allowFullscreen = true; y.replaceWith(f); });
+// ---------- Book a demo page ----------
+(() => {
+  const f = $("form[data-demo]"); if (!f) return;
+  const want = new URLSearchParams(location.search).get("for");
+  const pre = { restaurant: "Restaurant app + Porter delivery", gaming: "Gaming Club software", reviews: "Review & Feedback", loyalty: "Loyalty Card", staff: "Staff Attendance & Salary", qr: "QR Menu" }[want];
+  if (pre) f.querySelectorAll("input[name=interest]").forEach((c) => (c.checked = c.value === pre));
+  const SLOTS = ["10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
+  const days = []; const d0 = new Date(); for (let i = 0; days.length < 6 && i < 10; i++) { const d = new Date(d0); d.setDate(d0.getDate() + i); if (d.getDay() === 0) continue; if (i === 0 && d0.getHours() >= 17) continue; days.push(d); }
+  const lbl = (d, i) => (i === 0 && d.toDateString() === d0.toDateString() ? "Today" : d.toLocaleDateString("en-IN", { weekday: "short" })) + `<b>${d.getDate()}</b>` + d.toLocaleDateString("en-IN", { month: "short" });
+  let day = 0, slot = "";
+  const t12 = (s) => { const [h, m] = s.split(":").map(Number); return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`; };
+  const drawSlots = () => { const d = days[day], now = new Date();
+    $("[data-slots]").innerHTML = SLOTS.map((s) => { const [h] = s.split(":").map(Number); const past = d.toDateString() === now.toDateString() && h <= now.getHours() + 1;
+      return `<button type="button" class="slot" data-slot="${s}" ${past ? "disabled" : ""} aria-pressed="${slot === s}">${t12(s)}</button>`; }).join(""); };
+  $("[data-days]").innerHTML = days.map((d, i) => `<button type="button" class="day" data-day="${i}" aria-pressed="${i === 0}">${lbl(d, i)}</button>`).join("");
+  drawSlots();
+  f.addEventListener("click", (e) => { const a = e.target.closest("[data-day]"); if (a) { day = +a.dataset.day; slot = ""; f.querySelectorAll("[data-day]").forEach((b) => b.setAttribute("aria-pressed", b === a)); drawSlots(); }
+    const s = e.target.closest("[data-slot]"); if (s && !s.disabled) { slot = s.dataset.slot; f.querySelectorAll("[data-slot]").forEach((b) => b.setAttribute("aria-pressed", b === s)); } });
+  f.addEventListener("submit", async (e) => { e.preventDefault(); const v = (n) => (f.elements[n]?.value || "").trim(), er = f.querySelector(".err"), btn = f.querySelector("button[type=submit]");
+    const interest = [...f.querySelectorAll("input[name=interest]:checked")].map((c) => c.value);
+    const ph = v("phone").replace(/\D/g, "").replace(/^0+/, ""), phone = ph.length === 10 ? "91" + ph : ph;
+    if (!slot) return (er.textContent = "Please pick a time for the demo.");
+    if (!v("business_name") || !v("contact_name") || !v("city")) return (er.textContent = "Please fill in your details.");
+    if (!/^91[6-9]\d{9}$/.test(phone)) return (er.textContent = "Enter a 10-digit WhatsApp number.");
+    const when = days[day].toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) + ", " + t12(slot);
+    btn.disabled = true; er.textContent = "";
+    const { data, error } = await sb.rpc("submit_lead", { p: { business_name: v("business_name"), contact_name: v("contact_name"), phone: "+" + phone, city: v("city"), source: "enquiry",
+      message: `DEMO BOOKED: ${when} · ${v("how")} · Interested in: ${interest.join(", ") || "Not sure yet"}` } });
+    if (error) { btn.disabled = false; return (er.textContent = friendly(error)); }
+    const msg = `Hi Branditude, I've booked a free demo.\nRef: ${data?.ref || ""}\nWhen: ${when}\nHow: ${v("how")}\nInterested in: ${interest.join(", ") || "Not sure yet"}\nName: ${v("contact_name")}, ${v("business_name")}, ${v("city")}`;
+    f.outerHTML = `<div class="demo-done"><div class="done-mark"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></div>
+      <h2>Your demo is booked for ${esc(when)}</h2><p class="lede" style="margin-top:10px">Reference <b>${esc(data?.ref || "")}</b>. One last step: send us the confirmation on WhatsApp so we can reach you.</p>
+      <a class="btn wa" style="margin-top:20px" href="${waLink(msg)}" target="_blank" rel="noopener">Confirm on WhatsApp</a>
+      <p class="muted" style="margin-top:14px;font-size:15px">Want to look around first? Every product has a <a href="/#plans">3-day free trial</a>.</p></div>`;
+    $(".demo-done")?.scrollIntoView({ behavior: "smooth", block: "center" }); });
+})();
 load();

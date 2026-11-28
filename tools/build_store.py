@@ -117,7 +117,7 @@ def head(title, desc, theme="#ffffff"):
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Branditude">
 <script src="/assets/js/pwa.js" defer></script>
 {FONTS}
-<link rel="stylesheet" href="/assets/css/store.css?v=7">
+<link rel="stylesheet" href="/assets/css/store.css?v=8">
 </head>'''
 
 def header(cur=""):
@@ -127,9 +127,9 @@ def header(cur=""):
   <a class="brand" href="/"><img src="/assets/img/branditude-mark.svg" alt="" width="40" height="35"><span>Branditude<small>Growth tools for local business</small></span></a>
   <nav class="nav" id="site-nav" aria-label="Main">
     <div class="drop"><button class="navbtn" type="button" aria-expanded="false">Products ▾</button><div class="drop-menu">{menu}</div></div>
-    <a href="/restaurant-app"{" aria-current=page" if cur=="rest" else ""}>Restaurant app</a><a href="/#plans">Plans</a><a href="/gaming"{" aria-current=page" if cur=="game" else ""}>Gaming clubs</a><a href="/#faq">FAQ</a><a href="/login" data-signin>Login</a>
+    <a href="/restaurant-app"{" aria-current=page" if cur=="rest" else ""}>Restaurant app</a><a href="/#plans">Plans</a><a href="/gaming"{" aria-current=page" if cur=="game" else ""}>Gaming clubs</a><a href="/#faq">FAQ</a><a href="/demo"{" aria-current=page" if cur=="demo" else ""}>Book a demo</a><a href="/login" data-signin>Login</a>
   </nav>
-  <div class="actions"><a class="btn primary sm hide-m" href="/#plans">See prices</a><button class="menu-btn" id="menu-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><span></span></button></div>
+  <div class="actions"><a class="btn line sm hide-m" href="/demo">Book a demo</a><a class="btn primary sm hide-m" href="/#plans">See prices</a><button class="menu-btn" id="menu-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><span></span></button></div>
 </div></header>'''
 
 def footer():
@@ -142,7 +142,7 @@ def footer():
 </div></footer>
 <a class="wa-float" id="wa-float" data-wa="Hi Branditude! I'd like to know more and book a free demo." href="https://wa.me/918855837148?text=Hi%20Branditude!%20I%27d%20like%20to%20know%20more%20and%20book%20a%20free%20demo." target="_blank" rel="noopener" aria-label="Chat with Branditude on WhatsApp"><svg viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" d="M16 3C8.8 3 3 8.7 3 15.8c0 2.5.7 4.9 2 7L3 29l6.4-2c2 1.1 4.3 1.7 6.6 1.7 7.2 0 13-5.7 13-12.8S23.2 3 16 3zm0 23.4c-2.1 0-4.1-.6-5.9-1.7l-.4-.3-3.8 1.2 1.2-3.7-.3-.4c-1.2-1.8-1.8-3.8-1.8-5.9C5 10 9.9 5.2 16 5.2S27 10 27 15.9 22.1 26.4 16 26.4zm6-7.8c-.3-.2-2-1-2.3-1.1-.3-.1-.5-.2-.8.2l-1 1.3c-.2.2-.4.3-.7.1-.3-.2-1.4-.5-2.6-1.6-1-.9-1.6-1.9-1.8-2.2-.2-.3 0-.5.1-.7l.5-.6c.2-.2.2-.4.3-.6.1-.2 0-.4 0-.6l-1-2.5c-.3-.7-.6-.6-.8-.6h-.7c-.2 0-.6.1-.9.4-.3.3-1.2 1.2-1.2 2.9s1.2 3.4 1.4 3.6c.2.2 2.4 3.7 5.9 5.1 2.9 1.1 3.5.9 4.1.8.6-.1 2-.8 2.3-1.6.3-.8.3-1.5.2-1.6-.1-.2-.3-.3-.6-.4z"/></svg><span>WhatsApp us</span></a>
 <div id="checkout-root"></div>
-<script type="module" src="/assets/js/store.js?v=7"></script>
+<script type="module" src="/assets/js/store.js?v=8"></script>
 </body>
 </html>'''
 
@@ -151,7 +151,7 @@ def faq(items):
 
 CONTACT = '''<section class="contact" id="contact"><div class="wrap">
   <div><h2>Not sure what you need?</h2><p class="lede" style="margin-top:16px">Tell us about your business on WhatsApp. We'll suggest the right product or plan and set it up with you. We usually reply within an hour in working hours.</p>
-  <div class="row-cta"><a class="btn wa" data-wa="Hi Branditude, I'd like to know which product fits my business." href="https://wa.me/918855837148" target="_blank" rel="noopener">Chat on WhatsApp</a><a class="btn line" href="/#plans">Compare plans</a></div></div>
+  <div class="row-cta"><a class="btn wa" data-wa="Hi Branditude, I'd like to know which product fits my business." href="https://wa.me/918855837148" target="_blank" rel="noopener">Chat on WhatsApp</a><a class="btn line" href="/demo">Book a free demo</a></div></div>
   <div class="cinfo" data-cinfo></div></div></section>'''
 
 def home():
@@ -301,7 +301,7 @@ def gaming():
   <div><span class="kicker" style="color:#9fe07a"><span class="dot" style="background:#7cc242;color:#10200a;width:32px;height:32px;border-radius:10px">{ICON["game"]}</span>Gaming club software</span>
   <h1 style="color:#fff;max-width:16ch">Run your gaming café from one phone.</h1>
   <p class="lede" style="margin-top:20px">Live timers for every PS5, Xbox, PC, VR, racing sim and pool table. LP matches split game by game, happy-hour pricing, snacks and bills, all in one app. We set it up for you.</p>
-  <div class="cta"><a class="btn primary" href="#gplans">See the 2 plans</a><a class="btn line" style="background:transparent;color:#fff;box-shadow:inset 0 0 0 1.5px #4a5577" data-wa="Hi Branditude, I'd like a demo of the Gaming Club software." href="https://wa.me/918855837148" target="_blank" rel="noopener">Get a demo on WhatsApp</a></div></div>
+  <div class="cta"><a class="btn primary" href="#gplans">See the 2 plans</a><a class="btn line" style="background:transparent;color:#fff;box-shadow:inset 0 0 0 1.5px #4a5577" href="/demo?for=gaming">Book a free demo</a></div></div>
 </div></section>
 <section><div class="wrap"><div class="sec-head"><h2>Everything a gaming club runs on</h2></div><div class="feat-grid">{fg}</div>
   {video("gaming", "Watch: how the Gaming Club software works (40 seconds)")}</div></section>
@@ -357,7 +357,7 @@ def restaurant():
   <h1 style="font-size:clamp(38px,5.4vw,64px)">Your own food ordering app. Porter delivers.</h1>
   <p class="lede" style="margin-top:18px">Take delivery orders on your own app instead of paying 20–30% commission to food apps. Customers order and pay, you cook, and a Porter rider is booked automatically.</p>
   <div class="buybox"><div class="row"><div class="amt"><span style="display:block;font-size:14px;color:var(--ink-3);font-weight:700">Starting</span><b class="num">₹1,499</b> <span>/month</span></div>
-  <a class="btn primary" data-wa="Hi Branditude, I'd like a free demo of the restaurant ordering app with Porter delivery." href="https://wa.me/918855837148" target="_blank" rel="noopener">Book a free demo</a></div>
+  <a class="btn primary" href="/demo?for=restaurant">Book a free demo</a></div>
   <p class="note"><b>0% commission</b> on your orders. Porter delivery and online payment charges are paid as actual. We're setting up restaurants now: book a demo and we'll give you your start date.</p></div></div>
   {ph}
 </div></section>
@@ -408,8 +408,38 @@ def restaurant():
 {footer()}'''
     return head("Your own restaurant ordering app with Porter delivery · Branditude", "Take delivery orders on your own app with 0% commission. Orders come to you, Porter delivers automatically. Starting ₹1,499/month.", "#ffffff") + "\n" + body
 
+def demo():
+    prods = [("Review & Feedback","rev"),("Loyalty Card","loy"),("Staff Attendance & Salary","stf"),("QR Menu","qr"),("Restaurant app + Porter delivery","rest"),("Gaming Club software","game"),("Not sure yet","")]
+    opts = "".join(f'<label class="chip-opt"><input type="checkbox" name="interest" value="{html.escape(n)}"{" checked" if n=="Not sure yet" else ""}><span>{html.escape(n)}</span></label>' for n,_ in prods)
+    body = f'''<body data-page="demo">
+{header("demo")}
+<main id="main">
+<section class="phero" style="--soft:#eef3fb;--c:#2f6bc4;--cd:#1f4f97"><div class="wrap" style="grid-template-columns:1fr">
+  <div class="txt" style="padding-bottom:40px"><p class="crumbs"><a href="/">Home</a> / Book a demo</p>
+  <h1 style="font-size:clamp(36px,5vw,58px);max-width:18ch">Book a free 15-minute demo</h1>
+  <p class="lede" style="margin-top:16px;max-width:52ch">Pick a time that suits you. We'll call you on WhatsApp video or a normal call, show you the product on a real phone, and answer your questions. No obligation.</p></div>
+</div></section>
+<section style="padding-top:24px"><div class="wrap"><form class="demo-form" data-demo novalidate>
+  <div class="dstep"><h2>1. What would you like to see?</h2><div class="chips">{opts}</div></div>
+  <div class="dstep"><h2>2. Pick a day</h2><div class="days" data-days></div></div>
+  <div class="dstep"><h2>3. Pick a time</h2><div class="slots" data-slots></div><p class="muted" style="font-size:14px;margin-top:8px">Indian time. Monday to Saturday, 10 am to 7 pm.</p></div>
+  <div class="dstep"><h2>4. Your details</h2><div class="fields">
+    <div class="field"><label for="d-biz">Business name</label><input id="d-biz" name="business_name" required autocomplete="organization"></div>
+    <div class="field"><label for="d-name">Your name</label><input id="d-name" name="contact_name" required autocomplete="name"></div>
+    <div class="field"><label for="d-phone">WhatsApp number</label><input id="d-phone" name="phone" required inputmode="tel" autocomplete="tel" placeholder="98xxxxxxxx"></div>
+    <div class="field"><label for="d-city">City</label><input id="d-city" name="city" required autocomplete="address-level2"></div>
+    <div class="field full"><label for="d-how">How do you prefer the demo?</label><select id="d-how" name="how"><option>WhatsApp video call</option><option>Phone call</option><option>Google Meet</option><option>Visit my shop (Nagpur)</option></select></div>
+  </div></div>
+  <div class="dstep"><button class="btn primary block" type="submit">Book my demo</button><p class="err" role="alert"></p></div>
+</form></div></section>
+{CONTACT}
+</main>
+{footer()}'''
+    return head("Book a free demo · Branditude", "Book a free 15-minute demo of Branditude's review, loyalty, staff attendance, QR menu, restaurant app or gaming club software.") + "\n" + body
+
 open(os.path.join(OUT, "index.html"), "w").write(home())
 for k in ORDER: open(os.path.join(OUT, P[k]["file"]), "w").write(product(k))
 open(os.path.join(OUT, "gaming.html"), "w").write(gaming())
 open(os.path.join(OUT, "restaurant-app.html"), "w").write(restaurant())
+open(os.path.join(OUT, "demo.html"), "w").write(demo())
 print("built", OUT)
