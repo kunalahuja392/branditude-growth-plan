@@ -117,7 +117,7 @@ def head(title, desc, theme="#ffffff"):
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Branditude">
 <script src="/assets/js/pwa.js" defer></script>
 {FONTS}
-<link rel="stylesheet" href="/assets/css/store.css?v=5">
+<link rel="stylesheet" href="/assets/css/store.css?v=6">
 </head>'''
 
 def header(cur=""):
@@ -142,7 +142,7 @@ def footer():
 </div></footer>
 <a class="wa-float" id="wa-float" data-wa="Hi Branditude! I'd like to know more and book a free demo." href="https://wa.me/918855837148?text=Hi%20Branditude!%20I%27d%20like%20to%20know%20more%20and%20book%20a%20free%20demo." target="_blank" rel="noopener" aria-label="Chat with Branditude on WhatsApp"><svg viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" d="M16 3C8.8 3 3 8.7 3 15.8c0 2.5.7 4.9 2 7L3 29l6.4-2c2 1.1 4.3 1.7 6.6 1.7 7.2 0 13-5.7 13-12.8S23.2 3 16 3zm0 23.4c-2.1 0-4.1-.6-5.9-1.7l-.4-.3-3.8 1.2 1.2-3.7-.3-.4c-1.2-1.8-1.8-3.8-1.8-5.9C5 10 9.9 5.2 16 5.2S27 10 27 15.9 22.1 26.4 16 26.4zm6-7.8c-.3-.2-2-1-2.3-1.1-.3-.1-.5-.2-.8.2l-1 1.3c-.2.2-.4.3-.7.1-.3-.2-1.4-.5-2.6-1.6-1-.9-1.6-1.9-1.8-2.2-.2-.3 0-.5.1-.7l.5-.6c.2-.2.2-.4.3-.6.1-.2 0-.4 0-.6l-1-2.5c-.3-.7-.6-.6-.8-.6h-.7c-.2 0-.6.1-.9.4-.3.3-1.2 1.2-1.2 2.9s1.2 3.4 1.4 3.6c.2.2 2.4 3.7 5.9 5.1 2.9 1.1 3.5.9 4.1.8.6-.1 2-.8 2.3-1.6.3-.8.3-1.5.2-1.6-.1-.2-.3-.3-.6-.4z"/></svg><span>WhatsApp us</span></a>
 <div id="checkout-root"></div>
-<script type="module" src="/assets/js/store.js?v=5"></script>
+<script type="module" src="/assets/js/store.js?v=6"></script>
 </body>
 </html>'''
 
@@ -264,7 +264,18 @@ def product(k):
 {shot}
 <section style="padding-top:0"><div class="wrap">
   <div class="sec-head"><h2>How it works</h2></div><div class="steps">{how}</div>
+  {video(p["file"][:-5], "Watch: how " + p["name"] + " works (30 seconds)")}
   <div style="margin-top:40px"><h3>Made for</h3><div class="who">{who}</div></div>
+</div></section>
+
+<section style="padding-top:0"><div class="wrap">
+  <div class="sec-head"><h2>What happens after you sign up</h2></div>
+  <ol class="timeline">
+    <li><b>Today</b><span>Sign up in 2 minutes and start your free trial, or pay by UPI, card or netbanking. Your dashboard opens straight away.</span></li>
+    <li><b>Within 48 hours</b><span>Our team calls you on WhatsApp, adds your logo and details, and sends you the QR codes to print.</span></li>
+    <li><b>Day 2 onwards</b><span>Put the QR on your counter and start. Everything runs from your dashboard on your phone.</span></li>
+    <li><b>Any time</b><span>Questions? WhatsApp us on +91 88558 37148, Monday to Saturday, 10 am to 7 pm.</span></li>
+  </ol>
 </div></section>
 
 <section style="padding-top:0"><div class="wrap"><div class="bundle"><div><h2 style="font-size:clamp(26px,3vw,36px)">Want more than one tool?</h2><p>{p["bundle"]} Plans always cost less than buying the tools separately.</p></div>
@@ -292,7 +303,8 @@ def gaming():
   <p class="lede" style="margin-top:20px">Live timers for every PS5, Xbox, PC, VR, racing sim and pool table. LP matches split game by game, happy-hour pricing, snacks and bills, all in one app. We set it up for you.</p>
   <div class="cta"><a class="btn primary" href="#gplans">See the 2 plans</a><a class="btn line" style="background:transparent;color:#fff;box-shadow:inset 0 0 0 1.5px #4a5577" data-wa="Hi Branditude, I'd like a demo of the Gaming Club software." href="https://wa.me/918855837148" target="_blank" rel="noopener">Get a demo on WhatsApp</a></div></div>
 </div></section>
-<section><div class="wrap"><div class="sec-head"><h2>Everything a gaming club runs on</h2></div><div class="feat-grid">{fg}</div></div></section>
+<section><div class="wrap"><div class="sec-head"><h2>Everything a gaming club runs on</h2></div><div class="feat-grid">{fg}</div>
+  {video("gaming", "Watch: how the Gaming Club software works (30 seconds)")}</div></section>
 <section class="gaming" id="gplans"><div class="wrap">
   <div class="sec-head"><h2>Two plans. Everything included.</h2><p class="lede" style="margin-top:16px">No add-ons to work out. Pick the plan that fits and you're done.</p>
   <div class="bill-toggle" role="group" aria-label="Billing"><button type="button" data-bill="monthly" aria-pressed="true">Monthly</button><button type="button" data-bill="yearly" aria-pressed="false">Yearly <em>2 months free</em></button></div></div>

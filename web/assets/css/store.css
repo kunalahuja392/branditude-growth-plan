@@ -405,3 +405,10 @@ footer .flogo{width:150px;margin-bottom:12px}
 .explainer{margin:36px auto 0;max-width:880px}
 .explainer video{display:block;width:100%;aspect-ratio:16/9;border-radius:22px;background:#0e1426;box-shadow:var(--shadow-lg)}
 .explainer figcaption{text-align:center;color:var(--ink-3);font-size:15px;margin-top:10px;font-weight:600}
+
+.timeline{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,1fr);gap:14px;counter-reset:t}
+.timeline li{background:var(--soft,var(--mist));border-radius:20px;padding:20px;position:relative}
+.timeline li b{display:block;font:800 20px var(--display);color:var(--cd,var(--ink));margin-bottom:6px}
+.timeline li span{color:var(--ink-2);font-size:16px}
+@media (max-width:900px){.timeline{grid-template-columns:1fr 1fr}}@media (max-width:560px){.timeline{grid-template-columns:1fr}}
+.gaming .explainer figcaption{color:#8d97b3}
