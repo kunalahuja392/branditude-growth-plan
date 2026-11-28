@@ -58,7 +58,7 @@ CSS = open(f"{WEB}/assets/css/store.css").read()
 def build(key, v):
     ph = phone_of(v["page"])
     dark = v.get("dark")
-    D = [3.6,4.6,4.4,4.4,4.4,4.6,5.4]
+    D = v.get('D') or [3.6,4.6,4.4,4.4,4.4,4.6,5.4]
     T = [sum(D[:i]) for i in range(len(D))]; total=sum(D)
     def sc(i, inner, extra=""):
         return f'<section class="scene {extra}" style="animation:scene {D[i]}s linear {T[i]}s both">{inner}</section>'
@@ -122,5 +122,13 @@ h1.hook{{font:800 64px/1.1 var(--display);letter-spacing:-.03em;color:#fff;margi
 </style></head><body class="{v["cls"]}">{body}</body></html>'''
     open(f"/home/claude/vid/{key}.html","w").write(page)
     return total
+import subprocess
+VO=os.path.join(os.path.dirname(os.path.abspath(__file__)),'voice')
+base=[3.6,4.6,4.4,4.4,4.4,4.6,5.4]
+for k,v in V.items():
+    ds=[float(subprocess.check_output(['ffprobe','-v','error','-show_entries','format=duration','-of','csv=p=0',f'{VO}/{k}_{i}.mp3']).decode()) for i in range(7)]
+    v['D']=[round(max(base[i], ds[i]+0.75),2) for i in range(7)]
+    v['VOD']=ds
 tot={k:build(k,v) for k,v in V.items()}
+json.dump({k:v['D'] for k,v in V.items()}, open('/home/claude/vid/scenes.json','w'))
 json.dump(tot, open("/home/claude/vid/durations.json","w")); print(tot)

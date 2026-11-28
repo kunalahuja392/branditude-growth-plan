@@ -264,7 +264,7 @@ def product(k):
 {shot}
 <section style="padding-top:0"><div class="wrap">
   <div class="sec-head"><h2>How it works</h2></div><div class="steps">{how}</div>
-  {video(p["file"][:-5], "Watch: how " + p["name"] + " works (30 seconds)")}
+  {video(p["file"][:-5], "Watch: how " + p["name"] + " works (40 seconds)")}
   <div style="margin-top:40px"><h3>Made for</h3><div class="who">{who}</div></div>
 </div></section>
 
@@ -304,7 +304,7 @@ def gaming():
   <div class="cta"><a class="btn primary" href="#gplans">See the 2 plans</a><a class="btn line" style="background:transparent;color:#fff;box-shadow:inset 0 0 0 1.5px #4a5577" data-wa="Hi Branditude, I'd like a demo of the Gaming Club software." href="https://wa.me/918855837148" target="_blank" rel="noopener">Get a demo on WhatsApp</a></div></div>
 </div></section>
 <section><div class="wrap"><div class="sec-head"><h2>Everything a gaming club runs on</h2></div><div class="feat-grid">{fg}</div>
-  {video("gaming", "Watch: how the Gaming Club software works (30 seconds)")}</div></section>
+  {video("gaming", "Watch: how the Gaming Club software works (40 seconds)")}</div></section>
 <section class="gaming" id="gplans"><div class="wrap">
   <div class="sec-head"><h2>Two plans. Everything included.</h2><p class="lede" style="margin-top:16px">No add-ons to work out. Pick the plan that fits and you're done.</p>
   <div class="bill-toggle" role="group" aria-label="Billing"><button type="button" data-bill="monthly" aria-pressed="true">Monthly</button><button type="button" data-bill="yearly" aria-pressed="false">Yearly <em>2 months free</em></button></div></div>
@@ -325,7 +325,7 @@ def gaming():
 
 def video(name, poster_alt):
     if not os.path.exists(os.path.join(OUT, "assets", "video", name + ".mp4")): return ""
-    return (f'<figure class="explainer"><video src="/assets/video/{name}.mp4?v=2" poster="/assets/video/{name}.jpg" controls playsinline preload="none" '
+    return (f'<figure class="explainer"><video src="/assets/video/{name}.mp4?v=3" poster="/assets/video/{name}.jpg" controls playsinline preload="none" '
             f'aria-label="{html.escape(poster_alt)}"></video><figcaption>{html.escape(poster_alt)}</figcaption></figure>')
 
 def restaurant():
