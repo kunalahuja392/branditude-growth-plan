@@ -10,7 +10,7 @@ const inr = (n) => "₹" + new Intl.NumberFormat("en-IN", { maximumFractionDigit
 const inr2 = (n) => "₹" + new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(+n || 0);
 const PAGE = document.body.dataset.page || "home";
 const GAMING_HOST = /^gamingclubs\./.test(location.hostname) || new URLSearchParams(location.search).get("for") === "gaming-club";
-if (GAMING_HOST && PAGE === "home") location.replace("gaming.html" + location.search.replace(/([?&])for=gaming-club&?/, "$1").replace(/\?$/, ""));
+if (GAMING_HOST && PAGE === "home") location.replace("/gaming" + location.search.replace(/([?&])for=gaming-club&?/, "$1").replace(/\?$/, ""));
 
 // Product colour + name for each module (keeps the site and the plan chips in one language)
 const PROD = { reviews: ["p-rev", "Review & Feedback"], loyalty: ["p-loy", "Loyalty Card"], attendance: ["p-stf", "Staff Attendance"], menu: ["p-qr", "QR Menu"] };
@@ -146,13 +146,13 @@ function draw() {
   } else if (co.step === 3) {
     const trialNote = co.result.trial ? `<div class="note" style="margin-bottom:18px"><b>Everything is unlocked until ${new Date(co.result.trial_ends + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "long" })}.</b> Pay now or any time before then to keep it running.</div>` : "";
     body = trialNote + `<button class="btn primary block" data-co="rzp">Pay ${inr2(co.result.total)}</button><p class="muted" style="font-size:14px;text-align:center;margin-top:8px">UPI, cards, netbanking or wallets through Razorpay. It switches on as soon as you pay.</p><p class="err" id="err" role="alert"></p>`;
-    foot = co.result.trial ? `<a class="btn line sm" href="app.html">Start my free trial first</a>` : `<a class="btn line sm" href="app.html#plan">Pay later</a>`;
+    foot = co.result.trial ? `<a class="btn line sm" href="/app">Start my free trial first</a>` : `<a class="btn line sm" href="/app#plan">Pay later</a>`;
   } else {
     body = `<div class="done-mark"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></div>
       <h3>${co.pendingConfirm ? "Check your email" : co.enquiry ? "Thanks, we'll call you" : "You're all set"}</h3>
       <p style="color:var(--ink-2);margin-top:8px">${co.pendingConfirm ? "We've sent you a link to confirm your email. Open it on any phone and your business is set up automatically." : co.enquiry ? "Our team will call or WhatsApp you within one working day." : co.paidOnline ? "Payment received and switched on. Open your dashboard to get started." : "We'll confirm your payment shortly. You can start setting up your dashboard now."}</p>
       ${co.ref ? `<p style="margin-top:10px">Reference: <b>${esc(co.ref)}</b></p>` : ""}`;
-    foot = co.enquiry || co.pendingConfirm ? `<button class="btn primary" data-co="close">Close</button>` : `<a class="btn primary" href="app.html">Open my dashboard</a>`;
+    foot = co.enquiry || co.pendingConfirm ? `<button class="btn primary" data-co="close">Close</button>` : `<a class="btn primary" href="/app">Open my dashboard</a>`;
   }
   $("#checkout-root").innerHTML = `<div class="back" data-co="backdrop"><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="co-title">
     <div class="sheet-head"><h2 id="co-title">${steps[co.step - 1]}</h2><button class="x" data-co="close" aria-label="Close">×</button></div>
@@ -179,7 +179,7 @@ document.addEventListener("click", async (e) => {
     if (a === "next2") { const email = $("#a-email").value.trim(), password = $("#a-pass").value;
       if (!/^\S+@\S+\.\S+$/.test(email)) return err("Enter a valid email."); if (password.length < 8) return err("Password needs at least 8 characters.");
       el.disabled = true; co.biz.email = co.biz.email || email;
-      const r = co.mode === "signup" ? await sb.auth.signUp({ email, password, options: { data: { full_name: co.biz.contact_name, signup_as: "business", pending_registration: regPayload() }, emailRedirectTo: new URL("app.html", location.href).href } })
+      const r = co.mode === "signup" ? await sb.auth.signUp({ email, password, options: { data: { full_name: co.biz.contact_name, signup_as: "business", pending_registration: regPayload() }, emailRedirectTo: new URL("/app", location.href).href } })
                                      : await sb.auth.signInWithPassword({ email, password });
       if (r.error) { el.disabled = false; return err(/registered/i.test(r.error.message) ? "This email already has a login. Sign in instead." : /Invalid login/i.test(r.error.message) ? "Wrong email or password." : friendly(r.error)); }
       if (!r.data.session) { try { localStorage.setItem("bgp_pending_registration", JSON.stringify(regPayload())); } catch {} co.pendingConfirm = true; co.step = 4; return draw(); }
@@ -209,9 +209,9 @@ const mbar = $("#mbar"), first = $(".hero, .phero");
 const onScroll = () => { bar?.classList.toggle("solid", scrollY > 10);
   if (mbar && first) { const show = first.getBoundingClientRect().bottom < 0 && !co; mbar.classList.toggle("show", show); mbar.setAttribute("aria-hidden", !show); } };
 addEventListener("scroll", onScroll, { passive: true }); onScroll();
-sb.auth.getSession().then(({ data }) => { if (!data?.session) return; $$("[data-signin]").forEach((b) => { b.textContent = "My dashboard"; b.href = "app.html"; }); }).catch(() => {});
+sb.auth.getSession().then(({ data }) => { if (!data?.session) return; $$("[data-signin]").forEach((b) => { b.textContent = "My dashboard"; b.href = "/app"; }); }).catch(() => {});
 try { const r = new URLSearchParams(location.search).get("ref"); if (r) localStorage.setItem("bgp_ref", r.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20)); } catch {}
 // install as app (pwa.js sets window.bgpInstall)
-$$("[data-install]").forEach((b) => b.addEventListener("click", async () => { if (!window.bgpInstall) return (location.href = "login.html");
+$$("[data-install]").forEach((b) => b.addEventListener("click", async () => { if (!window.bgpInstall) return (location.href = "/login");
   const r = await bgpInstall.prompt(); toast(r === "accepted" ? "Installed. Open Branditude from your home screen." : "On iPhone: Share → Add to Home Screen. On Android: ⋮ → Install app."); }));
 load();
