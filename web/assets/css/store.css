@@ -373,3 +373,9 @@ footer .flogo{width:150px;margin-bottom:12px}
 .wide-shot{margin:0;border-radius:var(--r-lg);overflow:hidden;background:var(--mist)}
 .wide-shot img{width:100%;height:auto;aspect-ratio:16/8;object-fit:cover;object-position:center 35%}
 @media (max-width:700px){.wide-shot img{aspect-ratio:4/3}.stage.has-photo{aspect-ratio:4/3}}
+
+/* floating WhatsApp button */
+.wa-float{position:fixed;right:18px;bottom:18px;z-index:36;display:flex;align-items:center;gap:8px;height:56px;padding:0 20px 0 16px;border-radius:999px;background:var(--wa);color:#fff;text-decoration:none;font:700 16px var(--body);box-shadow:0 12px 28px -10px rgba(18,140,74,.7);transition:transform .2s,opacity .2s}
+.wa-float svg{width:28px;height:28px}
+.wa-float:hover{transform:translateY(-2px)}
+@media (max-width:720px){.wa-float{width:56px;padding:0;justify-content:center;right:14px;bottom:14px}.wa-float span{display:none}.wa-float.hide{opacity:0;pointer-events:none;transform:translateY(20px)}}

@@ -115,7 +115,7 @@ def head(title, desc, theme="#ffffff"):
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Branditude">
 <script src="/assets/js/pwa.js" defer></script>
 {FONTS}
-<link rel="stylesheet" href="/assets/css/store.css?v=2">
+<link rel="stylesheet" href="/assets/css/store.css?v=3">
 </head>'''
 
 def header(cur=""):
@@ -138,8 +138,9 @@ def footer():
   <div><b>Company</b><a href="/#plans">Plans & prices</a><a href="/#faq">FAQ</a><a href="/#contact">Contact</a><a href="/privacy">Privacy policy</a></div>
   <div><b>Already a client?</b><a href="/login" data-signin>Login to dashboard</a><a href="#" data-install>Install the app</a><a href="/download/BranditudeGrowth-Windows.zip">Windows app</a></div>
 </div></footer>
+<a class="wa-float" id="wa-float" data-wa="Hi Branditude! I'd like to know more and book a free demo." href="https://wa.me/918855837148?text=Hi%20Branditude!%20I%27d%20like%20to%20know%20more%20and%20book%20a%20free%20demo." target="_blank" rel="noopener" aria-label="Chat with Branditude on WhatsApp"><svg viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" d="M16 3C8.8 3 3 8.7 3 15.8c0 2.5.7 4.9 2 7L3 29l6.4-2c2 1.1 4.3 1.7 6.6 1.7 7.2 0 13-5.7 13-12.8S23.2 3 16 3zm0 23.4c-2.1 0-4.1-.6-5.9-1.7l-.4-.3-3.8 1.2 1.2-3.7-.3-.4c-1.2-1.8-1.8-3.8-1.8-5.9C5 10 9.9 5.2 16 5.2S27 10 27 15.9 22.1 26.4 16 26.4zm6-7.8c-.3-.2-2-1-2.3-1.1-.3-.1-.5-.2-.8.2l-1 1.3c-.2.2-.4.3-.7.1-.3-.2-1.4-.5-2.6-1.6-1-.9-1.6-1.9-1.8-2.2-.2-.3 0-.5.1-.7l.5-.6c.2-.2.2-.4.3-.6.1-.2 0-.4 0-.6l-1-2.5c-.3-.7-.6-.6-.8-.6h-.7c-.2 0-.6.1-.9.4-.3.3-1.2 1.2-1.2 2.9s1.2 3.4 1.4 3.6c.2.2 2.4 3.7 5.9 5.1 2.9 1.1 3.5.9 4.1.8.6-.1 2-.8 2.3-1.6.3-.8.3-1.5.2-1.6-.1-.2-.3-.3-.6-.4z"/></svg><span>WhatsApp us</span></a>
 <div id="checkout-root"></div>
-<script type="module" src="/assets/js/store.js?v=2"></script>
+<script type="module" src="/assets/js/store.js?v=3"></script>
 </body>
 </html>'''
 
@@ -148,7 +149,7 @@ def faq(items):
 
 CONTACT = '''<section class="contact" id="contact"><div class="wrap">
   <div><h2>Not sure what you need?</h2><p class="lede" style="margin-top:16px">Tell us about your business on WhatsApp. We'll suggest the right product or plan and set it up with you. We usually reply within an hour in working hours.</p>
-  <div class="row-cta"><a class="btn wa" data-wa="Hi Branditude, I'd like to know which product fits my business." href="#contact" target="_blank" rel="noopener">Chat on WhatsApp</a><a class="btn line" href="/#plans">Compare plans</a></div></div>
+  <div class="row-cta"><a class="btn wa" data-wa="Hi Branditude, I'd like to know which product fits my business." href="https://wa.me/918855837148" target="_blank" rel="noopener">Chat on WhatsApp</a><a class="btn line" href="/#plans">Compare plans</a></div></div>
   <div class="cinfo" data-cinfo></div></div></section>'''
 
 def home():
@@ -213,7 +214,7 @@ def home():
 </div></section>
 {CONTACT}
 </main>
-<div class="mbar" id="mbar" aria-hidden="true"><a class="btn line" href="#plans">See prices</a><a class="btn wa" data-wa="Hi Branditude, I'd like to know more." href="#contact" target="_blank" rel="noopener">WhatsApp us</a></div>
+<div class="mbar" id="mbar" aria-hidden="true"><a class="btn line" href="#plans">See prices</a><a class="btn wa" data-wa="Hi Branditude, I'd like to know more." href="https://wa.me/918855837148" target="_blank" rel="noopener">WhatsApp us</a></div>
 {footer()}'''
     return head("Branditude · Reviews, loyalty card, staff attendance & QR menu for local business", "Get more Google reviews, a digital loyalty card, staff attendance & salary, and a QR menu with table orders. From ₹199/month. Set up for you in 48 hours.") + "\n" + body
 
@@ -262,7 +263,7 @@ def product(k):
 <section style="padding-top:0"><div class="wrap"><div class="sec-head"><h2>Our other tools</h2></div><div class="picker" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">{others}</div></div></section>
 {CONTACT}
 </main>
-<div class="mbar" id="mbar" aria-hidden="true"><button class="btn primary" data-buy="{p["slug"]}">Buy · <span data-price="{p["slug"]}">{PRICE[p["slug"]]}</span></button><a class="btn wa" data-wa="Hi Branditude, I'd like to know more about {p["name"]}." href="#contact" target="_blank" rel="noopener">WhatsApp</a></div>
+<div class="mbar" id="mbar" aria-hidden="true"><button class="btn primary" data-buy="{p["slug"]}">Buy · <span data-price="{p["slug"]}">{PRICE[p["slug"]]}</span></button><a class="btn wa" data-wa="Hi Branditude, I'd like to know more about {p["name"]}." href="https://wa.me/918855837148" target="_blank" rel="noopener">WhatsApp</a></div>
 {footer()}'''
     desc = f'{p["name"]} by Branditude: {p["tile"]} From ₹{ {"rev":299,"loy":199,"stf":299,"qr":249}[k] }/month, set up for you in 48 hours.'
     return head(f'{p["name"]} for your business · Branditude', desc) + "\n" + body
@@ -277,7 +278,7 @@ def gaming():
   <div><span class="kicker" style="color:#9fe07a"><span class="dot" style="background:#7cc242;color:#10200a;width:32px;height:32px;border-radius:10px">{ICON["game"]}</span>Gaming club software</span>
   <h1 style="color:#fff;max-width:16ch">Run your gaming café from one phone.</h1>
   <p class="lede" style="margin-top:20px">Live timers for every PS5, Xbox, PC, VR, racing sim and pool table. LP matches split game by game, happy-hour pricing, snacks and bills, all in one app. We set it up for you.</p>
-  <div class="cta"><a class="btn primary" href="#gplans">See the 2 plans</a><a class="btn line" style="background:transparent;color:#fff;box-shadow:inset 0 0 0 1.5px #4a5577" data-wa="Hi Branditude, I'd like a demo of the Gaming Club software." href="#contact" target="_blank" rel="noopener">Get a demo on WhatsApp</a></div></div>
+  <div class="cta"><a class="btn primary" href="#gplans">See the 2 plans</a><a class="btn line" style="background:transparent;color:#fff;box-shadow:inset 0 0 0 1.5px #4a5577" data-wa="Hi Branditude, I'd like a demo of the Gaming Club software." href="https://wa.me/918855837148" target="_blank" rel="noopener">Get a demo on WhatsApp</a></div></div>
 </div></section>
 <section><div class="wrap"><div class="sec-head"><h2>Everything a gaming club runs on</h2></div><div class="feat-grid">{fg}</div></div></section>
 <section class="gaming" id="gplans"><div class="wrap">
@@ -293,7 +294,7 @@ def gaming():
   ("Is there a contract?","No. Pay monthly and stop any month, or pay yearly and get 2 months free.")])}</div></div></section>
 {CONTACT}
 </main>
-<div class="mbar" id="mbar" aria-hidden="true"><a class="btn primary" href="#gplans">See plans</a><a class="btn wa" data-wa="Hi Branditude, I'd like a demo of the Gaming Club software." href="#contact" target="_blank" rel="noopener">WhatsApp</a></div>
+<div class="mbar" id="mbar" aria-hidden="true"><a class="btn primary" href="#gplans">See plans</a><a class="btn wa" data-wa="Hi Branditude, I'd like a demo of the Gaming Club software." href="https://wa.me/918855837148" target="_blank" rel="noopener">WhatsApp</a></div>
 {footer()}'''
     return head("Gaming club software: timers, LP billing & bookings · Branditude", "Live station timers, LP (loser pays) splits, happy-hour pricing, snacks and bills for gaming cafés. Two plans from ₹850/month.", "#0e1426") + "\n" + body
 

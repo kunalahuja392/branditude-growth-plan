@@ -22,7 +22,7 @@ const gamingPlans = () => PKGS.filter((p) => (p.kind || "plan") === "plan" && (p
 const bySlug = (s) => PKGS.find((p) => p.slug === s);
 const mod = (k) => MODS.find((m) => m.key === k);
 const worth = (p) => (p.modules || []).reduce((t, k) => t + (mod(k) && !mod(k).core ? +mod(k).addon_price || 0 : 0), 0) * (billing === "yearly" ? 10 : 1);
-const waNum = () => (SET.agency?.whatsapp || "").replace(/\D/g, "");
+const waNum = () => (SET.agency?.whatsapp || "918855837148").replace(/\D/g, "");
 const waLink = (t) => (waNum() ? "https://wa.me/" + waNum() + "?text=" + encodeURIComponent(t) : "#contact");
 function toast(m) { const t = document.createElement("div"); t.className = "toast"; t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 2800); }
 
@@ -207,7 +207,7 @@ $$(".drop > .navbtn").forEach((b) => b.addEventListener("click", () => { const d
 document.addEventListener("click", (e) => { $$(".drop.open").forEach((d) => { if (!d.contains(e.target)) { d.classList.remove("open"); d.querySelector(".navbtn")?.setAttribute("aria-expanded", "false"); } }); });
 const mbar = $("#mbar"), first = $(".hero, .phero");
 const onScroll = () => { bar?.classList.toggle("solid", scrollY > 10);
-  if (mbar && first) { const show = first.getBoundingClientRect().bottom < 0 && !co; mbar.classList.toggle("show", show); mbar.setAttribute("aria-hidden", !show); } };
+  if (mbar && first) { const show = first.getBoundingClientRect().bottom < 0 && !co; mbar.classList.toggle("show", show); mbar.setAttribute("aria-hidden", !show); } $("#wa-float")?.classList.toggle("hide", !!(mbar && mbar.classList.contains("show")) || !!co); };
 addEventListener("scroll", onScroll, { passive: true }); onScroll();
 sb.auth.getSession().then(({ data }) => { if (!data?.session) return; $$("[data-signin]").forEach((b) => { b.textContent = "My dashboard"; b.href = "/app"; }); }).catch(() => {});
 try { const r = new URLSearchParams(location.search).get("ref"); if (r) localStorage.setItem("bgp_ref", r.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20)); } catch {}
