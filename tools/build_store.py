@@ -325,7 +325,7 @@ def gaming():
 
 def video(name, poster_alt):
     if not os.path.exists(os.path.join(OUT, "assets", "video", name + ".mp4")): return ""
-    return (f'<figure class="explainer"><video src="/assets/video/{name}.mp4" poster="/assets/video/{name}.jpg" controls playsinline preload="none" '
+    return (f'<figure class="explainer"><video src="/assets/video/{name}.mp4?v=2" poster="/assets/video/{name}.jpg" controls playsinline preload="none" '
             f'aria-label="{html.escape(poster_alt)}"></video><figcaption>{html.escape(poster_alt)}</figcaption></figure>')
 
 def restaurant():
