@@ -117,7 +117,7 @@ def head(title, desc, theme="#ffffff"):
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Branditude">
 <script src="/assets/js/pwa.js" defer></script>
 {FONTS}
-<link rel="stylesheet" href="/assets/css/store.css?v=6">
+<link rel="stylesheet" href="/assets/css/store.css?v=7">
 </head>'''
 
 def header(cur=""):
@@ -142,7 +142,7 @@ def footer():
 </div></footer>
 <a class="wa-float" id="wa-float" data-wa="Hi Branditude! I'd like to know more and book a free demo." href="https://wa.me/918855837148?text=Hi%20Branditude!%20I%27d%20like%20to%20know%20more%20and%20book%20a%20free%20demo." target="_blank" rel="noopener" aria-label="Chat with Branditude on WhatsApp"><svg viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" d="M16 3C8.8 3 3 8.7 3 15.8c0 2.5.7 4.9 2 7L3 29l6.4-2c2 1.1 4.3 1.7 6.6 1.7 7.2 0 13-5.7 13-12.8S23.2 3 16 3zm0 23.4c-2.1 0-4.1-.6-5.9-1.7l-.4-.3-3.8 1.2 1.2-3.7-.3-.4c-1.2-1.8-1.8-3.8-1.8-5.9C5 10 9.9 5.2 16 5.2S27 10 27 15.9 22.1 26.4 16 26.4zm6-7.8c-.3-.2-2-1-2.3-1.1-.3-.1-.5-.2-.8.2l-1 1.3c-.2.2-.4.3-.7.1-.3-.2-1.4-.5-2.6-1.6-1-.9-1.6-1.9-1.8-2.2-.2-.3 0-.5.1-.7l.5-.6c.2-.2.2-.4.3-.6.1-.2 0-.4 0-.6l-1-2.5c-.3-.7-.6-.6-.8-.6h-.7c-.2 0-.6.1-.9.4-.3.3-1.2 1.2-1.2 2.9s1.2 3.4 1.4 3.6c.2.2 2.4 3.7 5.9 5.1 2.9 1.1 3.5.9 4.1.8.6-.1 2-.8 2.3-1.6.3-.8.3-1.5.2-1.6-.1-.2-.3-.3-.6-.4z"/></svg><span>WhatsApp us</span></a>
 <div id="checkout-root"></div>
-<script type="module" src="/assets/js/store.js?v=6"></script>
+<script type="module" src="/assets/js/store.js?v=7"></script>
 </body>
 </html>'''
 
@@ -324,9 +324,12 @@ def gaming():
     return head("Gaming club software: timers, LP billing & bookings · Branditude", "Live station timers, LP (loser pays) splits, happy-hour pricing, snacks and bills for gaming cafés. Two plans from ₹850/month.", "#0e1426") + "\n" + body
 
 def video(name, poster_alt):
-    if not os.path.exists(os.path.join(OUT, "assets", "video", name + ".mp4")): return ""
-    return (f'<figure class="explainer"><video src="/assets/video/{name}.mp4?v=3" poster="/assets/video/{name}.jpg" controls playsinline preload="none" '
-            f'aria-label="{html.escape(poster_alt)}"></video><figcaption>{html.escape(poster_alt)}</figcaption></figure>')
+    YT = {"loyalty-card":"rjPXKH472gU","reviews":"PDeeu6PB3qo","staff-attendance":"z2e94Q4m0bI","qr-menu":"tsuF1ozTq7k","gaming":"ttekcWY9nN0","restaurant-app":"TJZzpsDMr9s"}
+    y = YT.get(name)
+    if not y: return ""
+    return (f'<figure class="explainer"><button type="button" class="yt" data-yt="{y}" aria-label="Play video: {html.escape(poster_alt)}">'
+            f'<img src="/assets/video/{name}.jpg" alt="" width="1280" height="720" loading="lazy"><span class="play" aria-hidden="true"></span></button>'
+            f'<figcaption>{html.escape(poster_alt)} · <a href="https://youtu.be/{y}" target="_blank" rel="noopener">Watch on YouTube</a></figcaption></figure>')
 
 def restaurant():
     scr = ('<div style="display:flex;justify-content:space-between;align-items:center"><span class="chip-s" style="background:#fff1e8;color:#b44a0c">Chai Point Café</span><span class="sub">Open now</span></div>'

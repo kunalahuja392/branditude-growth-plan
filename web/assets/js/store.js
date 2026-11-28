@@ -228,4 +228,8 @@ document.addEventListener("submit", async (e) => {
   if (error) { btn.disabled = false; return (er.textContent = friendly(error)); }
   f.outerHTML = `<div class="done"><h3>Thanks, we'll call you</h3><p style="color:var(--ink-2);margin-top:8px">Our team will call or WhatsApp you within one working day to show you the app.</p><p style="margin-top:10px">Reference: <b>${esc(data?.ref || "")}</b></p></div>`;
 });
+// explainer videos: load the YouTube player only when tapped
+document.addEventListener("click", (e) => { const y = e.target.closest("button.yt[data-yt]"); if (!y) return;
+  const f = document.createElement("iframe"); f.src = `https://www.youtube-nocookie.com/embed/${y.dataset.yt}?autoplay=1&rel=0&playsinline=1`;
+  f.title = y.getAttribute("aria-label") || "Video"; f.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen"; f.allowFullscreen = true; y.replaceWith(f); });
 load();
