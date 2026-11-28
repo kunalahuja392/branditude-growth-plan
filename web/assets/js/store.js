@@ -47,6 +47,7 @@ function drawAll() {
   const gr = +(SET.gst?.rate ?? 0);
   $$("[data-gst]").forEach((el) => (el.textContent = gr > 0 ? `Prices exclude ${Math.round(gr * 100)}% GST, added at checkout.` : "Prices are in Indian rupees. No GST is charged."));
   if (TRIAL) $$("[data-trial]").forEach((el) => { el.hidden = false; el.textContent = `${TRIAL}-day free trial`; });
+  if (TRIAL) $$("[data-trialnote]").forEach((el) => { el.hidden = false; el.innerHTML = `<b>Try it free for ${TRIAL} days.</b> Sign up and use everything now, no payment needed to start.`; });
   drawPlans(); drawGaming(); drawAddons(); drawTables();
 }
 function planCard(p, dark) {

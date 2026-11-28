@@ -379,3 +379,7 @@ footer .flogo{width:150px;margin-bottom:12px}
 .wa-float svg{width:28px;height:28px}
 .wa-float:hover{transform:translateY(-2px)}
 @media (max-width:720px){.wa-float{width:56px;padding:0;justify-content:center;right:14px;bottom:14px}.wa-float span{display:none}.wa-float.hide{opacity:0;pointer-events:none;transform:translateY(20px)}}
+
+.trial-pill{margin:14px 0 0;padding:10px 14px;border-radius:14px;background:#e8f7ee;color:#14532d;font-size:15px;line-height:1.45}
+.trial-pill b{color:#0f5132}
+.plans-sec .trial-pill,.gaming .trial-pill{margin:0 0 18px;display:inline-block}

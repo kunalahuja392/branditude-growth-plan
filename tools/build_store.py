@@ -115,7 +115,7 @@ def head(title, desc, theme="#ffffff"):
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Branditude">
 <script src="/assets/js/pwa.js" defer></script>
 {FONTS}
-<link rel="stylesheet" href="/assets/css/store.css?v=3">
+<link rel="stylesheet" href="/assets/css/store.css?v=4">
 </head>'''
 
 def header(cur=""):
@@ -140,7 +140,7 @@ def footer():
 </div></footer>
 <a class="wa-float" id="wa-float" data-wa="Hi Branditude! I'd like to know more and book a free demo." href="https://wa.me/918855837148?text=Hi%20Branditude!%20I%27d%20like%20to%20know%20more%20and%20book%20a%20free%20demo." target="_blank" rel="noopener" aria-label="Chat with Branditude on WhatsApp"><svg viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" d="M16 3C8.8 3 3 8.7 3 15.8c0 2.5.7 4.9 2 7L3 29l6.4-2c2 1.1 4.3 1.7 6.6 1.7 7.2 0 13-5.7 13-12.8S23.2 3 16 3zm0 23.4c-2.1 0-4.1-.6-5.9-1.7l-.4-.3-3.8 1.2 1.2-3.7-.3-.4c-1.2-1.8-1.8-3.8-1.8-5.9C5 10 9.9 5.2 16 5.2S27 10 27 15.9 22.1 26.4 16 26.4zm6-7.8c-.3-.2-2-1-2.3-1.1-.3-.1-.5-.2-.8.2l-1 1.3c-.2.2-.4.3-.7.1-.3-.2-1.4-.5-2.6-1.6-1-.9-1.6-1.9-1.8-2.2-.2-.3 0-.5.1-.7l.5-.6c.2-.2.2-.4.3-.6.1-.2 0-.4 0-.6l-1-2.5c-.3-.7-.6-.6-.8-.6h-.7c-.2 0-.6.1-.9.4-.3.3-1.2 1.2-1.2 2.9s1.2 3.4 1.4 3.6c.2.2 2.4 3.7 5.9 5.1 2.9 1.1 3.5.9 4.1.8.6-.1 2-.8 2.3-1.6.3-.8.3-1.5.2-1.6-.1-.2-.3-.3-.6-.4z"/></svg><span>WhatsApp us</span></a>
 <div id="checkout-root"></div>
-<script type="module" src="/assets/js/store.js?v=3"></script>
+<script type="module" src="/assets/js/store.js?v=4"></script>
 </body>
 </html>'''
 
@@ -189,6 +189,7 @@ def home():
 <section class="plans-sec" id="plans"><div class="wrap">
   <div class="sec-head c"><h2>Need more than one? A plan costs less.</h2><p class="lede" style="margin:16px auto 0">Plans bundle the tools together for less than buying them separately. Pay yearly and get 2 months free.</p>
   <div class="bill-toggle" role="group" aria-label="Billing"><button type="button" data-bill="monthly" aria-pressed="true">Monthly</button><button type="button" data-bill="yearly" aria-pressed="false">Yearly <em>2 months free</em></button></div></div>
+  <p class="trial-pill" data-trialnote hidden></p>
   <div class="plans" data-plans="main"><p class="muted">Loading prices…</p></div>
   <div class="addons"><div class="head"><h3>Add anything to your plan</h3><p>Every tool can be added to a plan on its own, from Plan & services in your dashboard.</p></div><div class="ad-list" data-addons></div></div>
   <p class="gst-note" data-gst>Prices are in Indian rupees.</p>
@@ -227,9 +228,11 @@ def product(k):
     if k == "qr":
         buy = '''<div class="tables" data-tables><label id="tl">Your tables</label><div class="stepper" role="group" aria-labelledby="tl"><button type="button" data-tstep="-1" aria-label="Fewer tables">−</button><output data-tables-out>Up to 6 tables</output><button type="button" data-tstep="1" aria-label="More tables">+</button></div></div>
 <div class="row"><div class="amt"><b class="num" data-tables-price>₹249</b> <span data-tables-per>/month</span></div><button class="btn primary" data-tables-buy data-buy="qr-menu-6">Get QR Menu</button></div>
+<p class="trial-pill" data-trialnote hidden></p>
 <p class="note">₹249 a month for every 6 tables. Pay yearly and get 2 months free.</p>'''
     else:
         buy = f'''<div class="row"><div class="amt"><b class="num" data-price="{p["slug"]}">{PRICE[p["slug"]]}</b> <span data-per>/month</span></div><button class="btn primary" data-buy="{p["slug"]}">Buy {p["name"]}</button></div>
+<p class="trial-pill" data-trialnote hidden></p>
 <p class="note">Pay monthly, cancel any month. Pay yearly and get 2 months free.</p>'''
     toggle = '<div class="bill-toggle" role="group" aria-label="Billing" style="margin:0 0 14px"><button type="button" data-bill="monthly" aria-pressed="true">Monthly</button><button type="button" data-bill="yearly" aria-pressed="false">Yearly <em>2 months free</em></button></div>'
     others = "".join(f'<a class="pick {P[o]["cls"]}" href="/{P[o]["file"][:-5]}"><span class="dot">{ICON[o]}</span><b>{P[o]["name"]}</b><span>{P[o]["tile"]}</span><i>From <span data-price="{P[o]["slug"]}">{PRICE[P[o]["slug"]]}</span>/month</i></a>' for o in ORDER if o != k)
@@ -284,6 +287,7 @@ def gaming():
 <section class="gaming" id="gplans"><div class="wrap">
   <div class="sec-head"><h2>Two plans. Everything included.</h2><p class="lede" style="margin-top:16px">No add-ons to work out. Pick the plan that fits and you're done.</p>
   <div class="bill-toggle" role="group" aria-label="Billing"><button type="button" data-bill="monthly" aria-pressed="true">Monthly</button><button type="button" data-bill="yearly" aria-pressed="false">Yearly <em>2 months free</em></button></div></div>
+  <p class="trial-pill" data-trialnote hidden></p>
   <div class="plans" data-plans="gaming"><p class="muted">Loading prices…</p></div>
   <p class="gst-note" data-gst style="color:#8d97b3"></p>
 </div></section>
