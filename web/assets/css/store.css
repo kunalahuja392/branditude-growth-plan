@@ -383,3 +383,25 @@ footer .flogo{width:150px;margin-bottom:12px}
 .trial-pill{margin:14px 0 0;padding:10px 14px;border-radius:14px;background:#e8f7ee;color:#14532d;font-size:15px;line-height:1.45}
 .trial-pill b{color:#0f5132}
 .plans-sec .trial-pill,.gaming .trial-pill{margin:0 0 18px;display:inline-block}
+
+/* restaurant app */
+:root{--c-rest:#f26b1d;--c-rest-d:#b44a0c;--c-rest-soft:#fff1e8}
+.p-rest{--c:var(--c-rest);--cd:var(--c-rest-d);--soft:var(--c-rest-soft)}
+.new-tag{margin-left:6px;background:var(--c-rest);color:#fff;font-size:12px;padding:2px 8px;border-radius:999px;letter-spacing:.02em}
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.cbox{border-radius:22px;padding:22px;border:1.5px solid var(--line);background:#fff}
+.cbox span{font-weight:700;color:var(--ink-3);font-size:15px}
+.cbox b{display:block;font:800 clamp(30px,4vw,42px) var(--display);letter-spacing:-.03em;margin:6px 0}
+.cbox p{color:var(--ink-2);margin:0}
+.cbox.bad b{color:#b0161d}.cbox.good{border-color:var(--c-rest);background:var(--c-rest-soft)}.cbox.good b{color:var(--c-rest-d)}
+.lead-card{display:grid;grid-template-columns:1fr 1.1fr;gap:32px;align-items:start;background:var(--c-rest-soft);border-radius:28px;padding:32px}
+.lead-card .fields{background:#fff;border-radius:20px;padding:20px}
+.lead-card .done{background:#fff;border-radius:20px;padding:24px}
+.rest-band{display:grid;grid-template-columns:1.2fr .8fr;gap:28px;align-items:center;background:var(--c-rest-soft);border-radius:28px;padding:36px}
+.rest-band h2{font-size:clamp(28px,3.4vw,42px)}
+.rest-band .big{font:800 clamp(40px,5vw,60px) var(--display);color:var(--c-rest-d);letter-spacing:-.03em}
+@media (max-width:820px){.compare,.lead-card,.rest-band{grid-template-columns:1fr}.lead-card,.rest-band{padding:22px}}
+/* explainer videos */
+.explainer{margin:36px auto 0;max-width:880px}
+.explainer video{display:block;width:100%;aspect-ratio:16/9;border-radius:22px;background:#0e1426;box-shadow:var(--shadow-lg)}
+.explainer figcaption{text-align:center;color:var(--ink-3);font-size:15px;margin-top:10px;font-weight:600}

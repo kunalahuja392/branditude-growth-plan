@@ -215,4 +215,17 @@ try { const r = new URLSearchParams(location.search).get("ref"); if (r) localSto
 // install as app (pwa.js sets window.bgpInstall)
 $$("[data-install]").forEach((b) => b.addEventListener("click", async () => { if (!window.bgpInstall) return (location.href = "/login");
   const r = await bgpInstall.prompt(); toast(r === "accepted" ? "Installed. Open Branditude from your home screen." : "On iPhone: Share → Add to Home Screen. On Android: ⋮ → Install app."); }));
+// call-back forms (e.g. restaurant app early access)
+document.addEventListener("submit", async (e) => {
+  const f = e.target.closest("form[data-lead]"); if (!f) return; e.preventDefault();
+  const v = (n) => (f.elements[n]?.value || "").trim(), er = f.querySelector(".err"), btn = f.querySelector("button[type=submit]");
+  const ph = v("phone").replace(/\D/g, "").replace(/^0+/, ""), phone = ph.length === 10 ? "91" + ph : ph;
+  if (!v("business_name") || !v("contact_name") || !v("city")) return (er.textContent = "Please fill in every field.");
+  if (!/^91[6-9]\d{9}$/.test(phone)) return (er.textContent = "Enter a 10-digit WhatsApp number.");
+  btn.disabled = true; er.textContent = "";
+  const { data, error } = await sb.rpc("submit_lead", { p: { business_name: v("business_name"), contact_name: v("contact_name"), phone: "+" + phone, city: v("city"), source: "enquiry",
+    message: f.dataset.lead + (v("orders") ? ` · about ${v("orders")} delivery orders a day` : "") } });
+  if (error) { btn.disabled = false; return (er.textContent = friendly(error)); }
+  f.outerHTML = `<div class="done"><h3>Thanks, we'll call you</h3><p style="color:var(--ink-2);margin-top:8px">Our team will call or WhatsApp you within one working day to show you the app.</p><p style="margin-top:10px">Reference: <b>${esc(data?.ref || "")}</b></p></div>`;
+});
 load();

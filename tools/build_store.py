@@ -11,6 +11,8 @@ ICON = {
  "stf": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
  "qr": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1.5"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1.5"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1.5"/><path d="M14 14h3v3h-3zM17.5 17.5h3v3h-3z" fill="currentColor" stroke="none"/></svg>',
  "game": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8h12a4 4 0 0 1 3.9 4.8l-1 4.6a2.3 2.3 0 0 1-4 1L15 16H9l-1.9 2.4a2.3 2.3 0 0 1-4-1l-1-4.6A4 4 0 0 1 6 8z"/><path d="M8 11v3M6.5 12.5h3"/><circle cx="16" cy="12" r=".8" fill="currentColor"/></svg>',
+ "rest": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 11h14l-1.2 7.2a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8z"/><path d="M9 11V8a3 3 0 0 1 6 0v3"/></svg>',
+ "bike": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17l4-7h5l3 7M10 10l-1.5-3H6M15 10l1-3h2.5"/></svg>',
  "check": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
 }
 
@@ -115,7 +117,7 @@ def head(title, desc, theme="#ffffff"):
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Branditude">
 <script src="/assets/js/pwa.js" defer></script>
 {FONTS}
-<link rel="stylesheet" href="/assets/css/store.css?v=4">
+<link rel="stylesheet" href="/assets/css/store.css?v=5">
 </head>'''
 
 def header(cur=""):
@@ -125,7 +127,7 @@ def header(cur=""):
   <a class="brand" href="/"><img src="/assets/img/branditude-mark.svg" alt="" width="40" height="35"><span>Branditude<small>Growth tools for local business</small></span></a>
   <nav class="nav" id="site-nav" aria-label="Main">
     <div class="drop"><button class="navbtn" type="button" aria-expanded="false">Products ▾</button><div class="drop-menu">{menu}</div></div>
-    <a href="/#plans">Plans</a><a href="/gaming"{" aria-current=page" if cur=="game" else ""}>Gaming clubs</a><a href="/#faq">FAQ</a><a href="/login" data-signin>Login</a>
+    <a href="/restaurant-app"{" aria-current=page" if cur=="rest" else ""}>Restaurant app</a><a href="/#plans">Plans</a><a href="/gaming"{" aria-current=page" if cur=="game" else ""}>Gaming clubs</a><a href="/#faq">FAQ</a><a href="/login" data-signin>Login</a>
   </nav>
   <div class="actions"><a class="btn primary sm hide-m" href="/#plans">See prices</a><button class="menu-btn" id="menu-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav"><span></span></button></div>
 </div></header>'''
@@ -134,13 +136,13 @@ def footer():
     prods = "".join(f'<a href="/{P[k]["file"][:-5]}">{P[k]["name"]}</a>' for k in ORDER)
     return f'''<footer><div class="wrap">
   <div><img class="flogo" src="/assets/img/branditude-logo-light.png" alt="Branditude, correct attitude for your brand" width="150" height="101"><p>Simple growth tools for cafés, salons, clinics, gyms and shops across India.</p><p data-year style="margin-top:14px"></p></div>
-  <div><b>Products</b>{prods}<a href="/gaming">Gaming club software</a></div>
+  <div><b>Products</b>{prods}<a href="/gaming">Gaming club software</a><a href="/restaurant-app">Restaurant app + delivery</a></div>
   <div><b>Company</b><a href="/#plans">Plans & prices</a><a href="/#faq">FAQ</a><a href="/#contact">Contact</a><a href="/privacy">Privacy policy</a></div>
   <div><b>Already a client?</b><a href="/login" data-signin>Login to dashboard</a><a href="#" data-install>Install the app</a><a href="/download/BranditudeGrowth-Windows.zip">Windows app</a></div>
 </div></footer>
 <a class="wa-float" id="wa-float" data-wa="Hi Branditude! I'd like to know more and book a free demo." href="https://wa.me/918855837148?text=Hi%20Branditude!%20I%27d%20like%20to%20know%20more%20and%20book%20a%20free%20demo." target="_blank" rel="noopener" aria-label="Chat with Branditude on WhatsApp"><svg viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" d="M16 3C8.8 3 3 8.7 3 15.8c0 2.5.7 4.9 2 7L3 29l6.4-2c2 1.1 4.3 1.7 6.6 1.7 7.2 0 13-5.7 13-12.8S23.2 3 16 3zm0 23.4c-2.1 0-4.1-.6-5.9-1.7l-.4-.3-3.8 1.2 1.2-3.7-.3-.4c-1.2-1.8-1.8-3.8-1.8-5.9C5 10 9.9 5.2 16 5.2S27 10 27 15.9 22.1 26.4 16 26.4zm6-7.8c-.3-.2-2-1-2.3-1.1-.3-.1-.5-.2-.8.2l-1 1.3c-.2.2-.4.3-.7.1-.3-.2-1.4-.5-2.6-1.6-1-.9-1.6-1.9-1.8-2.2-.2-.3 0-.5.1-.7l.5-.6c.2-.2.2-.4.3-.6.1-.2 0-.4 0-.6l-1-2.5c-.3-.7-.6-.6-.8-.6h-.7c-.2 0-.6.1-.9.4-.3.3-1.2 1.2-1.2 2.9s1.2 3.4 1.4 3.6c.2.2 2.4 3.7 5.9 5.1 2.9 1.1 3.5.9 4.1.8.6-.1 2-.8 2.3-1.6.3-.8.3-1.5.2-1.6-.1-.2-.3-.3-.6-.4z"/></svg><span>WhatsApp us</span></a>
 <div id="checkout-root"></div>
-<script type="module" src="/assets/js/store.js?v=4"></script>
+<script type="module" src="/assets/js/store.js?v=5"></script>
 </body>
 </html>'''
 
@@ -185,6 +187,13 @@ def home():
   <div class="step"><h3>We set it up with you</h3><p>Our team adds your logo, menu, staff and rewards, and sends you the QR codes to print.</p></div>
   <div class="step"><h3>Start using it</h3><p>Put the QR on your counter. Everything runs from your dashboard on your phone.</p></div></div>
 </div></section>
+
+<section style="padding-top:0"><div class="wrap"><div class="rest-band p-rest">
+  <div><span class="kicker"><span class="dot" style="background:var(--c);color:#fff;width:32px;height:32px;border-radius:10px">{ICON["rest"]}</span>For restaurants <span class="new-tag">New</span></span>
+  <h2>Your own food ordering app. Porter delivers.</h2><p class="lede" style="margin-top:14px">Take delivery orders on your own app with 0% commission. Orders come to you, and a Porter rider is booked automatically.</p>
+  <div class="row-cta"><a class="btn primary" href="/restaurant-app">See how it works</a><a class="btn line" data-wa="Hi Branditude, I'd like a free demo of the restaurant ordering app with Porter delivery." href="https://wa.me/918855837148" target="_blank" rel="noopener">Book a free demo</a></div></div>
+  <div><span style="font-weight:700;color:var(--ink-3)">Starting</span><div class="big">₹1,499<span style="font-size:20px;color:var(--ink-3)">/month</span></div><p class="muted" style="font-size:14px">Delivery and payment charges as actual.</p></div>
+</div></div></section>
 
 <section class="plans-sec" id="plans"><div class="wrap">
   <div class="sec-head c"><h2>Need more than one? A plan costs less.</h2><p class="lede" style="margin:16px auto 0">Plans bundle the tools together for less than buying them separately. Pay yearly and get 2 months free.</p>
@@ -302,7 +311,90 @@ def gaming():
 {footer()}'''
     return head("Gaming club software: timers, LP billing & bookings · Branditude", "Live station timers, LP (loser pays) splits, happy-hour pricing, snacks and bills for gaming cafés. Two plans from ₹850/month.", "#0e1426") + "\n" + body
 
+def video(name, poster_alt):
+    if not os.path.exists(os.path.join(OUT, "assets", "video", name + ".mp4")): return ""
+    return (f'<figure class="explainer"><video src="/assets/video/{name}.mp4" poster="/assets/video/{name}.jpg" controls playsinline preload="none" '
+            f'aria-label="{html.escape(poster_alt)}"></video><figcaption>{html.escape(poster_alt)}</figcaption></figure>')
+
+def restaurant():
+    scr = ('<div style="display:flex;justify-content:space-between;align-items:center"><span class="chip-s" style="background:#fff1e8;color:#b44a0c">Chai Point Café</span><span class="sub">Open now</span></div>'
+           '<h4>Order online</h4>'
+           + "".join(f'<div class="menu-it"><span class="ph" style="background:{bg}">{e}</span><div class="g"><b>{n}</b><span>{d}</span><div><em>{pr}</em></div></div><span class="add-s" style="background:#f26b1d"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></div>'
+                     for e,bg,n,d,pr in [("🍛","#fff1d6","Chicken biryani","Serves 1","₹249"),("🧀","#fde8e9","Paneer butter masala","With 2 rotis","₹229"),("🥤","#e3f2fc","Cold coffee","With ice cream","₹130")])
+           + '<div class="bubble" style="display:flex;gap:8px;align-items:center"><span style="font-size:20px">🛵</span><span><b>Porter rider on the way</b><br><span class="sub">Arriving in 12 min · live tracking</span></span></div>'
+           + '<div class="cartbar" style="background:#f26b1d"><span>2 items · ₹478</span><span>Place order</span></div>')
+    ph = f'<div class="phone" aria-hidden="true"><div class="screen"><div class="sbar"><span>9:41</span><span>●●● 5G</span></div><div class="sc">{scr}</div></div></div>'
+    feats = [("Your own ordering app","Your name, logo, menu and photos. Customers order from a link or QR, and can add it to their home screen like an app."),
+             ("Orders straight to you","New orders ring on your phone or counter tablet. Accept, set the cooking time, and mark it ready."),
+             ("Porter delivery, booked for you","When the food is ready, a Porter rider is booked automatically. No riders of your own needed."),
+             ("Live tracking on WhatsApp","Your customer gets the order status and the rider's live tracking link on WhatsApp."),
+             ("Online payment or cash","Customers pay by UPI or card when they order, or cash on delivery if you allow it."),
+             ("Your customers stay yours","Every order builds your own customer list for repeat offers, birthday coupons and loyalty stamps.")]
+    fg = "".join(f'<div class="feat"><span class="dot" style="background:#fff1e8;color:#c2510f">{ICON["bike" if "Porter" in t or "tracking" in t else "rest"]}</span><h3>{t}</h3><p>{d}</p></div>' for t, d in feats)
+    steps = [("Customer orders from your app","They open your link or scan your QR, pick dishes and pay."),("You accept the order","It rings on your phone or tablet. Tap accept and start cooking."),("Porter delivers automatically","A rider is booked when the food is ready, and the customer can track it live.")]
+    st = "".join(f'<div class="step"><h3>{t}</h3><p>{d}</p></div>' for t, d in steps)
+    body = f'''<body data-page="restaurant" class="p-rest">
+{header("rest")}
+<main id="main">
+<section class="phero p-rest"><div class="wrap">
+  <div class="txt"><p class="crumbs"><a href="/">Home</a> / Restaurant app</p>
+  <span class="kicker"><span class="dot" style="background:var(--c);color:#fff;width:32px;height:32px;border-radius:10px">{ICON["rest"]}</span>Restaurant app + Porter delivery <span class="new-tag">New</span></span>
+  <h1 style="font-size:clamp(38px,5.4vw,64px)">Your own food ordering app. Porter delivers.</h1>
+  <p class="lede" style="margin-top:18px">Take delivery orders on your own app instead of paying 20–30% commission to food apps. Customers order and pay, you cook, and a Porter rider is booked automatically.</p>
+  <div class="buybox"><div class="row"><div class="amt"><span style="display:block;font-size:14px;color:var(--ink-3);font-weight:700">Starting</span><b class="num">₹1,499</b> <span>/month</span></div>
+  <a class="btn primary" data-wa="Hi Branditude, I'd like a free demo of the restaurant ordering app with Porter delivery." href="https://wa.me/918855837148" target="_blank" rel="noopener">Book a free demo</a></div>
+  <p class="note"><b>0% commission</b> on your orders. Porter delivery and online payment charges are paid as actual. We're setting up restaurants now: book a demo and we'll give you your start date.</p></div></div>
+  {ph}
+</div></section>
+
+<section class="after-hero p-rest"><div class="wrap">
+  <div class="sec-head"><h2>How it works</h2></div><div class="steps">{st}</div>
+  {video("restaurant-app", "Watch: how your own restaurant app and Porter delivery work (40 seconds)")}
+</div></section>
+
+<section style="padding-top:0"><div class="wrap">
+  <div class="sec-head"><h2>Keep the commission. Keep your customers.</h2><p class="lede" style="margin-top:14px">An example for a restaurant doing ₹1,00,000 of delivery orders a month.</p></div>
+  <div class="compare">
+    <div class="cbox bad"><span>Food delivery app</span><b>₹20,000–30,000</b><p>20–30% commission every month, and the customer's details stay with the app.</p></div>
+    <div class="cbox good"><span>Your own app with Branditude</span><b>₹1,499</b><p>Plus Porter delivery and payment charges as actual. You can add a delivery fee to the bill, and every customer is yours.</p></div>
+  </div>
+  <p class="muted" style="font-size:14px;margin-top:10px">Commission rates vary by app and city. This is an example, not a quote.</p>
+</div></section>
+
+<section style="padding-top:0"><div class="wrap"><div class="sec-head"><h2>What you get</h2></div><div class="feat-grid">{fg}</div>
+  <div style="margin-top:40px"><h3>Made for</h3><div class="who"><span>Restaurants</span><span>Cloud kitchens</span><span>Cafés</span><span>Bakeries</span><span>Sweet shops</span><span>Tiffin services</span></div></div>
+</div></section>
+
+<section style="padding-top:0"><div class="wrap"><div class="lead-card" id="callback">
+  <div><h2 style="font-size:clamp(26px,3vw,36px)">Get a call back</h2><p class="lede" style="margin-top:12px">Leave your details and we'll call you to show the app and set your start date. Or message us on WhatsApp.</p>
+  <a class="btn wa" style="margin-top:18px" data-wa="Hi Branditude, I'd like a free demo of the restaurant ordering app with Porter delivery." href="https://wa.me/918855837148" target="_blank" rel="noopener">Book a demo on WhatsApp</a></div>
+  <form data-lead="Restaurant app + Porter delivery" class="fields" novalidate>
+    <div class="field"><label for="l-biz">Restaurant name</label><input id="l-biz" name="business_name" required autocomplete="organization" placeholder="e.g. Spice Garden"></div>
+    <div class="field"><label for="l-name">Your name</label><input id="l-name" name="contact_name" required autocomplete="name"></div>
+    <div class="field"><label for="l-phone">WhatsApp number</label><input id="l-phone" name="phone" required inputmode="tel" autocomplete="tel" placeholder="98xxxxxxxx"></div>
+    <div class="field"><label for="l-city">City</label><input id="l-city" name="city" required autocomplete="address-level2"></div>
+    <div class="field full"><label for="l-orders">Delivery orders a day (roughly)</label><input id="l-orders" name="orders" inputmode="numeric" placeholder="e.g. 30"></div>
+    <div class="field full"><button class="btn primary block" type="submit">Call me back</button><p class="err" role="alert"></p></div>
+  </form>
+</div></div></section>
+
+<section style="padding-top:0"><div class="wrap"><div class="sec-head"><h2>Questions from restaurant owners</h2></div><div class="faq">{faq([
+  ("Is this like Swiggy or Zomato?","It's your own ordering app, not a marketplace. Customers come to it from your link, QR codes, Instagram, Google profile and WhatsApp. You don't pay commission on the orders."),
+  ("Who delivers the food?","Porter. When an order is ready, a rider is booked automatically and the customer gets a live tracking link. You don't need your own delivery staff."),
+  ("What does delivery cost?","Porter's charge for each trip, as actual, depending on distance. You can add a delivery fee to the customer's bill to cover it."),
+  ("How do customers pay?","UPI, cards or netbanking at checkout through Razorpay, or cash on delivery if you switch it on. Payment gateway charges are as actual."),
+  ("What does ₹1,499 a month include?","Your ordering app with your menu and branding, the order screen for your phone or tablet, automatic Porter booking, WhatsApp order updates and your customer list. Bigger setups may cost more; we'll confirm on the demo."),
+  ("When can I start?","We're setting up restaurants one by one. Book a demo and we'll give you your start date and help you load your menu.")])}</div></div></section>
+
+<section style="padding-top:0"><div class="wrap"><div class="sec-head"><h2>Also for restaurants</h2></div><div class="picker" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">{"".join(f'<a class="pick {P[o]["cls"]}" href="/{P[o]["file"][:-5]}"><span class="dot">{ICON[o]}</span><b>{P[o]["name"]}</b><span>{P[o]["tile"]}</span><i>From <span data-price="{P[o]["slug"]}">{PRICE[P[o]["slug"]]}</span>/month</i></a>' for o in ["qr","loy","rev"])}</div></div></section>
+{CONTACT}
+</main>
+<div class="mbar" id="mbar" aria-hidden="true"><a class="btn primary" href="#callback">Call me back</a><a class="btn wa" data-wa="Hi Branditude, I'd like a free demo of the restaurant ordering app with Porter delivery." href="https://wa.me/918855837148" target="_blank" rel="noopener">WhatsApp</a></div>
+{footer()}'''
+    return head("Your own restaurant ordering app with Porter delivery · Branditude", "Take delivery orders on your own app with 0% commission. Orders come to you, Porter delivers automatically. Starting ₹1,499/month.", "#ffffff") + "\n" + body
+
 open(os.path.join(OUT, "index.html"), "w").write(home())
 for k in ORDER: open(os.path.join(OUT, P[k]["file"]), "w").write(product(k))
 open(os.path.join(OUT, "gaming.html"), "w").write(gaming())
+open(os.path.join(OUT, "restaurant-app.html"), "w").write(restaurant())
 print("built", OUT)
